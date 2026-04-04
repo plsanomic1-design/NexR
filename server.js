@@ -1649,8 +1649,8 @@ io.on('connection', (socket) => {
         
         try {
             const senderSave = await readAccountJson(fromUserId);
-            if (!senderSave || senderSave.balanceZh < amount) {
-                return socket.emit('notification', { type: 'error', text: 'Not enough ZH$ balance for tip!' });
+            if (!senderSave || senderSave.balance < amount) {
+                return socket.emit('notification', { type: 'error', text: 'Not enough balance for tip!' });
             }
 
             // Find recipient — by numeric ID or username lookup in Supabase
@@ -1691,9 +1691,9 @@ io.on('connection', (socket) => {
             const recSave = await readAccountJson(recipientId);
             if (!recSave) return socket.emit('notification', { type: 'error', text: 'Recipient wallet not initialized.' });
 
-            // Transfer ZH$ balance
-            senderSave.balanceZh = (senderSave.balanceZh || 0) - amount;
-            recSave.balanceZh = (recSave.balanceZh || 0) + amount;
+            // Transfer from main balance
+            senderSave.balance -= amount;
+            recSave.balance += amount;
 
             await persistAccountSave(fromUserId, senderSave);
             await persistAccountSave(recipientId, recSave);
@@ -1719,11 +1719,11 @@ io.on('connection', (socket) => {
         
         try {
             const save = await readAccountJson(userId);
-            if (!save || (save.balanceZh || 0) < amount) {
-                return socket.emit('notification', { type: 'error', text: 'Not enough ZH$ balance for rain!' });
+            if (!save || save.balance < amount) {
+                return socket.emit('notification', { type: 'error', text: 'Not enough balance for rain!' });
             }
 
-            save.balanceZh = (save.balanceZh || 0) - amount;
+            save.balance -= amount;
             await persistAccountSave(userId, save);
             socket.emit('balance:update', { balance: save.balance, balanceZh: save.balanceZh });
 
@@ -1752,10 +1752,10 @@ io.on('connection', (socket) => {
                 activeRains.splice(idx, 1);
 
                 if (r.joiners.length === 0) {
-                    // Refund ZH$ to creator
+                    // Refund to creator
                     const refundSave = await readAccountJson(userId);
                     if (refundSave) {
-                        refundSave.balanceZh = (refundSave.balanceZh || 0) + amount;
+                        refundSave.balance += amount;
                         await persistAccountSave(userId, refundSave);
                     }
                     io.emit('chat:message', { username: 'System', text: 'Rain ended with no joiners. Refunded.', createdAt: Date.now() });
@@ -1764,7 +1764,7 @@ io.on('connection', (socket) => {
                     for (const uid of r.joiners) {
                         const js = await readAccountJson(uid);
                         if (js) {
-                            js.balanceZh = (js.balanceZh || 0) + share;
+                            js.balance += share;
                             await persistAccountSave(uid, js);
                         }
                     }

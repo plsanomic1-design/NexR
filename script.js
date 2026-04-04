@@ -3490,7 +3490,7 @@ function confirmStartRain() {
     const minWager = parseFloat(document.getElementById('rain-min-wager').value) || 0;
 
     if (amount < 10) return alert('Minimum rain amount is 10 ZH$');
-    if (amount > roBalanceZh) return alert('Not enough ZH$ balance!');
+    if (amount > roBalance) return alert('Not enough balance!');
 
     socket?.emit('rain:create', {
         userId: robloxUserId,
@@ -3565,7 +3565,7 @@ function confirmSendTip() {
 
     if (!target) return alert('Enter a recipient!');
     if (amount < 1) return alert('Minimum tip is 1 ZH$');
-    if (amount > roBalanceZh) return alert('Not enough ZH$ balance!');
+    if (amount > roBalance) return alert('Not enough balance!');
 
     socket?.emit('tip:send', {
         fromUserId: robloxUserId,
