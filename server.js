@@ -965,15 +965,6 @@ const GAME_PASS_CREDIT_BY_ID = {
 const GAMEPASS_DEPOSIT_MIN_INTERVAL_MS = 2500;
 const lastGamepassDepositAt = new Map();
 
-/**
- * Roblox user IDs that created/own the game passes and are therefore
- * automatically flagged as owners by Roblox even without purchasing.
- * These accounts are blocked from using the deposit system.
- */
-const GAMEPASS_CREATOR_IDS = new Set([
-    2615180260  // artirzu7 — game pass creator account
-]);
-
 function fetchUserOwnsGamePass(userId, gamePassId) {
     return new Promise((resolve) => {
         const p = `/v1/users/${encodeURIComponent(userId)}/items/GamePass/${encodeURIComponent(gamePassId)}/is-owned`;
@@ -1031,6 +1022,14 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
 
     const diskSave = await readAccountJson(userId);
 
+    // ── Security: claimedGps is ALWAYS authoritative from server disk, never from client ──
+    // (A fresh page load sends savedAt = Date.now() which would be newer than the disk copy,
+    //  causing the timestamp merge to pick the client payload — which has claimedGps: [] and
+    //  would silently erase the record of previously claimed tiers.)
+    const serverClaimedGps = (diskSave && diskSave.stats && Array.isArray(diskSave.stats.claimedGps))
+        ? diskSave.stats.claimedGps
+        : [];
+
     let save;
     if (!diskSave) {
         save = { ...clientSave };
@@ -1040,6 +1039,10 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         save = diskAt >= clientAt ? { ...diskSave } : { ...clientSave };
         save.robloxUserId = userId;
     }
+
+    // Restore authoritative claimedGps regardless of which save won the timestamp merge
+    if (!save.stats || typeof save.stats !== 'object') save.stats = {};
+    save.stats.claimedGps = serverClaimedGps;
 
     mergeFlipIntoBalance(save);
 
@@ -1056,21 +1059,14 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         return res.status(400).json({ error: 'That game pass is not enabled for deposits.' });
     }
 
-    if (!save.stats || typeof save.stats !== 'object') save.stats = {};
-    if (!Array.isArray(save.stats.claimedGps)) save.stats.claimedGps = [];
-
-    if (save.stats.claimedGps.includes(gamePassId)) {
+    // Block if already claimed (using server-authoritative list)
+    if (serverClaimedGps.includes(gamePassId)) {
         return res.status(400).json({
             error: 'You have already deposited this exact tier. You can only deposit each tier once.'
         });
     }
 
-    if (GAMEPASS_CREATOR_IDS.has(userId)) {
-        return res.status(403).json({
-            error: 'The game pass creator account cannot use the deposit system. Please use a different Roblox account to deposit.'
-        });
-    }
-
+    // Verify real-time Roblox ownership
     const own = await fetchUserOwnsGamePass(userId, gamePassId);
     if (!own.ok) {
         return res.status(502).json({
