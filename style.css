@@ -1137,29 +1137,29 @@ input:checked + .slider:before { transform: translateX(14px); }
     min-width: 25px;
 }
 
-/* Mines cashout — hollow blue outline, muted until hover (reference UI) */
-#mines-play-btn.mines-cashout {
+/* Generic cashout button — hollow blue outline, muted until hover (reference UI) */
+.custom-cashout-btn {
     background: rgba(15, 18, 40, 0.35) !important;
-    border: 1px solid var(--accent);
+    border: 1px solid var(--accent) !important;
     color: var(--accent) !important;
     box-shadow: none !important;
     font-weight: 600;
     border-radius: 10px;
     transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
-#mines-play-btn.mines-cashout:hover:not(:disabled) {
+.custom-cashout-btn:hover:not(:disabled) {
     background: rgba(59, 130, 246, 0.12) !important;
-    border-color: #60a5fa;
+    border-color: #60a5fa !important;
     color: #93c5fd !important;
     box-shadow: 0 0 20px rgba(59, 130, 246, 0.18) !important;
 }
-#mines-play-btn.mines-cashout:disabled {
+.custom-cashout-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
-#mines-play-btn.mines-cashout:disabled:hover {
+.custom-cashout-btn:disabled:hover {
     background: rgba(15, 18, 40, 0.35) !important;
-    border-color: var(--accent);
+    border-color: var(--accent) !important;
     color: var(--accent) !important;
     box-shadow: none !important;
 }

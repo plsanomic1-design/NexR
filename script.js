@@ -123,6 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
             bjStandBtn.disabled = true;
             bjPlayBtn.disabled = false;
             bjPlayBtn.textContent = 'Place bet';
+            bjPlayBtn.classList.remove('custom-cashout-btn');
+            bjPlayBtn.style.background = 'var(--accent)';
             
             bjMsg.textContent = msg;
             bjMsg.style.color = color;
@@ -162,6 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 bjHitBtn.disabled = false;
                 bjStandBtn.disabled = false;
                 bjPlayBtn.textContent = 'Playing...';
+                bjPlayBtn.classList.add('custom-cashout-btn');
                 
                 renderHands();
                 if(getScore(pHand) === 21) {
@@ -245,8 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(!mIsPlaying) return;
             const mult = Number(mMultiplier);
             minesPlayBtn.textContent = `Cashout (${mult.toFixed(2)} x)`;
-            minesPlayBtn.classList.add('mines-cashout');
-            minesPlayBtn.style.background = '';
+            minesPlayBtn.classList.add('custom-cashout-btn');
         }
 
         minesPlayBtn.addEventListener('click', async () => {
@@ -357,8 +359,8 @@ document.addEventListener('DOMContentLoaded', () => {
         function endMines(win) {
             mIsPlaying = false;
             minesPlayBtn.textContent = 'Start new game';
-            minesPlayBtn.classList.remove('mines-cashout');
-            minesPlayBtn.style.background = '';
+            minesPlayBtn.classList.remove('custom-cashout-btn');
+            minesPlayBtn.style.background = 'var(--accent)';
             minesPlayBtn.disabled = false;
             
             const tiles = minesGrid.querySelectorAll('.mines-tile');
@@ -473,8 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tMulti = 1.0;
                     tLogic = []; // only used locally for tracking rendering layout
                     
-                    tPlayBtn.textContent = 'Cashout';
-                    tPlayBtn.style.background = 'var(--green)';
+                    syncTowersCashoutButton();
                     tPlayBtn.disabled = true; // must pick at least one tile first
                     
                     // Reset UI classes
@@ -526,6 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tMulti = Math.pow(cfg.base, curRow+1);
                     curRow++;
                     tPlayBtn.disabled = false; // can now cashout
+                    syncTowersCashoutButton();
                     
                     const rElements = Array.from(tGrid.children);
                     rElements[curRow-1].classList.remove('active-row');
@@ -548,9 +550,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        function syncTowersCashoutButton() {
+            if(!tIsPlaying) return;
+            tPlayBtn.textContent = `Cashout (${tMulti.toFixed(2)} x)`;
+            tPlayBtn.classList.add('custom-cashout-btn');
+        }
+
         function endTowers(win) {
             tIsPlaying = false;
             tPlayBtn.textContent = 'Start new game';
+            tPlayBtn.classList.remove('custom-cashout-btn');
             tPlayBtn.style.background = 'var(--accent)';
             tPlayBtn.disabled = false;
             
@@ -1150,6 +1159,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(typeof soundWin === 'function') soundWin();
             
             crashPlayBtn.textContent = 'Cashed out';
+            crashPlayBtn.classList.remove('custom-cashout-btn');
             crashPlayBtn.style.background = 'var(--accent)';
             crashPlayBtn.disabled = true;
             
@@ -1166,6 +1176,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             cMulti = 1.00 * Math.pow(Math.E, elapsed * 0.00006);
             
+            if(cState === 'running' && cBet > 0 && !hasCashedOut) {
+                crashPlayBtn.textContent = `Cashout (${cMulti.toFixed(2)} x)`;
+                if(!crashPlayBtn.classList.contains('custom-cashout-btn')) {
+                    crashPlayBtn.classList.add('custom-cashout-btn');
+                }
+            }
+
             if(cMulti >= cCrashPoint) {
                 cMulti = cCrashPoint;
                 cState = 'crashed';
@@ -1267,6 +1284,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cBet = 0;
             hasCashedOut = false;
             crashPlayBtn.textContent = 'Join next game';
+            crashPlayBtn.classList.remove('custom-cashout-btn');
             crashPlayBtn.style.background = 'var(--accent)';
             crashPlayBtn.disabled = false;
             countdown(); 
