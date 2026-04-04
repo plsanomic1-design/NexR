@@ -9,6 +9,7 @@
  * Node 18+ recommended (global fetch).
  */
 const https = require('https');
+const crypto = require('crypto');
 const express = require('express');
 
 const PORT = process.env.PORT || 8080;
@@ -19,6 +20,48 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
 
 /** Profile JSON is stored in one synthetic transactions row (type account_profile) so stats/username sync cross-device. */
 const PROFILE_REF_ID = 'zephrs_profile';
+/** Stable UUID for profile row when `reference_id` is a uuid column (legacy text id still read in load). */
+const PROFILE_REF_UUID = 'a0000000-0000-4000-8000-000000000001';
+
+function isUuidString(s) {
+    return (
+        typeof s === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)
+    );
+}
+
+/** Pack client tx id into game_name so we can use a DB-safe reference_id (uuid). */
+function packTxGameName(desc, clientId) {
+    const d = typeof desc === 'string' ? desc : '';
+    const id =
+        clientId != null
+            ? String(clientId)
+                  .replace(/[^a-zA-Z0-9_-]/g, '')
+                  .slice(0, 24)
+            : '';
+    if (!id) return d.slice(0, 4000);
+    return (`__id:${id}__|` + d).slice(0, 4000);
+}
+
+function unpackTxGameName(gameName) {
+    const g = typeof gameName === 'string' ? gameName : '';
+    const m = g.match(/^__id:([a-zA-Z0-9_-]{1,24})__\|(.*)$/s);
+    if (m) return { clientId: m[1], desc: m[2] };
+    return { clientId: null, desc: g };
+}
+
+function normalizeDbTxType(t) {
+    let s = String(t || 'deposit')
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')
+        .slice(0, 48);
+    return s || 'deposit';
+}
+
+function coerceTxReferenceId(clientRef) {
+    if (isUuidString(clientRef)) return clientRef;
+    return crypto.randomUUID();
+}
 
 function supabaseEnabled() {
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -136,10 +179,10 @@ async function addTransaction(userId, amount, currency, type, gameName) {
         user_id: String(userId),
         amount: num(amount, 0),
         currency: currency || 'zr',
-        type: type || 'deposit',
+        type: normalizeDbTxType(type),
         status: 'completed',
         game_name: gameName != null ? String(gameName) : '',
-        reference_id: null
+        reference_id: crypto.randomUUID()
     };
     let res;
     try {
@@ -171,17 +214,19 @@ function formatTxDateFromIso(iso) {
 
 function mapDbTxToClient(row) {
     const ref = row.reference_id != null ? String(row.reference_id) : '';
+    const unpacked = unpackTxGameName(row.game_name);
     const id =
-        ref.length > 0
+        unpacked.clientId ||
+        (ref.length > 0 && !isUuidString(ref)
             ? ref
             : typeof row.id === 'string' && row.id.length
               ? row.id.slice(0, 8)
               : Math.floor(Math.random() * 0xffffffff)
                     .toString(16)
-                    .padStart(8, '0');
+                    .padStart(8, '0'));
     return {
         id,
-        desc: typeof row.game_name === 'string' ? row.game_name : '',
+        desc: unpacked.desc,
         date: formatTxDateFromIso(row.created_at),
         amount: num(row.amount, 0),
         type: typeof row.type === 'string' ? row.type : 'deposit'
@@ -189,14 +234,15 @@ function mapDbTxToClient(row) {
 }
 
 function clientTxToRow(userId, tx) {
+    const clientRef = tx.id != null ? String(tx.id) : null;
     return {
         user_id: String(userId),
         amount: num(tx.amount, 0),
         currency: 'zr',
-        type: typeof tx.type === 'string' ? tx.type : 'deposit',
+        type: normalizeDbTxType(tx.type),
         status: 'completed',
-        game_name: typeof tx.desc === 'string' ? tx.desc : '',
-        reference_id: tx.id != null ? String(tx.id) : null
+        game_name: packTxGameName(tx.desc, tx.id),
+        reference_id: coerceTxReferenceId(clientRef)
     };
 }
 
@@ -239,6 +285,41 @@ async function persistAccountSave(userId, save) {
         return false;
     }
 
+    let profileJson;
+    try {
+        profileJson = JSON.stringify(buildProfilePayload(save));
+    } catch (e) {
+        profileJson = '{}';
+    }
+
+    const profileRow = {
+        user_id: String(userId),
+        amount: 0,
+        currency: 'zr',
+        type: 'account_profile',
+        status: 'ok',
+        game_name: profileJson,
+        reference_id: PROFILE_REF_UUID
+    };
+
+    let profRes;
+    try {
+        profRes = await supabaseFetch('transactions', {
+            method: 'POST',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify(profileRow)
+        });
+    } catch (e) {
+        console.error('persistAccountSave profile network error:', e && e.message);
+        return false;
+    }
+    if (!profRes.ok) {
+        try {
+            console.error('persistAccountSave profile failed:', profRes.status, await profRes.text());
+        } catch (_) {}
+        return false;
+    }
+
     const txs = Array.isArray(save.transactions) ? save.transactions.slice(0, 100) : [];
     const rows = txs.map((tx) => clientTxToRow(userId, tx));
     if (rows.length > 0) {
@@ -259,41 +340,6 @@ async function persistAccountSave(userId, save) {
             } catch (_) {}
             return false;
         }
-    }
-
-    let profileJson;
-    try {
-        profileJson = JSON.stringify(buildProfilePayload(save));
-    } catch (e) {
-        profileJson = '{}';
-    }
-
-    const profileRow = {
-        user_id: String(userId),
-        amount: 0,
-        currency: 'zr',
-        type: 'account_profile',
-        status: 'ok',
-        game_name: profileJson,
-        reference_id: PROFILE_REF_ID
-    };
-
-    let profRes;
-    try {
-        profRes = await supabaseFetch('transactions', {
-            method: 'POST',
-            headers: { Prefer: 'return=minimal' },
-            body: JSON.stringify(profileRow)
-        });
-    } catch (e) {
-        console.error('persistAccountSave profile network error:', e && e.message);
-        return false;
-    }
-    if (!profRes.ok) {
-        try {
-            console.error('persistAccountSave profile failed:', profRes.status, await profRes.text());
-        } catch (_) {}
-        return false;
     }
 
     return true;
@@ -336,7 +382,11 @@ async function loadAccountFromSupabase(userId) {
     let profile = {};
     const clientTxs = [];
     for (const row of all) {
-        if (row.type === 'account_profile' && String(row.reference_id) === PROFILE_REF_ID) {
+        const refStr = row.reference_id != null ? String(row.reference_id) : '';
+        if (
+            row.type === 'account_profile' &&
+            (refStr === PROFILE_REF_ID || refStr === PROFILE_REF_UUID)
+        ) {
             try {
                 profile = JSON.parse(row.game_name || '{}');
             } catch (e) {

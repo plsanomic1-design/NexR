@@ -2603,11 +2603,29 @@ function initWelcomeModal() {
                 robloxAvatarUrl = pr.avatarUrl;
             }
         } else {
-            roBalance = 0;
-            referralEarned = 0;
-            referredCount = 0;
-            userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0 };
-            transactions = [];
+            let restoredLocal = false;
+            try {
+                const raw = localStorage.getItem(SAVE_KEY);
+                if(raw) {
+                    const data = JSON.parse(raw);
+                    if(
+                        data &&
+                        typeof data === 'object' &&
+                        Number(data.robloxUserId) === Number(robloxUserId) &&
+                        typeof data.balance === 'number'
+                    ) {
+                        applySavePayload(data);
+                        restoredLocal = true;
+                    }
+                }
+            } catch(e) {}
+            if(!restoredLocal) {
+                roBalance = 0;
+                referralEarned = 0;
+                referredCount = 0;
+                userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0 };
+                transactions = [];
+            }
         }
 
         applyUsername(currentUsername);
