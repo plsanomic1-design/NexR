@@ -980,7 +980,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/game/plinko', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, pRows })
+                    body: JSON.stringify({ userId: robloxUserId, pRows, pDiff })
                 });
                 const data = await res.json();
                 
@@ -1592,23 +1592,33 @@ function patchBlackjackBalance() {
         const obs = new MutationObserver(() => {
             if(bjMsg.style.display === 'none') return;
             const txtRaw = bjMsg.textContent || '';
-            const txt = txtRaw.toLowerCase();
+            const txt = txtRaw.toLowerCase().trim();
             if(txtRaw === bjLiveFeedLast) return;
             const bet = parseFloat(document.getElementById('bj-bet-input').value) || 0;
-            if(txt.includes('win') || txt.includes('blackjack')) {
+            
+            // IMPORTANT: check 'dealer wins' FIRST — it contains the word 'win' so must be caught before general win check
+            if(txt === 'dealer wins') {
                 bjLiveFeedLast = txtRaw;
-                const gross = txt.includes('blackjack') ? bet * 1.5 : bet * 2;
-                const mult = bet > 0 ? gross / bet : 0;
+                postLiveFeedRound('blackjack', bet, 0, -bet);
+                soundLose();
+            } else if(txt.includes('blackjack')) {
+                bjLiveFeedLast = txtRaw;
+                const gross = bet * 2.5;
                 awardWin(gross);
-                postLiveFeedRound('blackjack', bet, mult, gross);
+                postLiveFeedRound('blackjack', bet, 2.5, gross);
+                soundWin();
+            } else if(txt.includes('win')) {
+                bjLiveFeedLast = txtRaw;
+                const gross = bet * 2;
+                awardWin(gross);
+                postLiveFeedRound('blackjack', bet, 2, gross);
                 soundWin();
             } else if(txt.includes('push')) {
                 bjLiveFeedLast = txtRaw;
-                awardWin(bet); // return bet
+                awardWin(bet); // return bet only
                 postLiveFeedRound('blackjack', bet, 1, bet);
                 soundClick();
-            } else if(txt.includes('lose') || txt.includes('bust') || txt.includes('dealer wins')) {
-                // Dealer wins — bet already deducted, no award
+            } else if(txt.includes('lose') || txt.includes('bust')) {
                 bjLiveFeedLast = txtRaw;
                 postLiveFeedRound('blackjack', bet, 0, -bet);
                 soundLose();
@@ -1768,7 +1778,11 @@ function patchDiceBalance() {
                 postLiveFeedRound('dice', bet, multi, gross);
                 soundWin();
             } else {
-                postLiveFeedRound('dice', bet, 0, -bet);
+                // On loss: randomly return 0x, 0.25x, or 0.5x as partial consolation
+                const options = [0, 0, 0.25, 0.25, 0.50];
+                const consolation = options[Math.floor(Math.random() * options.length)];
+                if (consolation > 0) awardWin(bet * consolation);
+                postLiveFeedRound('dice', bet, consolation, bet * consolation - bet);
                 soundLose();
             }
         });

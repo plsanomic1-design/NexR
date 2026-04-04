@@ -817,17 +817,73 @@ app.post('/api/game/dice', express.json(), (req, res) => {
 
 app.post('/api/game/plinko', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, pRows } = req.body;
-    let forceLoss = getCusState(userId).check();
-    let bucketIdx;
-    if (forceLoss) {
-        bucketIdx = Math.floor((pRows+1)/2);
-        getCusState(userId).recordLoss();
-        res.json({ customOutcome: true, idx: bucketIdx });
+    const { userId, pRows, pDiff } = req.body;
+    
+    // Controlled bucket weight tables (rows+1 weights per row count)
+    // Higher weight = more likely to land there
+    // Designed so low-value center buckets hit 70-80% of the time on hard
+    const weightTables = {
+        8: {
+            easy:   [0.5, 3, 8, 17, 25, 17, 8, 3, 0.5],
+            normal: [0.3, 2, 7, 16, 24, 16, 7, 2, 0.3],
+            hard:   [0.3, 2, 8, 18, 26, 18, 8, 2, 0.3]
+        },
+        10: {
+            easy:   [0.5, 2, 5, 10, 17, 23, 17, 10, 5, 2, 0.5],
+            normal: [0.3, 1.5, 4, 9, 16, 22, 16, 9, 4, 1.5, 0.3],
+            hard:   [0.3, 2, 5, 12, 20, 25, 20, 12, 5, 2, 0.3]
+        },
+        12: {
+            easy:   [0.5, 1.5, 3, 6, 10, 16, 20, 16, 10, 6, 3, 1.5, 0.5],
+            normal: [0.3, 1, 3, 6, 10, 17, 22, 17, 10, 6, 3, 1, 0.3],
+            hard:   [0.25, 1.5, 4, 6, 15, 20, 20, 20, 15, 6, 4, 1.5, 0.25]
+        },
+        14: {
+            easy:   [0.4, 1, 2, 4, 7, 12, 16, 17, 16, 12, 7, 4, 2, 1, 0.4],
+            normal: [0.3, 0.7, 2, 4, 7, 12, 17, 20, 17, 12, 7, 4, 2, 0.7, 0.3],
+            hard:   [0.25, 1.5, 3, 5, 5, 15, 15, 15, 15, 15, 5, 5, 3, 1.5, 0.25]
+        },
+        16: {
+            easy:   [0.3, 0.8, 1.5, 3, 5, 7, 10, 14, 18, 14, 10, 7, 5, 3, 1.5, 0.8, 0.3],
+            normal: [0.2, 0.5, 1.5, 3, 6, 10, 15, 20, 20, 20, 15, 10, 6, 3, 1.5, 0.5, 0.2],
+            // Hard 16: ~65% on 0.2x center, ~7% total on 0.5x, ~6% 2x, ~10% 9x, ~6.7% 26x, ~5% 130x, ~0.5% 1000x
+            hard:   [0.25, 1.25, 3.35, 5, 3, 5, 13, 13, 13, 13, 13, 5, 3, 5, 3.35, 1.25, 0.25]
+        }
+    };
+    
+    const rows = parseInt(pRows) || 16;
+    const diff = String(pDiff || 'hard');
+    const table = weightTables[rows];
+    const weights = table ? (table[diff] || table['easy']) : null;
+    
+    let idx;
+    if (weights) {
+        // Weighted random selection
+        const total = weights.reduce((s, w) => s + w, 0);
+        let r = Math.random() * total;
+        idx = weights.length - 1; // default to last if rounding error
+        for (let i = 0; i < weights.length; i++) {
+            r -= weights[i];
+            if (r <= 0) { idx = i; break; }
+        }
     } else {
-        res.json({ customOutcome: false });
+        idx = Math.floor((rows) / 2); // fallback: center bucket
     }
+    
+    // Still check cus state to potentially force a worse outcome
+    const forceLoss = getCusState(userId).check();
+    if (forceLoss) {
+        // Push towards center low-value buckets
+        const center = Math.floor((rows) / 2);
+        idx = center + (Math.random() < 0.5 ? -1 : 1) * Math.floor(Math.random() * 2);
+        if (idx < 0) idx = 0;
+        if (idx > rows) idx = rows;
+        getCusState(userId).recordLoss();
+    }
+    
+    res.json({ customOutcome: true, idx });
 });
+
 
 app.post('/api/game/record-result', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
