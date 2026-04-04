@@ -3309,3 +3309,16 @@ input:checked + .slider:before { transform: translateX(14px); }
     opacity: 0.7;
     cursor: wait;
 }
+
+/* Rain joined state — green tint, greyed out, no pointer */
+.rain-joined,
+.rain-join-btn.rain-joined,
+#chat-rain-join-btn.rain-joined {
+    background: rgba(32, 210, 133, 0.12) !important;
+    border: 1px solid rgba(32, 210, 133, 0.3) !important;
+    color: var(--green) !important;
+    cursor: default !important;
+    opacity: 0.85;
+    box-shadow: none !important;
+    pointer-events: none;
+}

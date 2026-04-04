@@ -3273,18 +3273,24 @@ if (socket) {
     });
 
     socket.on('rain:join-confirmed', ({ rainId }) => {
-        // Find the button in chat and update it
+        // Update all inline chat JOIN buttons for this rain
         const btns = document.querySelectorAll(`.chat-join-btn[data-rain-id="${rainId}"]`);
         btns.forEach(btn => {
+            clearTimeout(btn._joinTimeout);
             btn.classList.remove('loading');
+            btn.classList.add('rain-joined');
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-check"></i> JOINED';
         });
-        // Also update banner join btn
+
+        // Update the banner JOIN button
         const bannerBtn = document.getElementById('chat-rain-join-btn');
         if (bannerBtn) {
+            clearTimeout(bannerBtn._joinTimeout);
+            bannerBtn.classList.remove('loading');
+            bannerBtn.classList.add('rain-joined');
             bannerBtn.disabled = true;
-            bannerBtn.innerHTML = 'JOINED';
+            bannerBtn.innerHTML = '<i class="fa-solid fa-check"></i> JOINED';
         }
     });
 
@@ -3514,6 +3520,9 @@ function updateRainBanner(rain) {
     }
 
     if (banner) banner.style.display = 'block';
+
+    // Stamp the actual rain ID on the button so handleJoinRainLogic can find it
+    if (joinBtn) joinBtn.dataset.rainId = rain.id;
     
     // Update timer
     const updateTime = () => {
@@ -3529,12 +3538,15 @@ function updateRainBanner(rain) {
 
     if (joinBtn) {
         joinBtn.onclick = () => handleJoinRainLogic(joinBtn);
-        // Check if already joined
-        if (rain.joiners.includes(robloxUserId)) {
+        // type-safe check: server stores userId as numeric, normalise both sides
+        const alreadyJoined = rain.joiners.some(j => String(j) === String(robloxUserId));
+        if (alreadyJoined) {
             joinBtn.disabled = true;
-            joinBtn.innerHTML = 'JOINED';
+            joinBtn.classList.add('rain-joined');
+            joinBtn.innerHTML = '<i class="fa-solid fa-check"></i> JOINED';
         } else {
             joinBtn.disabled = false;
+            joinBtn.classList.remove('rain-joined');
             joinBtn.innerHTML = 'JOIN';
         }
     }
@@ -3546,15 +3558,31 @@ function handleInlineJoinRain(btn) {
 
 function handleJoinRainLogic(btn) {
     if (btn.disabled || btn.classList.contains('loading')) return;
-    
-    const rId = btn.dataset.rainId === 'active' ? (activeRains[0]?.id) : btn.dataset.rainId;
-    if (!rId) return;
+
+    // Resolve the rainId: prefer data-rain-id on the button, then fall back to activeRains[0]
+    let rId = btn.dataset.rainId;
+    if (!rId || rId === 'active') rId = activeRains[0]?.id;
+    if (!rId) {
+        console.warn('[Rain] No active rain ID found, cannot join.');
+        return;
+    }
 
     btn.classList.add('loading');
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> JOINING...';
-    
-    // Attempt join
+    btn.disabled = true;
+
+    // Emit join — server will confirm with rain:join-confirmed
     socket?.emit('rain:join', { rainId: rId, userId: robloxUserId });
+
+    // Timeout fallback: if server doesn't confirm in 5s, reset button
+    const timeout = setTimeout(() => {
+        if (btn.classList.contains('loading')) {
+            btn.classList.remove('loading');
+            btn.disabled = false;
+            btn.innerHTML = 'JOIN';
+        }
+    }, 5000);
+    btn._joinTimeout = timeout;
 }
 
 // TIP SYSTEM UI (Confirmation)
