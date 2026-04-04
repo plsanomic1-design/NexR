@@ -786,23 +786,6 @@
     </div>
     </div><!-- /.app-shell -->
 
-    <aside class="chat-rail" id="chat-rail" aria-label="Chat">
-        <div class="chat-rail-header">
-            <div class="chat-rail-title">
-                <span>Chat</span>
-                <span class="chat-online" id="chat-online-count"><span class="chat-online-dot" aria-hidden="true"></span> <span id="chat-online-num">-</span> online</span>
-            </div>
-            <button type="button" class="chat-collapse-btn" id="chat-collapse-btn" title="Collapse chat" aria-expanded="true"><i class="fa-solid fa-chevron-right"></i></button>
-        </div>
-        <div class="chat-messages-wrap">
-            <div class="chat-messages" id="chat-messages"></div>
-        </div>
-        <div class="chat-input-row">
-            <input type="text" class="chat-input" id="chat-input" placeholder="Say something..." maxlength="280" autocomplete="off">
-            <button type="button" class="chat-send-btn" id="chat-send-btn" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
-        </div>
-        <p class="chat-hint" id="chat-status">Connecting...</p>
-    </aside>
 
     <!-- ===== DEPOSIT MODAL ===== -->
     <div class="modal-backdrop" id="deposit-backdrop" onclick="closeDepositModal(event)">
@@ -1141,8 +1124,6 @@
 
     <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="script.js"></script>
-    <script src="chat.js"></script>
     <!-- ===== RAIN CONFIG MODAL ===== -->
     <div class="modal-backdrop" id="rain-backdrop">
         <div class="modal-box" style="max-width:450px; padding:30px;">
@@ -1206,5 +1187,6 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
+    <script src="voice.js"></script>
 </body>
 </html>
