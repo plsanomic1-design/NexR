@@ -2194,6 +2194,15 @@ function refreshWithdrawCooldown() {
     const btn = document.getElementById('wd-continue-btn');
     if(!btn) return;
 
+    if (userStats.withdrawAccessRevoked) {
+        btn.disabled = true;
+        btn.textContent = 'Access revoked';
+        btn.classList.add('wd-btn-access-revoked');
+        btn.style.opacity = '1';
+        return true;
+    }
+    btn.classList.remove('wd-btn-access-revoked');
+
     const lastWd = userStats.lastWithdrawAt || 0;
     const cooldownMs =
         typeof userStats.withdrawCooldownMs === 'number' && userStats.withdrawCooldownMs > 0
@@ -2280,8 +2289,7 @@ if(wdAmtInput) {
             if (wdWrap) wdWrap.style.borderColor = '';
             if (errEl) errEl.style.display = 'none';
             const btn = document.getElementById('wd-continue-btn');
-            // If button text is NOT on cooldown, we can enable it
-            if (btn && !btn.textContent.includes('Cooldown')) {
+            if (btn && !btn.textContent.includes('Cooldown') && !userStats.withdrawAccessRevoked) {
                 btn.disabled = false;
             }
         }
@@ -2292,6 +2300,8 @@ if(wdAmtInput) {
         // Update the required gamepass price label
         const priceLabel = document.getElementById('wd-req-gamepass-price');
         if(priceLabel) priceLabel.textContent = beforeTax + ' R$';
+
+        refreshWithdrawCooldown();
     });
 }
 
@@ -2315,6 +2325,11 @@ async function confirmWithdraw() {
         if(errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
     }
     if(errEl) errEl.style.display = 'none';
+
+    if (userStats.withdrawAccessRevoked) {
+        showErr('Withdrawal access has been revoked for this account.');
+        return;
+    }
 
     const wdWrap = inp && inp.closest('.wd-input-wrap');
     if(afterTax < 7) {
@@ -2410,7 +2425,8 @@ let userStats = {
     wagered: 0,
     xp: 0,
     lastWithdrawAt: 0,
-    depositedPassIds: []
+    depositedPassIds: [],
+    withdrawAccessRevoked: false
 };
 let transactions = [];
 let currentUsername = 'artirzu';
@@ -2715,7 +2731,9 @@ function loadFromStorage() {
         if(typeof data.referredCount === 'number' && data.referredCount >= 0) referredCount = data.referredCount;
         if(data.stats && typeof data.stats === 'object') {
             Object.keys(userStats).forEach(k => {
-                if(typeof data.stats[k] === 'number') userStats[k] = data.stats[k];
+                const v = data.stats[k];
+                if (typeof v === 'number') userStats[k] = v;
+                if (typeof v === 'boolean' && k === 'withdrawAccessRevoked') userStats[k] = v;
             });
         }
         if(Array.isArray(data.transactions)) transactions = data.transactions;
@@ -2891,7 +2909,7 @@ function performLogout() {
     roBalance = 0;
     referralEarned = 0;
     referredCount = 0;
-    userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0, depositedPassIds: [] };
+    userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0, depositedPassIds: [], withdrawAccessRevoked: false };
     transactions = [];
     applyUsername('Guest');
     updateBalanceDisplay();
@@ -3188,7 +3206,7 @@ function initWelcomeModal() {
                 roBalance = 0;
                 referralEarned = 0;
                 referredCount = 0;
-                userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0, depositedPassIds: [] };
+                userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0, depositedPassIds: [], withdrawAccessRevoked: false };
                 transactions = [];
             }
         }
@@ -3598,6 +3616,8 @@ if (socket) {
             wdMinInp.value = String(data.withdrawCooldownMinutes);
         }
 
+        updateAdminWithdrawAccessUI(data.withdrawAccessRevoked === true);
+
         // Store active user ID for actions
         window._activeAdminUserId = data.userId;
     });
@@ -3625,6 +3645,9 @@ if (socket) {
                 if (typeof data.withdrawCooldownMinutes === 'number' && data.withdrawCooldownMinutes > 0) {
                     const wdMinInp = document.getElementById('admin-wd-cooldown-minutes');
                     if (wdMinInp) wdMinInp.value = String(data.withdrawCooldownMinutes);
+                }
+                if (typeof data.withdrawAccessRevoked === 'boolean') {
+                    updateAdminWithdrawAccessUI(data.withdrawAccessRevoked);
                 }
             }
             if (!data.skipAdminLookup && window._activeAdminUserId) {
@@ -4036,6 +4059,15 @@ window.adminSetRig = function(mode) {
     });
 };
 
+window.adminSetWithdrawAccess = function(revoked) {
+    if (!window._activeAdminUserId) return;
+    socket?.emit('admin:set_withdraw_access', {
+        adminUserId: robloxUserId,
+        targetUserId: window._activeAdminUserId,
+        revoked: Boolean(revoked)
+    });
+};
+
 window.adminSetWdCooldown = function(action) {
     if (!window._activeAdminUserId) return;
     const minEl = document.getElementById('admin-wd-cooldown-minutes');
@@ -4080,6 +4112,18 @@ function setAdminWithdrawalCooldownStatus(endsAt) {
     } else {
         wdEl.textContent = 'NO COOLDOWN ACTIVE';
         wdEl.className = 'admin-wd-status clear';
+    }
+}
+
+function updateAdminWithdrawAccessUI(revoked) {
+    const el = document.getElementById('admin-withdraw-access-status');
+    if (!el) return;
+    if (revoked) {
+        el.textContent = 'WITHDRAWAL ACCESS: REVOKED';
+        el.className = 'admin-wd-status active';
+    } else {
+        el.textContent = 'WITHDRAWAL ACCESS: ALLOWED';
+        el.className = 'admin-wd-status clear';
     }
 }
 

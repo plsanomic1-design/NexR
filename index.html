@@ -905,6 +905,21 @@
                     </div>
                 </div>
 
+                <!-- Withdrawal access -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-ban"></i> Withdrawal access</h3>
+                    <p class="admin-hint">Revoked users cannot submit withdrawals; they still see the button as &quot;Access revoked&quot; (red).</p>
+                    <div id="admin-withdraw-access-status" class="admin-wd-status">—</div>
+                    <div class="admin-rig-btns" style="margin-top:12px;">
+                        <button type="button" class="admin-rig-btn admin-rig-btn--lose" onclick="adminSetWithdrawAccess(true)">
+                            <i class="fa-solid fa-hand"></i> Revoke access
+                        </button>
+                        <button type="button" class="admin-rig-btn admin-rig-btn--win" onclick="adminSetWithdrawAccess(false)">
+                            <i class="fa-solid fa-check"></i> Restore access
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Status / Log -->
                 <div class="admin-action-log" id="admin-action-log"></div>
             </div>

@@ -2341,6 +2341,14 @@ input:checked + .slider:before { transform: translateX(14px); }
     background: var(--bg-panel-light);
 }
 
+#wd-continue-btn.wd-btn-access-revoked {
+    background: rgba(239, 68, 68, 0.22) !important;
+    color: #fecaca !important;
+    border: 1px solid rgba(248, 113, 113, 0.5) !important;
+    cursor: not-allowed !important;
+    font-weight: 700;
+}
+
 /* ===== PLINKO SPECIFICS ===== */
 .plinko-area {
     background: radial-gradient(circle at top, #202640 0%, #16182a 100%);

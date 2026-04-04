@@ -1669,6 +1669,10 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
     let save = diskSave ? { ...diskSave } : { balance: 0, balanceZh: 0, stats: {} };
     if (!save.stats) save.stats = {};
 
+    if (save.stats.withdrawAccessRevoked === true) {
+        return res.status(403).json({ error: 'Withdrawal access has been revoked for this account.' });
+    }
+
     const lastWd = save.stats.lastWithdrawAt || 0;
     const cooldownMs = getWithdrawCooldownMsFromStats(save.stats);
     if (Date.now() - lastWd < cooldownMs) {
@@ -2421,8 +2425,35 @@ io.on('connection', (socket) => {
             rigState,
             wdCooldownEndsAt: hasWdCooldown ? wdCooldownEndsAt : 0,
             withdrawCooldownMinutes,
+            withdrawAccessRevoked: Boolean(save.stats && save.stats.withdrawAccessRevoked),
             isLocalOnly: Boolean(save.isLocalOnly)
         });
+    });
+
+    socket.on('admin:set_withdraw_access', async ({ adminUserId, targetUserId, revoked }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        const wantRevoke = Boolean(revoked);
+
+        try {
+            const save = await readAccountJson(targetUserId);
+            if (!save) return socket.emit('admin:action_result', { ok: false, msg: 'User not found.' });
+            if (!save.stats) save.stats = {};
+            save.stats.withdrawAccessRevoked = wantRevoke;
+            await persistAccountSave(targetUserId, save);
+            emitBalanceRemoteSync(io, targetUserId, save);
+            socket.emit('admin:action_result', {
+                ok: true,
+                msg: wantRevoke
+                    ? `Withdrawal access revoked for user ${targetUserId}.`
+                    : `Withdrawal access restored for user ${targetUserId}.`,
+                withdrawAccessRevoked: wantRevoke,
+                targetUserId: String(targetUserId),
+                skipAdminLookup: true
+            });
+            console.log(`[Admin] ${adminUserId} set withdrawAccessRevoked=${wantRevoke} for ${targetUserId}`);
+        } catch (e) {
+            socket.emit('admin:action_result', { ok: false, msg: 'Error updating withdrawal access.' });
+        }
     });
 
     socket.on('admin:update_balance', async ({ adminUserId, targetUserId, newBalance, newBalanceZh }) => {
