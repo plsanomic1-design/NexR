@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZephR$</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -19,9 +19,13 @@
                             <stop stop-color="#38bdf8"/>
                             <stop offset="1" stop-color="#818cf8"/>
                         </linearGradient>
+                        <filter id="glowNav" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="2" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
                     </defs>
-                    <rect x="2" y="2" width="36" height="36" rx="10" fill="#14142a" stroke="rgba(129,140,248,0.45)" stroke-width="1"/>
-                    <path d="M11 12h18v2.8H14.8L29.2 31H31v2.8H11V31h14.4L11 14.8V12z" fill="url(#brandGradNav)"/>
+                    <rect x="2" y="2" width="36" height="36" rx="10" fill="#161b22" stroke="rgba(59,130,246,0.4)" stroke-width="1.5"/>
+                    <path d="M10 9h18v2.8H13.8L28.2 28H30v2.8H10V28h14.4L10 11.8V9z" fill="url(#brandGradNav)" filter="url(#glowNav)"/>
                 </svg>
             </span>
         </div>
@@ -73,9 +77,13 @@
                                 <stop stop-color="#38bdf8"/>
                                 <stop offset="1" stop-color="#818cf8"/>
                             </linearGradient>
+                            <filter id="glowTop" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="2" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
                         </defs>
-                        <rect x="2" y="2" width="36" height="36" rx="10" fill="#14142a" stroke="rgba(129,140,248,0.45)" stroke-width="1"/>
-                        <path d="M11 12h18v2.8H14.8L29.2 31H31v2.8H11V31h14.4L11 14.8V12z" fill="url(#brandGradTop)"/>
+                        <rect x="2" y="2" width="36" height="36" rx="10" fill="#161b22" stroke="rgba(59,130,246,0.4)" stroke-width="1.5"/>
+                        <path d="M10 9h18v2.8H13.8L28.2 28H30v2.8H10V28h14.4L10 11.8V9z" fill="url(#brandGradTop)" filter="url(#glowTop)"/>
                     </svg>
                 </span>
                 <span class="topbar-logo-text">Zeph<span class="logo-highlight">R$</span></span>
@@ -103,15 +111,29 @@
         
         <div class="page-content" id="page-content">
             <div id="view-home" class="view active">
-                <div class="home-header">
-                    <h2>Popular games</h2>
-                    <div class="carousel-nav">
-                        <button type="button" class="nav-btn" aria-label="Previous"><span class="nav-carousel-char" aria-hidden="true">&lsaquo;</span></button>
-                        <button type="button" class="nav-btn" aria-label="Next"><span class="nav-carousel-char" aria-hidden="true">&rsaquo;</span></button>
+                <header class="home-hero">
+                    <div class="home-hero__intro">
+                        <span class="home-hero__eyebrow">ZephR$</span>
+                        <h1 class="home-hero__title">Play &amp; wager</h1>
+                        <p class="home-hero__sub">Choose a game below. Balance syncs when you link Roblox.</p>
                     </div>
-                </div>
-                
-                <div class="games-grid">
+                    <aside class="home-wallet-card" aria-label="Your balance">
+                        <h3 class="home-wallet-card__title">Wallet</h3>
+                        <div class="balance-item balance-item--hero">
+                            <div class="balance-icon zr"><span class="balance-zr-letter">ZH$</span></div>
+                            <span class="balance-name">ZR$</span>
+                            <span class="balance-val" id="home-balance">0.00</span>
+                        </div>
+                        <button type="button" class="btn-primary btn-deposit-full" id="home-deposit-btn" onclick="openDepositModal()">Add funds</button>
+                    </aside>
+                </header>
+
+                <section class="home-games-block" aria-labelledby="home-games-heading">
+                    <div class="home-section-head">
+                        <h2 id="home-games-heading">Games</h2>
+                        <span class="home-section-hint">Tap a tile to open</span>
+                    </div>
+                <div class="games-grid games-grid--mosaic">
                     <div class="game-card crash" onclick="document.querySelector('[data-view=crash]').click()">
                         <div class="game-card-visual crash-visual" aria-hidden="true"></div>
                         <div class="badge badge-popular">Popular</div>
@@ -137,40 +159,12 @@
                         <h3 class="card-title">MINES</h3>
                     </div>
                 </div>
+                </section>
 
-                <div class="home-info-row">
-                    <div class="refer-card">
-                        <div class="refer-bg-glow"></div>
-                        <h3>Refer friends</h3>
-                        <div class="refer-stats">
-                            <div class="stat">
-                                <span class="stat-label">Total earned</span>
-                                <span class="stat-value" id="home-refer-earned">0.00 <span class="currency-inline">ZR$</span></span>
-                            </div>
-                            <div class="stat">
-                                <span class="stat-label">Users referred</span>
-                                <span class="stat-value" id="home-refer-count">0</span>
-                            </div>
-                        </div>
-                        <button type="button" class="btn-primary" style="margin-top:20px; width:200px">Make an affiliate code</button>
-                        <p class="refer-desc" style="margin-top:10px; color:var(--text-secondary); font-size:11px; max-width:80%;">Share ZephR$ with friends and earn ZR$! Everyone you invite will get a free case when they join.</p>
-                    </div>
-                    
-                    <div class="balances-card">
-                        <h3>Your Balances</h3>
-                        <div class="balance-item">
-                            <div class="balance-icon zr"><span class="balance-zr-letter">ZH$</span></div>
-                            <span class="balance-name">ZR$</span>
-                            <span class="balance-val" id="home-balance">0.00</span>
-                        </div>
-                        <button type="button" class="btn-primary btn-deposit-full" id="home-deposit-btn" onclick="openDepositModal()">Deposit</button>
-                        <p class="balances-footnote">What are the differences?</p>
-                    </div>
-                </div>
-
-                <div class="live-feed-section">
+                <section class="live-feed-section" aria-labelledby="live-feed-heading">
                     <div class="feed-header">
-                        <h2>Live feed</h2>
+                        <h2 id="live-feed-heading">Activity</h2>
+                        <span class="feed-header-hint">Recent rounds</span>
                     </div>
                     <div class="feed-tabs">
                         <button class="feed-tab active">All Games</button>
@@ -193,7 +187,7 @@
                             <!-- populated by JS -->
                         </tbody>
                     </table>
-                </div>
+                </section>
             </div>
             <div id="view-blackjack" class="view">
                 <div class="game-layout">
@@ -953,7 +947,22 @@
     <div class="modal-backdrop" id="welcome-backdrop">
         <div class="modal-box" style="max-width:500px; padding:35px; position:relative;">
             <div style="display:flex; align-items:center; margin-bottom:20px;">
-                <span class="welcome-brand-glyph" aria-hidden="true">Z</span>
+                <span class="brand-mark" aria-hidden="true">
+                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                        <defs>
+                            <linearGradient id="brandGradWelcome" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#38bdf8"/>
+                                <stop offset="1" stop-color="#818cf8"/>
+                            </linearGradient>
+                            <filter id="glowWelcome" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="2" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+                        <rect x="2" y="2" width="36" height="36" rx="10" fill="#161b22" stroke="rgba(59,130,246,0.4)" stroke-width="1.5"/>
+                        <path d="M10 9h18v2.8H13.8L28.2 28H30v2.8H10V28h14.4L10 11.8V9z" fill="url(#brandGradWelcome)" filter="url(#glowWelcome)"/>
+                    </svg>
+                </span>
                 <span style="font-size:18px; font-weight:800; margin-left:10px;">Zeph<span style="color:#7dd3fc;">R$</span></span>
             </div>
             <h2 style="font-size:22px; font-weight:700; margin-bottom:10px;">Welcome</h2>

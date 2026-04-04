@@ -1164,11 +1164,6 @@ function updateBalanceDisplay() {
     if(tbEl) tbEl.textContent = formatted;
     if(homeEl) homeEl.textContent = formatted;
 
-    const refEarn = document.getElementById('home-refer-earned');
-    if(refEarn) refEarn.innerHTML = referralEarned.toFixed(2) + ' <span class="currency-inline">ZR$</span>';
-    const refCnt = document.getElementById('home-refer-count');
-    if(refCnt) refCnt.textContent = String(referredCount);
-
     // Animate the topbar value briefly
     const chip = document.querySelector('.balance-chip');
     if(chip) {
