@@ -55,39 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Populate Live Feed
-    const liveFeedBody = document.getElementById('live-feed-body');
-    if (liveFeedBody) {
-        const games = [
-            { name: 'Mines', code: 'M' },
-            { name: 'Dice', code: 'D' },
-            { name: 'Towers', code: 'T' },
-            { name: 'Plinko', code: 'P' },
-            { name: 'Blackjack', code: 'B' }
-        ];
-        const users = ['PickerFromAfrica', 'dilan351647', 'Perkyracksss1', '90dayrun', 'Guest123'];
-        
-        for (let i = 0; i < 6; i++) {
-            const gameObj = games[Math.floor(Math.random() * games.length)];
-            const user = users[Math.floor(Math.random() * users.length)];
-            const amount = [25, 1000, 200, 50, 10][Math.floor(Math.random() * 5)];
-            const isWin = Math.random() > 0.4;
-            const multiplier = isWin ? (Math.random() * 2 + 1).toFixed(2) : "0.00";
-            const payout = isWin ? "+" + (amount * parseFloat(multiplier)).toFixed(2) : "-" + amount;
-            const payoutClass = isWin ? 'payout-pos' : 'payout-neg';
-            
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><span class="feed-game-letter" aria-hidden="true">${gameObj.code}</span> ${gameObj.name}</td>
-                <td><div style="display:flex; align-items:center;"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${user}&backgroundColor=2c2f4a" style="width:24px;height:24px;border-radius:50%;margin-right:8px;"> ${user}</div></td>
-                <td><span class="currency-inline">ZR$</span> ${amount}</td>
-                <td style="color:var(--text-secondary)">x${multiplier}</td>
-                <td class="${payoutClass}"><span class="currency-inline">ZR$</span> ${payout}</td>
-                <td style="color:var(--text-secondary)">16:50</td>
-            `;
-            liveFeedBody.appendChild(tr);
-        }
-    }
+    if (typeof initLiveFeed === 'function') initLiveFeed();
 
     // Blackjack Logic
     const bjPlayBtn = document.getElementById('bj-play-btn');
@@ -835,6 +803,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         setTimeout(() => bucketEl.classList.remove('hit'), 150);
                         const multi = parseFloat(bucketEl.dataset.multi);
                         awardWin(b.bet * multi);
+                        postLiveFeedRound('plinko', b.bet, multi, b.bet * multi);
                         if(multi >= 2) {
                             if(typeof soundWin === 'function') soundWin();
                         } else {
@@ -1023,6 +992,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hasCashedOut = true;
             let winAmt = cBet * cMulti;
             awardWin(winAmt);
+            postLiveFeedRound('crash', cBet, cMulti, winAmt);
             if(typeof soundWin === 'function') soundWin();
             
             crashPlayBtn.textContent = 'Cashed out';
@@ -1052,6 +1022,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 drawGraph(elapsed, cMulti);
                 if(typeof soundLose === 'function' && !hasCashedOut && cBet > 0) soundLose();
+                if(!hasCashedOut && cBet > 0) postLiveFeedRound('crash', cBet, 0, -cBet);
                 
                 const hist = document.getElementById('crash-history');
                 const p = document.createElement('span');
@@ -1281,6 +1252,148 @@ function awardWin(amount) {
     saveToStorage();
 }
 
+function getLiveFeedDisplayName() {
+    try {
+        if (typeof currentUsername === 'string' && currentUsername.trim().length > 0) {
+            return currentUsername.trim().slice(0, 40);
+        }
+    } catch (e) {}
+    return 'Guest';
+}
+
+function postLiveFeedRound(gameKey, bet, multiplier, grossPayout) {
+    if (typeof window === 'undefined' || window.location.protocol === 'file:') return;
+    const b = typeof bet === 'number' && bet >= 0 ? bet : 0;
+    if (b <= 0) return;
+    const m = typeof multiplier === 'number' && multiplier >= 0 ? multiplier : 0;
+    const p = typeof grossPayout === 'number' ? grossPayout : 0;
+    try {
+        fetch(new URL('/api/live-feed', window.location.origin).href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: getLiveFeedDisplayName(),
+                gameKey,
+                bet: b,
+                multiplier: m,
+                payout: p
+            })
+        }).catch(() => {});
+    } catch (e) {}
+}
+
+let _liveFeedFilter = 'all';
+
+const GAME_FEED_META = {
+    crash: { name: 'Crash', emoji: '🚀' },
+    blackjack: { name: 'Blackjack', emoji: '🃏' },
+    dice: { name: 'Dice', emoji: '🎲' },
+    mines: { name: 'Mines', emoji: '💎' },
+    towers: { name: 'Towers', emoji: '🏰' },
+    plinko: { name: 'Plinko', emoji: '📊' },
+    rooms: { name: 'Rooms', emoji: '🚪' }
+};
+
+function escapeFeedHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function formatFeedTime(ms) {
+    const d = new Date(ms);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return hh + ':' + mm;
+}
+
+function renderLiveFeedRows(events) {
+    const body = document.getElementById('live-feed-body');
+    if (!body) return;
+    let list = Array.isArray(events) ? [...events] : [];
+    if (_liveFeedFilter === 'high') {
+        list = list.filter((e) => (e.payout || 0) > 0 && (e.bet || 0) >= 100);
+    } else if (_liveFeedFilter === 'lucky') {
+        list = list.filter((e) => (e.payout || 0) > 0 && (e.multiplier || 0) >= 3);
+    }
+    body.textContent = '';
+    const slice = list.slice(0, 25);
+    if (slice.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td colspan="6" style="padding:28px 12px; text-align:center; color:var(--text-secondary); font-size:13px;">No activity for this filter yet. Play a game or switch to All Games.</td>';
+        body.appendChild(tr);
+        return;
+    }
+    slice.forEach((ev) => {
+        const meta = GAME_FEED_META[ev.gameKey] || { name: ev.gameKey || 'Game', emoji: '🎰' };
+        const bet = Number(ev.bet) || 0;
+        const mult = Number(ev.multiplier) || 0;
+        const payoutVal = Number(ev.payout) || 0;
+        const payoutStr = payoutVal >= 0 ? '+' + payoutVal.toFixed(2) : payoutVal.toFixed(2);
+        const payoutClass = payoutVal > 0 ? 'payout-pos' : 'payout-neg';
+        const timeStr = ev.createdAt ? formatFeedTime(ev.createdAt) : '--:--';
+        const user = typeof ev.username === 'string' ? ev.username : 'Guest';
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td><span class="feed-game-emoji" aria-hidden="true">' +
+            meta.emoji +
+            '</span> <span class="feed-game-name">' +
+            escapeFeedHtml(meta.name) +
+            '</span></td>' +
+            '<td><div style="display:flex; align-items:center;"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=' +
+            encodeURIComponent(user) +
+            '&backgroundColor=2c2f4a" alt="" style="width:24px;height:24px;border-radius:50%;margin-right:8px;"> ' +
+            escapeFeedHtml(user) +
+            '</div></td>' +
+            '<td><span class="currency-inline">ZR$</span> ' +
+            bet.toFixed(2) +
+            '</td>' +
+            '<td style="color:var(--text-secondary)">x' +
+            mult.toFixed(2) +
+            '</td>' +
+            '<td class="' +
+            payoutClass +
+            '"><span class="currency-inline">ZR$</span> ' +
+            payoutStr +
+            '</td>' +
+            '<td style="color:var(--text-secondary)">' +
+            escapeFeedHtml(timeStr) +
+            '</td>';
+        body.appendChild(tr);
+    });
+}
+
+async function refreshLiveFeed() {
+    const body = document.getElementById('live-feed-body');
+    if (!body || typeof window === 'undefined' || window.location.protocol === 'file:') return;
+    try {
+        const u = new URL('/api/live-feed', window.location.origin);
+        u.searchParams.set('limit', '80');
+        const res = await fetch(u.href);
+        if (!res.ok) return;
+        const data = await res.json();
+        const rows = Array.isArray(data.events) ? data.events : [];
+        renderLiveFeedRows(rows);
+    } catch (e) {}
+}
+
+function initLiveFeed() {
+    const body = document.getElementById('live-feed-body');
+    if (!body || typeof window === 'undefined' || window.location.protocol === 'file:') return;
+    const tabs = document.querySelectorAll('.live-feed-section .feed-tab');
+    tabs.forEach((tab, i) => {
+        tab.addEventListener('click', () => {
+            tabs.forEach((t) => t.classList.remove('active'));
+            tab.classList.add('active');
+            _liveFeedFilter = i === 1 ? 'high' : i === 2 ? 'lucky' : 'all';
+            refreshLiveFeed();
+        });
+    });
+    refreshLiveFeed();
+    setInterval(refreshLiveFeed, 5000);
+}
+
 // Re-wire game balance hooks (called after games init)
 document.addEventListener('DOMContentLoaded', () => {
     patchBlackjackBalance();
@@ -1295,6 +1408,8 @@ function patchBlackjackBalance() {
     const standBtn = document.getElementById('bj-stand-btn');
     if(!playBtn) return;
 
+    let bjLiveFeedLast = '';
+
     // Intercept "Place bet" to deduct balance
     const origClick = playBtn.onclick;
     playBtn.addEventListener('click', function(e) {
@@ -1308,6 +1423,7 @@ function patchBlackjackBalance() {
                 return;
             }
             deductBet(bet);
+            bjLiveFeedLast = '';
             soundClick();
         }
     }, true);
@@ -1317,16 +1433,25 @@ function patchBlackjackBalance() {
     if(bjMsg) {
         const obs = new MutationObserver(() => {
             if(bjMsg.style.display === 'none') return;
-            const txt = bjMsg.textContent.toLowerCase();
+            const txtRaw = bjMsg.textContent || '';
+            const txt = txtRaw.toLowerCase();
+            if(txtRaw === bjLiveFeedLast) return;
             const bet = parseFloat(document.getElementById('bj-bet-input').value) || 0;
             if(txt.includes('win') || txt.includes('blackjack')) {
-                const payout = txt.includes('blackjack') ? bet * 1.5 : bet * 2;
-                awardWin(payout);
+                bjLiveFeedLast = txtRaw;
+                const gross = txt.includes('blackjack') ? bet * 1.5 : bet * 2;
+                const mult = bet > 0 ? gross / bet : 0;
+                awardWin(gross);
+                postLiveFeedRound('blackjack', bet, mult, gross);
                 soundWin();
             } else if(txt.includes('push')) {
+                bjLiveFeedLast = txtRaw;
                 awardWin(bet); // return bet
+                postLiveFeedRound('blackjack', bet, 1, bet);
                 soundClick();
             } else if(txt.includes('lose') || txt.includes('bust')) {
+                bjLiveFeedLast = txtRaw;
+                postLiveFeedRound('blackjack', bet, 0, -bet);
                 soundLose();
             }
         });
@@ -1349,18 +1474,31 @@ function patchMinesBalance() {
                 return;
             }
             deductBet(bet);
+            minesFeedLast = '';
         }
     }, true);
+
+    let minesFeedLast = '';
 
     // Listen on mines-message for outcome
     if(minesMsg) {
         const obs = new MutationObserver(() => {
             if(minesMsg.style.display === 'none') return;
-            const txt = minesMsg.textContent.toLowerCase();
+            const txtRaw = minesMsg.textContent || '';
+            const txt = txtRaw.toLowerCase();
+            const bet = parseFloat(document.getElementById('mines-bet-input').value) || 0;
             if(txt.startsWith('won')) {
-                const val = parseFloat(minesMsg.textContent.replace('Won','')) || 0;
+                if(txtRaw === minesFeedLast) return;
+                minesFeedLast = txtRaw;
+                const val = parseFloat(minesMsg.textContent.replace(/Won/gi, '')) || 0;
+                const mult = bet > 0 ? val / bet : 0;
+                postLiveFeedRound('mines', bet, mult, val);
                 awardWin(val);
                 soundWin();
+            } else if(txt.includes('busted')) {
+                if(txtRaw === minesFeedLast) return;
+                minesFeedLast = txtRaw;
+                postLiveFeedRound('mines', bet, 0, -bet);
             }
             // bust: bomb SFX only from the clicked tile (not mines-message observer)
         });
@@ -1384,18 +1522,30 @@ function patchTowersBalance() {
                 return;
             }
             deductBet(bet);
+            towersFeedLast = '';
         }
     }, true);
+
+    let towersFeedLast = '';
 
     if(tMsg) {
         const obs = new MutationObserver(() => {
             if(tMsg.style.display === 'none') return;
-            const txt = tMsg.textContent.toLowerCase();
+            const txtRaw = tMsg.textContent || '';
+            const txt = txtRaw.toLowerCase();
+            const bet = parseFloat(document.getElementById('towers-bet-input').value) || 0;
             if(txt.startsWith('won')) {
-                const val = parseFloat(tMsg.textContent.replace('Won','')) || 0;
+                if(txtRaw === towersFeedLast) return;
+                towersFeedLast = txtRaw;
+                const val = parseFloat(tMsg.textContent.replace(/Won/gi, '')) || 0;
+                const mult = bet > 0 ? val / bet : 0;
+                postLiveFeedRound('towers', bet, mult, val);
                 awardWin(val);
                 soundWin();
             } else if(txt === 'busted!') {
+                if(txtRaw === towersFeedLast) return;
+                towersFeedLast = txtRaw;
+                postLiveFeedRound('towers', bet, 0, -bet);
                 soundLose();
             }
         });
@@ -1443,16 +1593,23 @@ function patchDiceBalance() {
         deductBet(bet);
     }, true);
 
+    let diceFeedAt = 0;
+
     // Listen for result marker win/lose class
     if(resultMarker) {
         const obs = new MutationObserver(() => {
             if(!resultMarker.classList.contains('show')) return;
+            if(Date.now() - diceFeedAt < 450) return;
+            diceFeedAt = Date.now();
             const bet = parseFloat(document.getElementById('dice-bet-input').value) || 0;
             const multi = parseFloat(document.getElementById('dice-multi-input').value) || 1;
             if(resultMarker.classList.contains('win')) {
-                awardWin(bet * multi);
+                const gross = bet * multi;
+                awardWin(gross);
+                postLiveFeedRound('dice', bet, multi, gross);
                 soundWin();
             } else {
+                postLiveFeedRound('dice', bet, 0, -bet);
                 soundLose();
             }
         });

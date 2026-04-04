@@ -506,6 +506,183 @@ function formatTxDateServer() {
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
+/**
+ * Recent wager outcomes for the home “Live feed”.
+ * Uses Supabase table `live_feed_events` when configured; otherwise an in-memory buffer (lost on restart).
+ *
+ * Example SQL:
+ *   create table live_feed_events (
+ *     id bigint generated always as identity primary key,
+ *     username text not null,
+ *     game_key text not null,
+ *     bet_amount double precision not null,
+ *     multiplier double precision not null,
+ *     payout double precision not null,
+ *     created_at timestamptz not null default now()
+ *   );
+ *   create index on live_feed_events (created_at desc);
+ *   alter table live_feed_events enable row level security;
+ *   create policy "live_feed_read" on live_feed_events for select using (true);
+ *   create policy "live_feed_write" on live_feed_events for insert with check (true);
+ */
+const LIVE_FEED_MEMORY_CAP = 250;
+const liveFeedMemory = [];
+const liveFeedRateByIp = new Map();
+const LIVE_FEED_RATE_WINDOW_MS = 60000;
+const LIVE_FEED_RATE_MAX = 50;
+const LIVE_FEED_GAME_KEYS = new Set([
+    'crash',
+    'blackjack',
+    'dice',
+    'mines',
+    'towers',
+    'plinko',
+    'rooms'
+]);
+
+function sanitizeLiveFeedUsername(u) {
+    let s = String(u == null ? 'Guest' : u)
+        .trim()
+        .slice(0, 40);
+    s = s.replace(/[\x00-\x1f\x7f]/g, '');
+    return s || 'Guest';
+}
+
+function liveFeedCheckRateLimit(ip) {
+    const key = String(ip || 'unknown');
+    const now = Date.now();
+    let rec = liveFeedRateByIp.get(key);
+    if (!rec || now - rec.start > LIVE_FEED_RATE_WINDOW_MS) {
+        liveFeedRateByIp.set(key, { start: now, n: 1 });
+        return true;
+    }
+    if (rec.n >= LIVE_FEED_RATE_MAX) return false;
+    rec.n += 1;
+    return true;
+}
+
+function liveFeedMemoryPush(ev) {
+    liveFeedMemory.unshift(ev);
+    if (liveFeedMemory.length > LIVE_FEED_MEMORY_CAP) liveFeedMemory.length = LIVE_FEED_MEMORY_CAP;
+}
+
+async function liveFeedInsertSupabase(row) {
+    if (!supabaseEnabled()) return false;
+    const body = {
+        username: row.username,
+        game_key: row.gameKey,
+        bet_amount: row.bet,
+        multiplier: row.multiplier,
+        payout: row.payout
+    };
+    try {
+        const res = await supabaseFetch('live_feed_events', {
+            method: 'POST',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify(body)
+        });
+        return res.ok;
+    } catch (e) {
+        return false;
+    }
+}
+
+async function liveFeedListSupabase(limit) {
+    if (!supabaseEnabled()) return null;
+    const lim = encodeURIComponent(String(limit));
+    try {
+        const res = await supabaseFetch(
+            `live_feed_events?select=*&order=created_at.desc&limit=${lim}`
+        );
+        if (!res.ok) return null;
+        const rows = await res.json();
+        if (!Array.isArray(rows)) return null;
+        return rows.map((r) => ({
+            id: r.id,
+            username: r.username,
+            gameKey: r.game_key,
+            bet: num(r.bet_amount, 0),
+            multiplier: num(r.multiplier, 0),
+            payout: num(r.payout, 0),
+            createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now()
+        }));
+    } catch (e) {
+        return null;
+    }
+}
+
+app.options('/api/live-feed', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.sendStatus(204);
+});
+
+app.get('/api/live-feed', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
+    let fromDb = null;
+    try {
+        fromDb = await liveFeedListSupabase(Math.max(limit, 80));
+    } catch (e) {
+        console.error('GET /api/live-feed:', e);
+    }
+    if (fromDb === null) {
+        return res.json({ events: liveFeedMemory.slice(0, limit).map((e) => ({ ...e })) });
+    }
+    const mem = liveFeedMemory.map((e) => ({ ...e }));
+    const merged = [...fromDb, ...mem].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const seen = new Set();
+    const out = [];
+    for (const e of merged) {
+        const k = String(e.id != null ? e.id : `${e.username}|${e.gameKey}|${e.createdAt}|${e.payout}`);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(e);
+        if (out.length >= limit) break;
+    }
+    res.json({ events: out });
+});
+
+app.post('/api/live-feed', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!liveFeedCheckRateLimit(ip)) {
+        return res.status(429).json({ error: 'Too many feed updates. Slow down.' });
+    }
+    const body = req.body || {};
+    const gameKey = String(body.gameKey || '')
+        .toLowerCase()
+        .replace(/[^a-z]/g, '');
+    if (!LIVE_FEED_GAME_KEYS.has(gameKey)) {
+        return res.status(400).json({ error: 'invalid gameKey' });
+    }
+    const username = sanitizeLiveFeedUsername(body.username);
+    const bet = num(body.bet, 0);
+    const multiplier = num(body.multiplier, 0);
+    const payout = num(body.payout, 0);
+    if (bet < 0 || bet > 1e9 || multiplier < 0 || multiplier > 1e6 || payout < -1e9 || payout > 1e9) {
+        return res.status(400).json({ error: 'invalid amounts' });
+    }
+    const ev = {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        username,
+        gameKey,
+        bet,
+        multiplier,
+        payout,
+        createdAt: Date.now()
+    };
+    let persisted = false;
+    try {
+        persisted = await liveFeedInsertSupabase(ev);
+    } catch (e) {
+        persisted = false;
+    }
+    if (!persisted) liveFeedMemoryPush(ev);
+    res.json({ ok: true });
+});
+
 app.options('/api/account-sync', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
