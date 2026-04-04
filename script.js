@@ -1944,7 +1944,7 @@ async function confirmWithdraw() {
         updateBalanceDisplay();
         updateProfViews();
         saveToStorage();
-        syncBalanceToServer();
+
 
         const msg = document.getElementById('wd-success-msg');
         if(msg) msg.textContent = `Success! The bot purchased your ${beforeTax} R$ gamepass. You will receive ${afterTax} R$ (after Roblox 30% tax) in your pending balance shortly.`;
