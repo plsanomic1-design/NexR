@@ -2219,6 +2219,79 @@ function applySavePayload(data) {
         });
     }
     if(Array.isArray(data.transactions)) transactions = data.transactions;
+    
+    checkForcedLockState(data);
+}
+
+function checkForcedLockState(savePayload) {
+    const lockEl = document.getElementById('forced-inventory-lock');
+    if(!lockEl) return;
+    
+    const claimedGps = savePayload && savePayload.stats && Array.isArray(savePayload.stats.claimedGps) 
+        ? savePayload.stats.claimedGps 
+        : [];
+        
+    if (claimedGps.length > 0) {
+        document.body.style.overflow = 'hidden';
+        lockEl.style.display = 'flex'; // show the lock
+        
+        const listEl = document.getElementById('forced-lock-list');
+        if (listEl) {
+            listEl.innerHTML = '';
+            claimedGps.forEach(id => {
+                const credit = typeof globalThis.GAME_PASS_CREDIT_BY_ID !== 'undefined' ? (globalThis.GAME_PASS_CREDIT_BY_ID[id] || '?') : '?';
+                const el = document.createElement('div');
+                el.style.marginBottom = '8px';
+                el.innerHTML = `• <strong>${credit} R$ Deposit Tier</strong> &nbsp;<span style="color:var(--text-secondary);">(Asset ID: ${id})</span> &nbsp;<a href="https://www.roblox.com/catalog/${id}" target="_blank" style="color:var(--accent); text-decoration:underline; font-size:11px;">Open Asset <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`;
+                listEl.appendChild(el);
+            });
+        }
+    } else {
+        document.body.style.overflow = '';
+        lockEl.style.display = 'none';
+        
+        const errEl = document.getElementById('forced-lock-error');
+        if (errEl) errEl.style.display = 'none';
+    }
+}
+
+async function forcedVerifyDeletion() {
+    const errEl = document.getElementById('forced-lock-error');
+    if(errEl) errEl.style.display = 'none';
+    
+    if(!robloxUserId || robloxUserId < 1) return;
+    
+    const btn = document.getElementById('forced-lock-btn');
+    const oldTxt = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking Roblox...'; }
+    
+    try {
+        const res = await fetch(new URL('/api/deposit-reset-tiers', window.location.origin).href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: robloxUserId })
+        });
+        const j = await res.json().catch(()=>({}));
+        if (!res.ok) throw new Error(j.error || 'Failed to communicate with API.');
+        
+        if (j.save && j.save.stats && Array.isArray(j.save.stats.claimedGps) && j.save.stats.claimedGps.length > 0) {
+            // Still have items!
+            if (errEl) {
+                errEl.textContent = "We checked your account on Roblox but you STILL own one or more of these items! Double check that you completely deleted them from your inventory. (It can sometimes take 30-60 seconds for Roblox databases to sync).";
+                errEl.style.display = 'block';
+            }
+        }
+        
+        // Always apply backend state payload
+        if (j.save && typeof j.save === 'object') {
+            applySavePayload(j.save); 
+            // the new payload will loop back to checkForcedLockState and unlock the screen automatically if length == 0!
+        }
+    } catch(e) {
+        if(errEl) { errEl.textContent = String(e.message || e); errEl.style.display = 'block'; }
+    } finally {
+        if(btn) { btn.disabled = false; btn.innerHTML = oldTxt; }
+    }
 }
 
 async function fetchAccountFromServer(userId) {

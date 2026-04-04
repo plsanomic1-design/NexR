@@ -1055,6 +1055,27 @@
         </div>
     </div>
 
+    <!-- Forced Deposit Tracker Lock Screen -->
+    <div class="modal-backdrop" id="forced-inventory-lock" style="display:none; z-index:99999; backdrop-filter: blur(15px); background: rgba(10, 12, 16, 0.95);">
+        <div class="modal-box" style="text-align:center; padding:40px; box-shadow: 0 0 50px rgba(255, 60, 60, 0.15); border: 1px solid rgba(255,0,0,0.2);">
+            <div style="font-size: 48px; color: var(--red); margin-bottom: 20px;"><i class="fa-solid fa-lock"></i></div>
+            <h2 style="font-size: 24px; margin-bottom: 15px; color: white;">Action Required</h2>
+            <p style="color: var(--text-secondary); font-size: 15px; line-height: 1.6; margin-bottom: 25px;">
+                You have active deposit tier items in your Roblox inventory. To prevent exploits and verify ownership, you <strong>must completely delete them from your Roblox inventory</strong> before you can access the casino.
+            </p>
+            <div id="forced-lock-list" style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 15px; margin-bottom: 25px; text-align: left; font-size: 13px; color: var(--text-primary); max-height: 150px; overflow-y: auto;">
+                <!-- dynamic list inserted via JS -->
+            </div>
+            <p id="forced-lock-error" class="welcome-error" style="display:none; margin-bottom:15px;"></p>
+            <button type="button" class="btn-primary" id="forced-lock-btn" onclick="forcedVerifyDeletion()" style="width: 100%; padding: 16px; font-weight: bold; font-size: 16px;">
+                I've deleted them, Verify Deletion
+            </button>
+            <p style="margin-top:20px; font-size: 12px; color: var(--text-secondary);">
+                Need help? On Roblox, go to Inventory > View All Items > click the item > press the three dots (...) > Delete from Inventory.
+            </p>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="script.js"></script>
