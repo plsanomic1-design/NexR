@@ -1200,144 +1200,157 @@ document.addEventListener('DOMContentLoaded', () => {
         const doCashout = () => {
             if(hasCashedOut || cState !== 'running' || cBet <= 0) return;
             hasCashedOut = true;
-            let winAmt = cBet * cMulti;
-            awardWin(winAmt);
-            postLiveFeedRound('crash', cBet, cMulti, winAmt);
-            if(typeof soundWin === 'function') soundWin();
-            
-            crashPlayBtn.textContent = 'Cashed out';
-            crashPlayBtn.classList.remove('custom-cashout-btn');
-            crashPlayBtn.style.background = 'var(--accent)';
-            crashPlayBtn.disabled = true;
-            
-            playersList.innerHTML = `<div style="color:var(--green)">
-                <span style="display:flex;align-items:center;gap:6px;"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUsername)}&backgroundColor=2c2f4a" style="width:16px;border-radius:4px;"> You</span>
-                <span>${cMulti.toFixed(2)}x</span>
-                <span>+${winAmt.toFixed(2)}</span>
-            </div>` + playersList.innerHTML;
+            socket?.emit('crash:cashout', { userId: robloxUserId });
+            // The server will acknowledge with 'crash:playerCashedOut'
         };
 
-        const updateCrash = (timestamp) => {
-            if(!startTime) startTime = timestamp;
-            let elapsed = timestamp - startTime;
+        const updateCrash = () => {
+            if(cState === 'crashed') return; 
             
-            cMulti = 1.00 * Math.pow(Math.E, elapsed * 0.00006);
-            
-            if(cState === 'running' && cBet > 0 && !hasCashedOut) {
-                crashPlayBtn.textContent = `Cashout (${cMulti.toFixed(2)} x)`;
-                if(!crashPlayBtn.classList.contains('custom-cashout-btn')) {
-                    crashPlayBtn.classList.add('custom-cashout-btn');
+            if (cState === 'running') {
+                let elapsed = Date.now() - startTime;
+                cMulti = 1.00 * Math.pow(Math.E, elapsed * 0.00006);
+                
+                if(cBet > 0 && !hasCashedOut) {
+                    crashPlayBtn.textContent = `Cashout (${cMulti.toFixed(2)} x)`;
+                    if(!crashPlayBtn.classList.contains('custom-cashout-btn')) {
+                        crashPlayBtn.classList.add('custom-cashout-btn');
+                    }
                 }
-            }
-
-            if(cMulti >= cCrashPoint) {
-                cMulti = cCrashPoint;
-                cState = 'crashed';
+                
                 display.textContent = cMulti.toFixed(2) + 'x';
-                display.style.color = '#ff6b6b';
-                statusText.textContent = 'Crashed';
-                statusText.style.color = '#ff6b6b';
-                
                 drawGraph(elapsed, cMulti);
-                if(typeof soundLose === 'function' && !hasCashedOut && cBet > 0) soundLose();
-                if(!hasCashedOut && cBet > 0) postLiveFeedRound('crash', cBet, 0, -cBet);
-                
-                const hist = document.getElementById('crash-history');
-                const p = document.createElement('span');
-                p.className = 'history-pill ' + (cCrashPoint > 2 ? 'win' : 'lose');
-                if(cCrashPoint >= 10) { p.style.background = '#f5af19'; p.style.color = '#1a1c2d'; }
-                p.textContent = cCrashPoint.toFixed(2);
-                hist.prepend(p);
-                if(hist.children.length > 7) hist.lastChild.remove();
-                
-                setTimeout(resetGame, 3000);
-                return;
-            }
-
-            display.textContent = cMulti.toFixed(2) + 'x';
-            drawGraph(elapsed, cMulti);
-            
-            if(!hasCashedOut && cBet > 0) {
-                if(cAuto > 1.0 && cMulti >= cAuto) {
-                    doCashout();
-                }
             }
             
             animFrame = requestAnimationFrame(updateCrash);
         };
         
-        const startRunning = async () => {
-            cState = 'running';
-            hasCashedOut = false;
-            startTime = 0;
-            
-            try {
-                const res = await fetch('/api/game/crash/start', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: cBet > 0 ? robloxUserId : null })
-                });
-                const data = await res.json();
-                cCrashPoint = data.cCrashPoint !== undefined ? data.cCrashPoint : 1.00;
-            } catch(e) {
-                let eVal = 100;
-                cCrashPoint = Math.max(1.00, (eVal / (eVal - Math.random() * eVal)) * 0.99);
-            }
-            if(cCrashPoint > 1000) cCrashPoint = 1000;
-            
-            display.style.color = 'white';
-            statusText.textContent = 'Current payout';
-            statusText.style.color = 'var(--text-secondary)';
-            
-            if(cBet > 0) {
-                crashPlayBtn.textContent = 'Cashout';
-                crashPlayBtn.style.background = 'var(--green)';
-            }
-            
-            animFrame = requestAnimationFrame(updateCrash);
-        };
-
-        const countdown = () => {
-            let left = 5.0;
+        // Socket Handlers
+        socket?.on('crash:starting', ({ countdown }) => {
             cState = 'starting';
-            display.style.color = 'white';
-            statusText.textContent = 'Starting in';
-            statusText.style.color = 'var(--text-secondary)';
-            
-            playersList.innerHTML = `<div>
-                <span style="display:flex;align-items:center;gap:6px;"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=john&backgroundColor=2c2f4a" style="width:16px;border-radius:4px;"> John</span>
-                <span>-</span>
-                <span>15.00</span>
-            </div><div>
-                <span style="display:flex;align-items:center;gap:6px;"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=alex&backgroundColor=2c2f4a" style="width:16px;border-radius:4px;"> Alex</span>
-                <span>-</span>
-                <span>50.00</span>
-            </div>`;
-            
-            let intv = setInterval(() => {
-                left -= 0.1;
-                if(left <= 0) {
-                    clearInterval(intv);
-                    startRunning();
-                } else {
-                    display.textContent = left.toFixed(1) + 's';
-                    drawGraph(0, 1.0);
-                }
-            }, 100);
-        };
-
-        const resetGame = () => {
-            cState = 'idle';
             cBet = 0;
             hasCashedOut = false;
+            display.style.color = 'white';
+            statusText.textContent = 'Starting soon';
+            statusText.style.color = 'var(--text-secondary)';
             crashPlayBtn.textContent = 'Join next game';
             crashPlayBtn.classList.remove('custom-cashout-btn');
             crashPlayBtn.style.background = 'var(--accent)';
             crashPlayBtn.disabled = false;
-            countdown(); 
-        };
+            playersList.innerHTML = '';
+            
+            let left = countdown;
+            let intv = setInterval(() => {
+                left -= 0.1;
+                if(left <= 0 || cState !== 'starting') clearInterval(intv);
+                else {
+                    display.textContent = left.toFixed(1) + 's';
+                    drawGraph(0, 1.0);
+                }
+            }, 100);
+        });
 
-        setTimeout(resetGame, 1000); 
+        socket?.on('crash:sync_state', (data) => {
+            cState = data.state;
+            startTime = data.startTime;
+            cCrashPoint = data.target || 1.0;
+            
+            // Check if we were already betting on reconnects
+            const myPlayer = data.players.find(p => String(p.userId) === String(robloxUserId));
+            if (myPlayer) {
+                cBet = myPlayer.bet;
+                hasCashedOut = myPlayer.cashedOut;
+            }
+            
+            if(cState === 'running') {
+                display.style.color = 'white';
+                statusText.textContent = 'Current payout';
+                statusText.style.color = 'var(--text-secondary)';
+                if(!animFrame) animFrame = requestAnimationFrame(updateCrash);
+            } else if (cState === 'crashed') {
+                display.textContent = cCrashPoint.toFixed(2) + 'x';
+                display.style.color = '#ff6b6b';
+                statusText.textContent = 'Crashed';
+                statusText.style.color = '#ff6b6b';
+                drawGraph(Date.now() - startTime, cCrashPoint);
+            }
+            
+            playersList.innerHTML = '';
+            data.players.forEach(p => appendPlayer(p.userId, p.username, p.bet, p.cashedOut, p.winAmt, (p.winAmt/p.bet)));
+        });
+        
+        socket?.on('crash:start', (data) => {
+            cState = 'running';
+            startTime = data.startTime;
+            display.style.color = 'white';
+            statusText.textContent = 'Current payout';
+            statusText.style.color = 'var(--text-secondary)';
+            if(cBet > 0) {
+                crashPlayBtn.textContent = 'Cashout';
+                crashPlayBtn.style.background = 'var(--green)';
+            }
+            if(!animFrame) animFrame = requestAnimationFrame(updateCrash);
+        });
+
+        socket?.on('crash:crashed', (data) => {
+            cMulti = data.target;
+            cState = 'crashed';
+            display.textContent = cMulti.toFixed(2) + 'x';
+            display.style.color = '#ff6b6b';
+            statusText.textContent = 'Crashed';
+            statusText.style.color = '#ff6b6b';
+            drawGraph(Date.now() - startTime, cMulti);
+            
+            if(typeof soundLose === 'function' && !hasCashedOut && cBet > 0) soundLose();
+            if(!hasCashedOut && cBet > 0) postLiveFeedRound('crash', cBet, 0, -cBet);
+            
+            const hist = document.getElementById('crash-history');
+            if(hist) {
+                const p = document.createElement('span');
+                p.className = 'history-pill ' + (data.target > 2 ? 'win' : 'lose');
+                if(data.target >= 10) { p.style.background = '#f5af19'; p.style.color = '#1a1c2d'; }
+                p.textContent = data.target.toFixed(2);
+                hist.prepend(p);
+                if(hist.children.length > 7) hist.lastChild.remove();
+            }
+        });
+
+        function appendPlayer(uid, username, bet, cashedOut, winAmt, multi) {
+            if (cashedOut) {
+                playersList.innerHTML = `<div style="color:var(--green)">
+                    <span style="display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-check"></i> ${String(uid) === String(robloxUserId) ? 'You' : username}</span>
+                    <span>${multi.toFixed(2)}x</span>
+                    <span>+${winAmt.toLocaleString('en-US', {minimumFractionDigits:2})}</span>
+                </div>` + playersList.innerHTML;
+            } else {
+                playersList.innerHTML += `<div>
+                    <span style="display:flex;align-items:center;gap:6px;"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}&backgroundColor=2c2f4a" style="width:16px;border-radius:4px;"> ${String(uid) === String(robloxUserId) ? 'You' : username}</span>
+                    <span>-</span>
+                    <span>${bet.toLocaleString('en-US', {minimumFractionDigits:2})}</span>
+                </div>`;
+            }
+        }
+
+        socket?.on('crash:playerJoined', (data) => {
+            appendPlayer(data.userId, data.username, data.bet, false, 0, 0);
+        });
+
+        socket?.on('crash:playerCashedOut', (data) => {
+            if (data.userId === String(robloxUserId)) {
+                hasCashedOut = true;
+                postLiveFeedRound('crash', cBet, data.multi, data.winAmt);
+                if(typeof soundWin === 'function') soundWin();
+                
+                crashPlayBtn.textContent = 'Cashed out';
+                crashPlayBtn.classList.remove('custom-cashout-btn');
+                crashPlayBtn.style.background = 'var(--accent)';
+                crashPlayBtn.disabled = true;
+            }
+            
+            // Remove their pending row by wiping and syncing is better, but appending works for now.
+            // The user requested quick real-time vibes.
+            appendPlayer(data.userId, data.userId === String(robloxUserId) ? 'You' : 'Player', 0, true, data.winAmt, data.multi);
+        });
 
         crashPlayBtn.addEventListener('click', (e) => {
             if(cState === 'idle' || cState === 'starting') {
@@ -1355,16 +1368,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 cAuto = parseFloat(autoInp.value) || 0;
                 cBet = bet;
-                deductBet(bet);
                 
-                crashPlayBtn.textContent = 'Joined';
+                // Do NOT manually deduct from UI, wait for the socket to 'balance:update' and confirm the bet!
+                socket?.emit('crash:join', { userId: robloxUserId, username: currentUsername, bet, auto: cAuto });
+                
+                crashPlayBtn.textContent = 'Joining...';
                 crashPlayBtn.style.background = 'var(--bg-panel-light)';
                 
-                playersList.innerHTML = `<div>
-                    <span style="display:flex;align-items:center;gap:6px;"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUsername)}&backgroundColor=2c2f4a" style="width:16px;border-radius:4px;"> You</span>
-                    <span>-</span>
-                    <span>${bet.toFixed(2)}</span>
-                </div>` + playersList.innerHTML;
             } else if(cState === 'running') {
                 doCashout();
             }
@@ -1415,13 +1425,13 @@ function getZephrsChatUser() {
 function updateBalanceDisplay() {
     const tbEl = document.getElementById('tb-balance');
     const homeEl = document.getElementById('home-balance');
-    const formatted = roBalance.toFixed(2);
+    const formatted = roBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if(tbEl) tbEl.textContent = formatted;
     if(homeEl) homeEl.textContent = formatted;
 
     // Update ZH$ display if element exists
     const zhEl = document.getElementById('tb-balance-zh');
-    if(zhEl) zhEl.textContent = roBalanceZh.toFixed(2);
+    if(zhEl) zhEl.textContent = roBalanceZh.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     // Animate the topbar value briefly
     const chip = document.querySelector('.balance-chip');

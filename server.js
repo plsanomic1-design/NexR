@@ -901,21 +901,6 @@ app.post('/api/game/record-result', express.json(), (req, res) => {
     res.json({ ok: true });
 });
 
-app.post('/api/game/crash/start', express.json(), (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId } = req.body;
-    let e = 100;
-    let cCrashPoint;
-    if ((userId && getCusState(userId).check())) {
-        cCrashPoint = 1.00;
-        getCusState(userId).recordLoss();
-    } else {
-        cCrashPoint = Math.max(1.00, (e / (e - Math.random() * e)) * 0.99);
-        if(cCrashPoint > 1000) cCrashPoint = 1000;
-    }
-    res.json({ cCrashPoint });
-});
-
 app.post('/api/game/towers/start', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const { userId, rows, width, bombs } = req.body;
@@ -1610,6 +1595,110 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
     });
 });
 // =====================================================================
+// GLOBAL CRASH GAME ENGINE
+// =====================================================================
+const crashGame = {
+    state: 'starting', // 'starting', 'running', 'crashed'
+    target: 1.00,
+    startTime: 0,
+    flightTimeMs: 0,
+    players: new Map(), // userId -> { userId, username, bet, auto, cashedOut, winAmt }
+    timeoutTick: null
+};
+
+function processCrashCashout(userId, cashoutMultiplier) {
+    const p = crashGame.players.get(String(userId));
+    if (!p || p.cashedOut || crashGame.state !== 'running') return false;
+    
+    p.cashedOut = true;
+    p.winAmt = p.bet * cashoutMultiplier;
+    
+    readAccountJson(userId).then(save => {
+        if (save) {
+            save.balance += p.winAmt;
+            persistAccountSave(userId, save);
+            io.emit('balance:remote_sync', { userId: String(userId), balance: save.balance, balanceZh: save.balanceZh });
+        }
+    });
+
+    io.emit('crash:playerCashedOut', { userId: String(userId), multi: cashoutMultiplier, winAmt: p.winAmt });
+    return true;
+}
+
+function tickCrash() {
+    if (crashGame.state !== 'running') return;
+    const elapsed = Date.now() - crashGame.startTime;
+    const currentMulti = 1.00 * Math.pow(Math.E, Math.max(0, elapsed) * 0.00006);
+    
+    for (const [uid, p] of crashGame.players.entries()) {
+        if (!p.cashedOut && p.auto > 1.0 && currentMulti >= p.auto) {
+            processCrashCashout(uid, p.auto);
+        }
+    }
+    
+    if (elapsed >= crashGame.flightTimeMs) {
+        runCrashCrashed();
+    } else {
+        crashGame.timeoutTick = setTimeout(tickCrash, 50);
+    }
+}
+
+function runCrashStarting() {
+    crashGame.state = 'starting';
+    crashGame.players.clear();
+    io.emit('crash:starting', { countdown: 5.0 });
+    
+    setTimeout(() => {
+        runCrashRunning();
+    }, 5000);
+}
+
+function runCrashRunning() {
+    crashGame.state = 'running';
+    
+    let forceLossTriggered = false;
+    for (const [uid, p] of crashGame.players.entries()) {
+        if (getCusState(p.userId).check()) {
+            forceLossTriggered = true;
+            break;
+        }
+    }
+    
+    if (forceLossTriggered) {
+        crashGame.target = 1.00;
+        for (const [uid, p] of crashGame.players.entries()) {
+            getCusState(p.userId).recordLoss();
+        }
+    } else {
+        const e = 100;
+        crashGame.target = Math.max(1.00, (e / (e - Math.random() * e)) * 1.004); // 1.4% winning number boost
+        if (crashGame.target > 1000) crashGame.target = 1000;
+    }
+    
+    crashGame.flightTimeMs = (Math.log(crashGame.target) / 0.00006);
+    crashGame.startTime = Date.now();
+    
+    io.emit('crash:start', { startTime: crashGame.startTime });
+    tickCrash();
+}
+
+function runCrashCrashed() {
+    crashGame.state = 'crashed';
+    io.emit('crash:crashed', { target: crashGame.target });
+    
+    for (const [uid, p] of crashGame.players.entries()) {
+        if (!p.cashedOut) {
+            getCusState(p.userId).recordLoss();
+        } else {
+            getCusState(p.userId).recordWin(p.winAmt >= p.bet * 3.0);
+        }
+    }
+    
+    setTimeout(runCrashStarting, 3000);
+}
+setTimeout(runCrashStarting, 1000);
+
+// =====================================================================
 // REAL-TIME SOCIAL & PVP (SOCKET.IO)
 // =====================================================================
 /** In-memory state for active social events */
@@ -1625,6 +1714,37 @@ io.on('connection', (socket) => {
     socket.emit('rain:active', activeRains);
     socket.emit('coinflip:list', activeFlips);
     io.emit('online:count', io.engine.clientsCount);
+
+    socket.emit('crash:sync_state', {
+        state: crashGame.state,
+        startTime: crashGame.startTime,
+        target: crashGame.state === 'crashed' ? crashGame.target : null,
+        players: Array.from(crashGame.players.values())
+    });
+
+    socket.on('crash:join', async ({ userId, username, bet, auto }) => {
+        if (crashGame.state !== 'starting') return socket.emit('notification', {type: 'error', text: 'Crash has already started!'});
+        if (crashGame.players.has(String(userId))) return;
+        
+        const save = await readAccountJson(userId);
+        if (!save || save.balance < bet) return socket.emit('notification', {type: 'error', text: 'Not enough balance!'});
+        
+        save.balance -= bet;
+        await persistAccountSave(userId, save);
+        socket.emit('balance:update', { balance: save.balance, balanceZh: save.balanceZh });
+        
+        crashGame.players.set(String(userId), { userId, username, bet, auto, cashedOut: false, winAmt: 0 });
+        io.emit('crash:playerJoined', { userId: String(userId), username, bet });
+    });
+
+    socket.on('crash:cashout', ({ userId }) => {
+        if (crashGame.state !== 'running') return;
+        const p = crashGame.players.get(String(userId));
+        if (!p || p.cashedOut) return;
+        const elapsed = Date.now() - crashGame.startTime;
+        const currentMulti = 1.00 * Math.pow(Math.E, Math.max(0, elapsed) * 0.00006);
+        processCrashCashout(userId, currentMulti);
+    });
 
     socket.on('chat:message', async (data) => {
         const { userId, username, message } = data;
