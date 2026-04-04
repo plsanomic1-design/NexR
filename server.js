@@ -1001,14 +1001,12 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const body = req.body || {};
     const userId = parseInt(String(body.userId != null ? body.userId : ''), 10);
-    const clientSave = body.save;
+
     if (!userId || userId < 1) {
         return res.status(400).json({ error: 'missing userId' });
     }
-    if (!clientSave || typeof clientSave !== 'object' || clientSave.robloxUserId !== userId) {
-        return res.status(400).json({ error: 'expected save with matching robloxUserId' });
-    }
 
+    // Rate-limit: prevent rapid double-clicks
     const prevAt = lastGamepassDepositAt.get(userId) || 0;
     if (Date.now() - prevAt < GAMEPASS_DEPOSIT_MIN_INTERVAL_MS) {
         return res.status(429).json({
@@ -1020,36 +1018,6 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         return res.status(503).json({ error: 'Account storage is not configured or unavailable.' });
     }
 
-    const diskSave = await readAccountJson(userId);
-
-    // ── Security: claimedGps is ALWAYS authoritative from server disk, never from client ──
-    // (A fresh page load sends savedAt = Date.now() which would be newer than the disk copy,
-    //  causing the timestamp merge to pick the client payload — which has claimedGps: [] and
-    //  would silently erase the record of previously claimed tiers.)
-    const serverClaimedGps = (diskSave && diskSave.stats && Array.isArray(diskSave.stats.claimedGps))
-        ? diskSave.stats.claimedGps
-        : [];
-
-    let save;
-    if (!diskSave) {
-        save = { ...clientSave };
-    } else {
-        const diskAt = typeof diskSave.savedAt === 'number' ? diskSave.savedAt : 0;
-        const clientAt = typeof clientSave.savedAt === 'number' ? clientSave.savedAt : 0;
-        save = diskAt >= clientAt ? { ...diskSave } : { ...clientSave };
-        save.robloxUserId = userId;
-    }
-
-    // Restore authoritative claimedGps regardless of which save won the timestamp merge
-    if (!save.stats || typeof save.stats !== 'object') save.stats = {};
-    save.stats.claimedGps = serverClaimedGps;
-
-    mergeFlipIntoBalance(save);
-
-    if (save.gamePassDepositClaimed !== undefined) {
-        delete save.gamePassDepositClaimed;
-    }
-
     const gamePassId = parseInt(String(body.gamePassId != null ? body.gamePassId : ''), 10);
     if (!gamePassId || gamePassId < 1) {
         return res.status(400).json({ error: 'missing or invalid gamePassId' });
@@ -1059,14 +1027,7 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         return res.status(400).json({ error: 'That game pass is not enabled for deposits.' });
     }
 
-    // Block if already claimed (using server-authoritative list)
-    if (serverClaimedGps.includes(gamePassId)) {
-        return res.status(400).json({
-            error: 'You have already deposited this exact tier. You can only deposit each tier once.'
-        });
-    }
-
-    // Verify real-time Roblox ownership
+    // ── Server-side Roblox ownership check (sole source of truth) ──
     const own = await fetchUserOwnsGamePass(userId, gamePassId);
     if (!own.ok) {
         return res.status(502).json({
@@ -1075,20 +1036,21 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     }
     if (!own.owned) {
         return res.status(400).json({
-            error:
-                'That game pass was not found on this Roblox account. Buy the selected pass on Roblox, then verify again (it can take a few seconds after purchase).'
+            error: 'That game pass was not found on this Roblox account. Buy the selected pass on Roblox, then verify again (it can take a few seconds after purchase).'
         });
     }
 
+    // ── Ownership confirmed — load account from server only, then credit ──
+    const diskSave = await readAccountJson(userId);
+    const save = diskSave ? { ...diskSave } : { robloxUserId: userId, balance: 0, stats: {} };
+    save.robloxUserId = userId;
+
+    mergeFlipIntoBalance(save);
+    if (!save.stats || typeof save.stats !== 'object') save.stats = {};
+
     const bal = typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0;
     save.balance = bal + credit;
-    if (typeof save.balanceZh !== 'number' || save.balanceZh < 0) {
-        save.balanceZh = 0;
-    }
-    if (!save.stats || typeof save.stats !== 'object') save.stats = {};
-    save.stats.deposited =
-        (typeof save.stats.deposited === 'number' ? save.stats.deposited : 0) + credit;
-    save.stats.claimedGps.push(gamePassId);
+    save.stats.deposited = (typeof save.stats.deposited === 'number' ? save.stats.deposited : 0) + credit;
     save.savedAt = Date.now();
     lastGamepassDepositAt.set(userId, save.savedAt);
 
@@ -1118,6 +1080,7 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
 
     res.json({ ok: true, save, credited: credit });
 });
+
 
 // =====================================================================
 // ROBLOX BOT — Automated Gamepass Withdrawal

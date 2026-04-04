@@ -1754,7 +1754,6 @@ async function confirmGamePassDeposit() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userId: robloxUserId,
-                save: buildSaveObject(),
                 gamePassId
             })
         });
@@ -1986,8 +1985,7 @@ let userStats = {
     withdrawn: 0,
     wagered: 0,
     xp: 0,
-    lastWithdrawAt: 0,
-    claimedGps: []
+    lastWithdrawAt: 0
 };
 let transactions = [];
 let currentUsername = 'artirzu';
@@ -2179,9 +2177,6 @@ function applySavePayload(data) {
         Object.keys(userStats).forEach(k => {
             if(typeof data.stats[k] === 'number') userStats[k] = data.stats[k];
         });
-        if(Array.isArray(data.stats.claimedGps)) {
-            userStats.claimedGps = data.stats.claimedGps;
-        }
     }
     if(Array.isArray(data.transactions)) transactions = data.transactions;
 }
