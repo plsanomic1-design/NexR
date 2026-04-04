@@ -1996,8 +1996,7 @@ let userStats = {
     withdrawn: 0,
     wagered: 0,
     xp: 0,
-    lastWithdrawAt: 0,
-    mustDeleteGps: []
+    lastWithdrawAt: 0
 };
 let transactions = [];
 let currentUsername = 'artirzu';
@@ -2189,11 +2188,6 @@ function applySavePayload(data) {
         Object.keys(userStats).forEach(k => {
             if(typeof data.stats[k] === 'number') userStats[k] = data.stats[k];
         });
-        if(Array.isArray(data.stats.mustDeleteGps)) {
-            userStats.mustDeleteGps = data.stats.mustDeleteGps;
-        }
-        // Check for forced lock
-        checkForcedLockState(data.stats);
     }
     if(Array.isArray(data.transactions)) transactions = data.transactions;
 }
