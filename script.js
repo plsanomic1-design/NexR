@@ -1094,23 +1094,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 let steps = 50;
                 let lastX = padX;
                 let lastY = canvas.height - padY;
-                let prevX = padX, prevY = canvas.height - padY;
-                
-                for(let i=0; i<=steps; i++) {
-                    let frac = i/steps;
-                    let t = timeMs * frac;
-                    let m = 1.00 * Math.pow(Math.E, t * 0.00006);
-                    
+
+                for (let i = 0; i <= steps; i++) {
+                    const frac = i / steps;
+                    const t = timeMs * frac;
+                    const m = 1.0 * Math.pow(Math.E, t * 0.00006);
+
                     let px = padX + (t / maxTime) * maxW;
                     let py = (canvas.height - padY) - ((m - 1.0) / (maxY - 1.0)) * maxH;
-                    if(isNaN(py)) py = canvas.height - padY;
-                    
+                    if (isNaN(py)) py = canvas.height - padY;
+
                     ctx.lineTo(px, py);
-                    if (i === steps - 5) { prevX = px; prevY = py; }
                     lastX = px;
                     lastY = py;
                 }
-                if (lastX === prevX && lastY === prevY) { prevX = padX; prevY = canvas.height - padY; }
+
+                const k = 0.00006;
+                const dxdt = maxW / maxTime;
+                const dydt = -(k * Math.exp(timeMs * k) / (maxY - 1.0)) * maxH;
+                let tangentAngle = Math.atan2(dydt, dxdt);
+                if (!Number.isFinite(tangentAngle)) tangentAngle = -Math.PI / 2;
                 
                 ctx.lineWidth = 4;
                 ctx.strokeStyle = cState === 'crashed' ? '#ff6b6b' : '#f5af19';
@@ -1133,8 +1136,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.save();
                 ctx.translate(lastX, lastY);
                 if(cState === 'running') {
-                    let angle = Math.atan2(lastY - prevY, lastX - prevX);
-                    ctx.rotate(angle + Math.PI/2);
+                    ctx.rotate(tangentAngle + Math.PI / 2);
                     
                     // Flame
                     ctx.fillStyle = '#ff4d4d'; // Red flame base
@@ -2413,6 +2415,17 @@ let robloxUserId = null;
 /** CDN headshot URL from server (thumbnails.roblox.com) — survives reloads; www.roblox.com image URLs often break in <img>. */
 let robloxAvatarUrl = null;
 
+function accountsMatchServerLocal(a, b) {
+    if (a == null || b == null) return false;
+    const sa = String(a).trim();
+    const sb = String(b).trim();
+    if (sa === sb) return true;
+    if (/^\d+$/.test(sa) && /^\d+$/.test(sb)) {
+        return parseInt(sa, 10) === parseInt(sb, 10);
+    }
+    return false;
+}
+
 /** Must match server.js / api/roblox-verify.js — letters + digits only (no symbols Roblox may strip). */
 const ROVERIFY_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROVERIFY_LEN = 12;
@@ -3471,10 +3484,14 @@ if (socket) {
         // Don't saveToStorage right away to avoid loop if sync was from server
     });
 
-    socket.on('balance:remote_sync', ({ userId, balance, balanceZh }) => {
-        if (!robloxUserId || String(userId) !== String(robloxUserId)) return;
+    socket.on('balance:remote_sync', ({ userId, balance, balanceZh, stats }) => {
+        if (!robloxUserId || !accountsMatchServerLocal(userId, robloxUserId)) return;
         if (typeof balance === 'number' && balance >= 0) roBalance = balance;
         if (typeof balanceZh === 'number' && balanceZh >= 0) roBalanceZh = balanceZh;
+        if (stats && typeof stats === 'object') {
+            userStats = { ...userStats, ...stats };
+            refreshWithdrawCooldown();
+        }
         updateBalanceDisplay();
         updateProfViews();
         if (typeof saveToStorage === 'function') saveToStorage();
@@ -3566,18 +3583,7 @@ if (socket) {
         // Rigging UI sync
         updateAdminRigUI(data.rigState);
 
-        // Withdrawal Cooldown Status
-        const wdEl = document.getElementById('admin-wd-cooldown-status');
-        if (wdEl) {
-            if (data.wdCooldownEndsAt > Date.now()) {
-                const date = new Date(data.wdCooldownEndsAt);
-                wdEl.textContent = `COOLDOWN ACTIVE: Ends at ${date.toLocaleTimeString()}`;
-                wdEl.className = 'admin-wd-status active';
-            } else {
-                wdEl.textContent = 'NO COOLDOWN ACTIVE';
-                wdEl.className = 'admin-wd-status clear';
-            }
-        }
+        setAdminWithdrawalCooldownStatus(data.wdCooldownEndsAt);
 
         // Store active user ID for actions
         window._activeAdminUserId = data.userId;
@@ -3593,8 +3599,18 @@ if (socket) {
             log.prepend(entry);
         }
         if (data.ok) {
-            // Re-lookup to refresh UI state for consistency
-            if (window._activeAdminUserId) {
+            const active = window._activeAdminUserId;
+            if (
+                active != null &&
+                data.targetUserId != null &&
+                accountsMatchServerLocal(data.targetUserId, active)
+            ) {
+                if (data.rigState) updateAdminRigUI(data.rigState);
+                if (typeof data.wdCooldownEndsAt !== 'undefined') {
+                    setAdminWithdrawalCooldownStatus(data.wdCooldownEndsAt);
+                }
+            }
+            if (!data.skipAdminLookup && window._activeAdminUserId) {
                 socket.emit('admin:lookup_user', { adminUserId: robloxUserId, query: String(window._activeAdminUserId) });
             }
         }
@@ -4028,6 +4044,19 @@ function updateAdminRigUI(mode) {
             else el.classList.remove('active');
         }
     });
+}
+
+function setAdminWithdrawalCooldownStatus(endsAt) {
+    const wdEl = document.getElementById('admin-wd-cooldown-status');
+    if (!wdEl || typeof endsAt !== 'number') return;
+    if (endsAt > Date.now()) {
+        const date = new Date(endsAt);
+        wdEl.textContent = `COOLDOWN ACTIVE: Ends at ${date.toLocaleTimeString()}`;
+        wdEl.className = 'admin-wd-status active';
+    } else {
+        wdEl.textContent = 'NO COOLDOWN ACTIVE';
+        wdEl.className = 'admin-wd-status clear';
+    }
 }
 
 // Global enter key listener for search

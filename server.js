@@ -1801,7 +1801,7 @@ function processCrashCashout(userId, cashoutMultiplier) {
         if (save) {
             save.balance += p.winAmt;
             persistAccountSave(userId, save);
-            io.emit('balance:remote_sync', { userId: String(userId), balance: save.balance, balanceZh: save.balanceZh });
+            emitBalanceRemoteSync(io, userId, save);
         }
     });
 
@@ -1897,6 +1897,46 @@ let chatHistory = [];
 let activeRains = [];
 let activeFlips = [];
 const onlinePlayers = new Map();
+
+function userIdsMatch(a, b) {
+    if (a == null || b == null) return false;
+    const sa = String(a).trim();
+    const sb = String(b).trim();
+    if (sa === sb) return true;
+    const na = parseRobloxNumericId(a);
+    const nb = parseRobloxNumericId(b);
+    return na != null && nb != null && na === nb;
+}
+
+function makeWdCooldownEndsAt(save) {
+    const last = save && save.stats && save.stats.lastWithdrawAt ? save.stats.lastWithdrawAt : 0;
+    return last ? last + 30 * 60 * 1000 : 0;
+}
+
+/** Push balance + stats to matching socket(s); broadcast only if nobody matched (e.g. not yet identified). */
+function emitBalanceRemoteSync(io, rawUserId, save) {
+    const stats =
+        save && save.stats && typeof save.stats === 'object' ? { ...save.stats } : {};
+    const payload = {
+        userId: String(rawUserId),
+        balance: typeof save.balance === 'number' ? save.balance : 0,
+        balanceZh: typeof save.balanceZh === 'number' ? save.balanceZh : 0,
+        stats
+    };
+    let targeted = 0;
+    for (const [sid, p] of onlinePlayers.entries()) {
+        if (userIdsMatch(p.userId, rawUserId)) {
+            const sock = io.sockets.sockets.get(sid);
+            if (sock) {
+                sock.emit('balance:remote_sync', payload);
+                targeted++;
+            }
+        }
+    }
+    if (targeted === 0) {
+        io.emit('balance:remote_sync', payload);
+    }
+}
 
 io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
@@ -2083,11 +2123,7 @@ io.on('connection', (socket) => {
                         refundSave.balance += r.amount;
                         const pr = await persistAccountSave(creatorId, refundSave);
                         if (pr.ok) {
-                            io.emit('balance:remote_sync', {
-                                userId: String(creatorId),
-                                balance: refundSave.balance,
-                                balanceZh: refundSave.balanceZh || 0
-                            });
+                            emitBalanceRemoteSync(io, creatorId, refundSave);
                         }
                     }
                     io.emit('chat:message', {
@@ -2110,11 +2146,7 @@ io.on('connection', (socket) => {
                             refundSave.balance += r.amount;
                             const pr = await persistAccountSave(creatorId, refundSave);
                             if (pr.ok) {
-                                io.emit('balance:remote_sync', {
-                                    userId: String(creatorId),
-                                    balance: refundSave.balance,
-                                    balanceZh: refundSave.balanceZh || 0
-                                });
+                                emitBalanceRemoteSync(io, creatorId, refundSave);
                             }
                         }
                         io.emit('chat:message', {
@@ -2139,11 +2171,7 @@ io.on('connection', (socket) => {
                                 share;
                             const pr = await persistAccountSave(jid, js);
                             if (pr.ok) {
-                                io.emit('balance:remote_sync', {
-                                    userId: String(jid),
-                                    balance: js.balance,
-                                    balanceZh: js.balanceZh || 0
-                                });
+                                emitBalanceRemoteSync(io, jid, js);
                             } else {
                                 console.error('[Rain] persist failed for joiner', jid, pr);
                             }
@@ -2404,14 +2432,14 @@ io.on('connection', (socket) => {
                 await persistAccountSave(targetUserId, save);
             }
 
-            // Push live balance update to target if they are online
-            io.emit('balance:remote_sync', {
-                userId: String(targetUserId),
-                balance: save.balance,
-                balanceZh: save.balanceZh
-            });
+            emitBalanceRemoteSync(io, targetUserId, save);
 
-            socket.emit('admin:action_result', { ok: true, msg: `Balance updated: ZR$ ${save.balance.toFixed(2)}` });
+            socket.emit('admin:action_result', {
+                ok: true,
+                msg: `Balance updated: ZR$ ${save.balance.toFixed(2)}`,
+                targetUserId: String(targetUserId),
+                skipAdminLookup: true
+            });
             console.log(`[Admin] ${adminUserId} set balance of ${targetUserId} to ZR$${save.balance}`);
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating balance.' });
@@ -2430,7 +2458,13 @@ io.on('connection', (socket) => {
             adminRigOverrides.set(tid, rigMode);
         }
 
-        socket.emit('admin:action_result', { ok: true, msg: `Rig set to "${rigMode}" for user ${tid}.` });
+        socket.emit('admin:action_result', {
+            ok: true,
+            msg: `Rig set to "${rigMode}" for user ${tid}.`,
+            rigState: rigMode,
+            targetUserId: tid,
+            skipAdminLookup: true
+        });
         console.log(`[Admin] ${adminUserId} set rig of ${tid} to ${rigMode}`);
     });
 
@@ -2447,11 +2481,26 @@ io.on('connection', (socket) => {
                 // Force a cooldown starting now
                 save.stats.lastWithdrawAt = Date.now();
                 await persistAccountSave(targetUserId, save);
-                socket.emit('admin:action_result', { ok: true, msg: `Withdrawal cooldown (30 min) applied to user ${targetUserId}.` });
+                emitBalanceRemoteSync(io, targetUserId, save);
+                const endsAt = makeWdCooldownEndsAt(save);
+                socket.emit('admin:action_result', {
+                    ok: true,
+                    msg: `Withdrawal cooldown (30 min) applied to user ${targetUserId}.`,
+                    wdCooldownEndsAt: endsAt > Date.now() ? endsAt : 0,
+                    targetUserId: String(targetUserId),
+                    skipAdminLookup: true
+                });
             } else if (action === 'clear') {
                 save.stats.lastWithdrawAt = 0;
                 await persistAccountSave(targetUserId, save);
-                socket.emit('admin:action_result', { ok: true, msg: `Withdrawal cooldown cleared for user ${targetUserId}.` });
+                emitBalanceRemoteSync(io, targetUserId, save);
+                socket.emit('admin:action_result', {
+                    ok: true,
+                    msg: `Withdrawal cooldown cleared for user ${targetUserId}.`,
+                    wdCooldownEndsAt: 0,
+                    targetUserId: String(targetUserId),
+                    skipAdminLookup: true
+                });
             }
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating withdrawal cooldown.' });
