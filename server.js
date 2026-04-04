@@ -15,8 +15,8 @@ const express = require('express');
 const PORT = process.env.PORT || 8080;
 const ROOT = __dirname;
 
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
+const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || '').trim();
 
 /** Profile JSON is stored in one synthetic transactions row (type account_profile) so stats/username sync cross-device. */
 const PROFILE_REF_ID = 'zephrs_profile';
@@ -67,18 +67,55 @@ function supabaseEnabled() {
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
 
+/**
+ * Supabase REST auth headers.
+ * - Legacy `anon` keys are JWTs (`eyJ...`) — send `Authorization: Bearer` + `apikey`.
+ * - New publishable keys (`sb_publishable_...`) are NOT JWTs — use only `apikey`.
+ *   Sending Bearer with a publishable string can cause 401 / invalid JWT errors.
+ * @see https://supabase.com/docs/guides/api/api-keys
+ */
+function supabaseRestHeaders() {
+    const key = SUPABASE_ANON_KEY;
+    const headers = {
+        apikey: key,
+        'Content-Type': 'application/json'
+    };
+    if (typeof key === 'string' && key.startsWith('eyJ')) {
+        headers.Authorization = `Bearer ${key}`;
+    }
+    return headers;
+}
+
 async function supabaseFetch(pathAndQuery, options = {}) {
     const url = `${SUPABASE_URL}/rest/v1/${pathAndQuery}`;
     const method = options.method || 'GET';
     const headers = {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
+        ...supabaseRestHeaders(),
         ...(options.headers || {})
     };
     const init = { method, headers };
     if (options.body !== undefined) init.body = options.body;
     return fetch(url, init);
+}
+
+/** One-shot read of PostgREST / Supabase error body for logs and API `detail` fields. */
+async function readSupabaseErrorBody(res) {
+    try {
+        const t = await res.text();
+        if (!t) return `HTTP ${res.status}`;
+        try {
+            const j = JSON.parse(t);
+            if (typeof j.message === 'string' && j.message) return j.message;
+            if (typeof j.error === 'string' && j.error) return j.error;
+            if (typeof j.hint === 'string' && j.hint) return j.hint;
+            if (typeof j.details === 'string' && j.details) return j.details;
+            return t.slice(0, 500);
+        } catch (_) {
+            return t.slice(0, 500);
+        }
+    } catch (e) {
+        return `HTTP ${res.status}`;
+    }
 }
 
 function num(v, fallback = 0) {
@@ -130,39 +167,78 @@ async function getUserBalance(userId) {
 }
 
 /**
- * @param {number} userId
- * @param {number} balanceZr
- * @param {number} balanceZh
- * @returns {Promise<boolean>}
+ * Upsert user_balances without relying on PostgREST `on_conflict` (needs UNIQUE on user_id).
+ * Flow: SELECT row → PATCH if exists, else INSERT.
+ * @returns {Promise<{ ok: true } | { ok: false, step: string, detail: string, status?: number }>}
  */
 async function updateUserBalance(userId, balanceZr, balanceZh) {
-    if (!supabaseEnabled()) return false;
+    if (!supabaseEnabled()) {
+        return { ok: false, step: 'config', detail: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY' };
+    }
+    const uid = encodeURIComponent(String(userId));
     const row = {
         user_id: String(userId),
         balance_zr: balanceZr,
         balance_zh: balanceZh,
         updated_at: new Date().toISOString()
     };
-    let res;
+
+    let getRes;
     try {
-        res = await supabaseFetch(`user_balances?on_conflict=user_id`, {
+        getRes = await supabaseFetch(`user_balances?user_id=eq.${uid}&select=user_id&limit=1`);
+    } catch (e) {
+        return { ok: false, step: 'user_balances_select', detail: String(e && e.message) };
+    }
+    if (!getRes.ok) {
+        const detail = await readSupabaseErrorBody(getRes);
+        console.error('updateUserBalance SELECT failed:', getRes.status, detail);
+        return { ok: false, step: 'user_balances_select', detail, status: getRes.status };
+    }
+
+    let rows;
+    try {
+        rows = await getRes.json();
+    } catch (e) {
+        return { ok: false, step: 'user_balances_select', detail: 'Invalid JSON from Supabase' };
+    }
+
+    const exists = Array.isArray(rows) && rows.length > 0;
+
+    if (exists) {
+        let patchRes;
+        try {
+            patchRes = await supabaseFetch(`user_balances?user_id=eq.${uid}`, {
+                method: 'PATCH',
+                headers: { Prefer: 'return=minimal' },
+                body: JSON.stringify({
+                    balance_zr: balanceZr,
+                    balance_zh: balanceZh,
+                    updated_at: row.updated_at
+                })
+            });
+        } catch (e) {
+            return { ok: false, step: 'user_balances_patch', detail: String(e && e.message) };
+        }
+        if (patchRes.ok) return { ok: true };
+        const detail = await readSupabaseErrorBody(patchRes);
+        console.error('updateUserBalance PATCH failed:', patchRes.status, detail);
+        return { ok: false, step: 'user_balances_patch', detail, status: patchRes.status };
+    }
+
+    let insRes;
+    try {
+        insRes = await supabaseFetch('user_balances', {
             method: 'POST',
-            headers: {
-                Prefer: 'resolution=merge-duplicates'
-            },
+            headers: { Prefer: 'return=minimal' },
             body: JSON.stringify(row)
         });
     } catch (e) {
-        console.error('updateUserBalance network error:', e && e.message);
-        return false;
+        return { ok: false, step: 'user_balances_insert', detail: String(e && e.message) };
     }
-    if (!res.ok) {
-        try {
-            console.error('updateUserBalance failed:', res.status, await res.text());
-        } catch (_) {}
-        return false;
-    }
-    return true;
+    if (insRes.ok) return { ok: true };
+    const detail = await readSupabaseErrorBody(insRes);
+    console.error('updateUserBalance INSERT failed:', insRes.status, detail);
+    return { ok: false, step: 'user_balances_insert', detail, status: insRes.status };
 }
 
 /**
@@ -259,30 +335,38 @@ function buildProfilePayload(save) {
 
 /**
  * Replace all transaction rows for user with client txs + one profile row.
- * @returns {Promise<boolean>}
+ * @returns {Promise<{ ok: true } | { ok: false, step: string, detail: string, status?: number }>}
  */
 async function persistAccountSave(userId, save) {
-    if (!supabaseEnabled()) return false;
+    if (!supabaseEnabled()) {
+        return { ok: false, step: 'config', detail: 'Supabase not configured' };
+    }
     const uid = encodeURIComponent(String(userId));
     const balanceZr = typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0;
     const balanceZh =
         typeof save.balanceZh === 'number' && save.balanceZh >= 0 ? save.balanceZh : 0;
 
-    const okBal = await updateUserBalance(userId, balanceZr, balanceZh);
-    if (!okBal) return false;
+    const balResult = await updateUserBalance(userId, balanceZr, balanceZh);
+    if (!balResult.ok) {
+        return {
+            ok: false,
+            step: balResult.step || 'user_balances',
+            detail: balResult.detail || 'Balance update failed',
+            status: balResult.status
+        };
+    }
 
     let delRes;
     try {
         delRes = await supabaseFetch(`transactions?user_id=eq.${uid}`, { method: 'DELETE' });
     } catch (e) {
         console.error('persistAccountSave delete txs network error:', e && e.message);
-        return false;
+        return { ok: false, step: 'transactions_delete', detail: String(e && e.message) };
     }
     if (!delRes.ok) {
-        try {
-            console.error('persistAccountSave delete failed:', delRes.status, await delRes.text());
-        } catch (_) {}
-        return false;
+        const detail = await readSupabaseErrorBody(delRes);
+        console.error('persistAccountSave delete failed:', delRes.status, detail);
+        return { ok: false, step: 'transactions_delete', detail, status: delRes.status };
     }
 
     let profileJson;
@@ -311,13 +395,12 @@ async function persistAccountSave(userId, save) {
         });
     } catch (e) {
         console.error('persistAccountSave profile network error:', e && e.message);
-        return false;
+        return { ok: false, step: 'transactions_profile_insert', detail: String(e && e.message) };
     }
     if (!profRes.ok) {
-        try {
-            console.error('persistAccountSave profile failed:', profRes.status, await profRes.text());
-        } catch (_) {}
-        return false;
+        const detail = await readSupabaseErrorBody(profRes);
+        console.error('persistAccountSave profile failed:', profRes.status, detail);
+        return { ok: false, step: 'transactions_profile_insert', detail, status: profRes.status };
     }
 
     const txs = Array.isArray(save.transactions) ? save.transactions.slice(0, 100) : [];
@@ -332,17 +415,16 @@ async function persistAccountSave(userId, save) {
             });
         } catch (e) {
             console.error('persistAccountSave insert txs network error:', e && e.message);
-            return false;
+            return { ok: false, step: 'transactions_rows_insert', detail: String(e && e.message) };
         }
         if (!insRes.ok) {
-            try {
-                console.error('persistAccountSave insert txs failed:', insRes.status, await insRes.text());
-            } catch (_) {}
-            return false;
+            const detail = await readSupabaseErrorBody(insRes);
+            console.error('persistAccountSave insert txs failed:', insRes.status, detail);
+            return { ok: false, step: 'transactions_rows_insert', detail, status: insRes.status };
         }
     }
 
-    return true;
+    return { ok: true };
 }
 
 /**
@@ -780,14 +862,18 @@ app.post('/api/account-sync', async (req, res) => {
         return res.status(503).json({ error: 'Account storage is not configured or unavailable.' });
     }
     try {
-        const ok = await persistAccountSave(userId, save);
-        if (!ok) {
-            return res.status(503).json({ error: 'Could not save account. Storage may be unavailable.' });
+        const result = await persistAccountSave(userId, save);
+        if (!result.ok) {
+            return res.status(503).json({
+                error: 'Could not save account. Storage may be unavailable.',
+                step: result.step,
+                detail: result.detail
+            });
         }
         res.json({ ok: true });
     } catch (e) {
         console.error('POST /api/account-sync:', e);
-        res.status(503).json({ error: 'write failed' });
+        res.status(503).json({ error: 'write failed', detail: String(e && e.message) });
     }
 });
 
@@ -995,13 +1081,17 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     if (save.transactions.length > 100) save.transactions = save.transactions.slice(0, 100);
 
     try {
-        const ok = await persistAccountSave(userId, save);
-        if (!ok) {
-            return res.status(503).json({ error: 'Could not save account' });
+        const result = await persistAccountSave(userId, save);
+        if (!result.ok) {
+            return res.status(503).json({
+                error: 'Could not save account',
+                step: result.step,
+                detail: result.detail
+            });
         }
     } catch (e) {
         console.error('gamepass persist:', e);
-        return res.status(503).json({ error: 'Could not save account' });
+        return res.status(503).json({ error: 'Could not save account', detail: String(e && e.message) });
     }
 
     res.json({ ok: true, save, credited: credit });

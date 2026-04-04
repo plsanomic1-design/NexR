@@ -1766,12 +1766,17 @@ async function confirmGamePassDeposit() {
         });
         const j = await res.json().catch(() => ({}));
         if(!res.ok) {
-            const msg =
+            let msg =
                 typeof j.error === 'string' && j.error.length > 0
                     ? j.error
                     : res.status === 429
                       ? 'Please wait a couple of seconds and try again.'
                       : 'Verification failed.';
+            if (typeof j.detail === 'string' && j.detail.length > 0) {
+                msg += ' — ' + j.detail;
+            } else if (typeof j.step === 'string' && j.step.length > 0) {
+                msg += ' (' + j.step + ')';
+            }
             throw new Error(msg);
         }
         if(j.save && typeof j.save === 'object') applySavePayload(j.save);
