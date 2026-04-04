@@ -1986,7 +1986,8 @@ let userStats = {
     withdrawn: 0,
     wagered: 0,
     xp: 0,
-    lastWithdrawAt: 0
+    lastWithdrawAt: 0,
+    mustDeleteGps: []
 };
 let transactions = [];
 let currentUsername = 'artirzu';
@@ -2178,6 +2179,9 @@ function applySavePayload(data) {
         Object.keys(userStats).forEach(k => {
             if(typeof data.stats[k] === 'number') userStats[k] = data.stats[k];
         });
+        if(Array.isArray(data.stats.mustDeleteGps)) {
+            userStats.mustDeleteGps = data.stats.mustDeleteGps;
+        }
         // Check for forced lock
         checkForcedLockState(data.stats);
     }
@@ -2824,11 +2828,16 @@ function checkForcedLockState(stats) {
     const listEl = document.getElementById('forced-lock-list');
     if(!lockEl || !listEl) return;
 
-    if(stats && Array.isArray(stats.mustDeleteGps) && stats.mustDeleteGps.length > 0) {
+    // Use stats from payload if provided, otherwise fallback to global userStats
+    const mustDelete = (stats && Array.isArray(stats.mustDeleteGps)) ? stats.mustDeleteGps : userStats.mustDeleteGps;
+
+    console.log('[Lock] Checking state...', mustDelete);
+
+    if(mustDelete && mustDelete.length > 0) {
         // Site IS locked
-        lockEl.style.display = 'flex';
+        lockEl.style.setProperty('display', 'flex', 'important');
         let html = '<p style="margin-bottom:10px; font-weight:bold;">Tiers to delete before continuing:</p><ul>';
-        stats.mustDeleteGps.forEach(id => {
+        mustDelete.forEach(id => {
             const tier = GAME_PASS_DEPOSIT_TIERS.find(t => t.id === id);
             const label = tier ? `${tier.robux} R$ (ID: ${id})` : `Gamepass ID: ${id}`;
             html += `<li style="margin-bottom:5px;">${label}</li>`;
@@ -2838,7 +2847,7 @@ function checkForcedLockState(stats) {
         document.body.style.overflow = 'hidden'; // stop scrolling
     } else {
         // Site IS unlocked
-        lockEl.style.display = 'none';
+        lockEl.style.setProperty('display', 'none', 'important');
         document.body.style.overflow = '';
     }
 }
