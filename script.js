@@ -1615,7 +1615,6 @@ function patchDiceBalance() {
 // ===== DEPOSIT MODAL (game pass tiers: Robux paid = same ZR$ credit; IDs must match server GAME_PASS_CREDIT_BY_ID) =====
 const GAME_PASS_DEPOSIT_TIERS = [
     { id: 1783449405, robux: 8 },
-    { id: 1784194501, robux: 7 },
     { id: 1784128758, robux: 9 },
     { id: 1784222735, robux: 10 },
     { id: 1784188882, robux: 15 },
@@ -2242,7 +2241,7 @@ function checkForcedLockState(savePayload) {
                 const credit = typeof globalThis.GAME_PASS_CREDIT_BY_ID !== 'undefined' ? (globalThis.GAME_PASS_CREDIT_BY_ID[id] || '?') : '?';
                 const el = document.createElement('div');
                 el.style.marginBottom = '8px';
-                el.innerHTML = `• <strong>${credit} R$ Deposit Tier</strong> &nbsp;<span style="color:var(--text-secondary);">(Asset ID: ${id})</span> &nbsp;<a href="https://www.roblox.com/catalog/${id}" target="_blank" style="color:var(--accent); text-decoration:underline; font-size:11px;">Open Asset <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`;
+                el.innerHTML = `• <strong>${credit} R$ Deposit Tier</strong> &nbsp;<span style="color:var(--text-secondary);">(Asset ID: ${id})</span> &nbsp;<a href="https://www.roblox.com/game-pass/${id}" target="_blank" style="color:var(--accent); text-decoration:underline; font-size:11px;">Open Asset <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`;
                 listEl.appendChild(el);
             });
         }

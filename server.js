@@ -945,7 +945,6 @@ app.post('/api/roblox-verify', async (req, res) => {
 /** Game pass deposit: Robux paid = ZR$ credited. Keys must match client GAME_PASS_DEPOSIT_TIERS. */
 const GAME_PASS_CREDIT_BY_ID = {
     1783449405: 8,
-    1784194501: 7,
     1784128758: 9,
     1784222735: 10,
     1784188882: 15,
