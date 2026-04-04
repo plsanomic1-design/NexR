@@ -603,6 +603,56 @@ async function readAccountJson(userId) {
     return loadAccountFromSupabase(userId);
 }
 
+/** Positive Roblox user id for DB ops, or null. */
+function parseRobloxUserIdStrict(val) {
+    if (typeof val === 'number' && Number.isFinite(val) && val > 0) return Math.floor(val);
+    if (typeof val === 'string') {
+        const t = val.trim();
+        if (/^\d+$/.test(t)) {
+            const n = parseInt(t, 10);
+            return n > 0 ? n : null;
+        }
+    }
+    return null;
+}
+
+/**
+ * Split `total` ZR$ across `count` recipients in whole cents so the sum matches exactly (e.g. 100k / 2 => 50k each).
+ * @param {number} total
+ * @param {number} count
+ * @returns {number[]}
+ */
+function splitAmountEqually(total, count) {
+    if (count < 1 || typeof total !== 'number' || !Number.isFinite(total) || total < 0) return [];
+    const cents = Math.round(total * 100);
+    const base = Math.floor(cents / count);
+    const rem = cents % count;
+    const out = [];
+    for (let i = 0; i < count; i++) {
+        out.push((base + (i < rem ? 1 : 0)) / 100);
+    }
+    return out;
+}
+
+/**
+ * Load Supabase save or return a minimal new save so rain/tip payouts can create `user_balances` rows.
+ */
+async function loadOrCreateAccountSave(rawUserId) {
+    const uid = parseRobloxUserIdStrict(rawUserId);
+    if (uid == null) return null;
+    const existing = await readAccountJson(uid);
+    if (existing) return existing;
+    if (!supabaseEnabled()) return null;
+    return {
+        robloxUserId: uid,
+        balance: 0,
+        balanceZh: 0,
+        stats: {},
+        transactions: [],
+        savedAt: Date.now()
+    };
+}
+
 /** CDN URL from Roblox thumbnails API — works in <img>; www.roblox.com headshot URLs often fail off-site. */
 function fetchRobloxAvatarHeadshotUrl(userId) {
     const path = `/v1/users/avatar-headshot?userIds=${encodeURIComponent(userId)}&size=420x420&format=Png&isCircular=true`;
@@ -1980,23 +2030,36 @@ io.on('connection', (socket) => {
     // RAIN SYSTEM SVR
     socket.on('rain:create', async ({ userId, amount, duration, minWager }) => {
         if (amount < 10) return;
-        
+
+        const creatorId = parseRobloxUserIdStrict(userId);
+        if (creatorId == null) {
+            return socket.emit('notification', { type: 'error', text: 'Log in to start a rain.' });
+        }
+
         try {
-            const save = await readAccountJson(userId);
+            const save = await readAccountJson(creatorId);
             if (!save || save.balance < amount) {
                 return socket.emit('notification', { type: 'error', text: 'Not enough balance for rain!' });
             }
 
             save.balance -= amount;
-            await persistAccountSave(userId, save);
+            const persistCreator = await persistAccountSave(creatorId, save);
+            if (!persistCreator.ok) {
+                save.balance += amount;
+                return socket.emit('notification', {
+                    type: 'error',
+                    text: 'Could not lock rain funds. Try again or check server logs.'
+                });
+            }
             socket.emit('balance:update', { balance: save.balance, balanceZh: save.balanceZh });
 
             const rain = {
                 id: Math.random().toString(36).substr(2, 9),
+                creatorUserId: creatorId,
                 creator: save.username,
                 amount,
                 minWager: minWager || 0,
-                endsAt: Date.now() + (duration * 1000),
+                endsAt: Date.now() + duration * 1000,
                 joiners: []
             };
 
@@ -2009,49 +2072,121 @@ io.on('connection', (socket) => {
             });
 
             setTimeout(async () => {
-                // End Rain
-                const idx = activeRains.findIndex(r => r.id === rain.id);
+                const idx = activeRains.findIndex((r) => r.id === rain.id);
                 if (idx === -1) return;
                 const r = activeRains[idx];
                 activeRains.splice(idx, 1);
 
                 if (r.joiners.length === 0) {
-                    // Refund to creator
-                    const refundSave = await readAccountJson(userId);
+                    const refundSave = await readAccountJson(creatorId);
                     if (refundSave) {
-                        refundSave.balance += amount;
-                        await persistAccountSave(userId, refundSave);
-                    }
-                    io.emit('chat:message', { username: 'System', text: 'Rain ended with no joiners. Refunded.', createdAt: Date.now() });
-                } else {
-                    const share = Math.floor((r.amount / r.joiners.length) * 100) / 100;
-                    for (const uid of r.joiners) {
-                        const js = await readAccountJson(uid);
-                        if (js) {
-                            js.balance += share;
-                            await persistAccountSave(uid, js);
+                        refundSave.balance += r.amount;
+                        const pr = await persistAccountSave(creatorId, refundSave);
+                        if (pr.ok) {
+                            io.emit('balance:remote_sync', {
+                                userId: String(creatorId),
+                                balance: refundSave.balance,
+                                balanceZh: refundSave.balanceZh || 0
+                            });
                         }
                     }
-                    io.emit('chat:message', { 
-                        username: 'System', 
-                        text: `🌧️ Rain ended! ${r.joiners.length} players split ${r.amount} ZH$ (${share} each).`,
-                        createdAt: Date.now() 
+                    io.emit('chat:message', {
+                        username: 'System',
+                        text: 'Rain ended with no joiners. Refunded.',
+                        createdAt: Date.now()
                     });
+                } else {
+                    const payees = [];
+                    const seen = new Set();
+                    for (const j of r.joiners) {
+                        const jid = parseRobloxUserIdStrict(j);
+                        if (jid == null || seen.has(jid)) continue;
+                        seen.add(jid);
+                        payees.push(jid);
+                    }
+                    if (payees.length === 0) {
+                        const refundSave = await readAccountJson(creatorId);
+                        if (refundSave) {
+                            refundSave.balance += r.amount;
+                            const pr = await persistAccountSave(creatorId, refundSave);
+                            if (pr.ok) {
+                                io.emit('balance:remote_sync', {
+                                    userId: String(creatorId),
+                                    balance: refundSave.balance,
+                                    balanceZh: refundSave.balanceZh || 0
+                                });
+                            }
+                        }
+                        io.emit('chat:message', {
+                            username: 'System',
+                            text: 'Rain had no valid joiners; refunded to host.',
+                            createdAt: Date.now()
+                        });
+                    } else {
+                        const shares = splitAmountEqually(r.amount, payees.length);
+                        for (let i = 0; i < payees.length; i++) {
+                            const jid = payees[i];
+                            const share = shares[i];
+                            const js = await loadOrCreateAccountSave(jid);
+                            if (!js) {
+                                console.error('[Rain] Payout skipped — no account for user', jid);
+                                continue;
+                            }
+                            js.balance = (typeof js.balance === 'number' ? js.balance : 0) + share;
+                            if (!js.stats || typeof js.stats !== 'object') js.stats = {};
+                            js.stats.rainWinnings =
+                                (typeof js.stats.rainWinnings === 'number' ? js.stats.rainWinnings : 0) +
+                                share;
+                            const pr = await persistAccountSave(jid, js);
+                            if (pr.ok) {
+                                io.emit('balance:remote_sync', {
+                                    userId: String(jid),
+                                    balance: js.balance,
+                                    balanceZh: js.balanceZh || 0
+                                });
+                            } else {
+                                console.error('[Rain] persist failed for joiner', jid, pr);
+                            }
+                        }
+                        const shareLabel =
+                            shares.length > 0
+                                ? `${shares[0].toFixed(2)} ZH$ each`
+                                : `${(r.amount / payees.length).toFixed(2)} ZH$ each`;
+                        io.emit('chat:message', {
+                            username: 'System',
+                            text: `🌧️ Rain ended! ${payees.length} player(s) split ${r.amount} ZH$ (${shareLabel}).`,
+                            createdAt: Date.now()
+                        });
+                    }
                 }
                 io.emit('rain:active', activeRains);
             }, duration * 1000);
-
         } catch (e) {
             console.error('[Rain Error]', e);
         }
     });
 
     socket.on('rain:join', ({ rainId, userId }) => {
-        const rain = activeRains.find(r => r.id === rainId);
-        if (rain && !rain.joiners.includes(userId)) {
-            rain.joiners.push(userId);
-            socket.emit('rain:join-confirmed', { rainId });
+        const uid = parseRobloxUserIdStrict(userId);
+        if (uid == null) {
+            socket.emit('rain:join-failed', { rainId });
+            return socket.emit('notification', { type: 'error', text: 'Log in to join the rain.' });
         }
+        const rain = activeRains.find((r) => r.id === rainId);
+        if (!rain) {
+            socket.emit('rain:join-failed', { rainId });
+            return socket.emit('notification', { type: 'error', text: 'This rain is no longer active.' });
+        }
+        if (rain.creatorUserId != null && String(rain.creatorUserId) === String(uid)) {
+            socket.emit('rain:join-failed', { rainId });
+            return socket.emit('notification', { type: 'error', text: 'You cannot join your own rain.' });
+        }
+        if (rain.joiners.some((j) => String(j) === String(uid))) {
+            socket.emit('rain:join-failed', { rainId });
+            return socket.emit('notification', { type: 'error', text: 'You already joined this rain.' });
+        }
+        rain.joiners.push(uid);
+        socket.emit('rain:join-confirmed', { rainId });
     });
 
     // COINFLIP SVR

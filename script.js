@@ -3368,6 +3368,21 @@ if (socket) {
         }
     });
 
+    socket.on('rain:join-failed', ({ rainId }) => {
+        const bannerBtn = document.getElementById('chat-rain-join-btn');
+        if (bannerBtn && (!rainId || String(bannerBtn.dataset.rainId) === String(rainId))) {
+            clearTimeout(bannerBtn._joinTimeout);
+            bannerBtn.classList.remove('loading');
+            const rain =
+                (rainId && activeRains.find((r) => r.id === rainId)) || activeRains[0] || null;
+            if (rain) updateRainBanner(rain);
+            else {
+                bannerBtn.disabled = false;
+                bannerBtn.innerHTML = 'JOIN';
+            }
+        }
+    });
+
     socket.on('rain:join-confirmed', ({ rainId }) => {
         // Update all inline chat JOIN buttons for this rain
         const btns = document.querySelectorAll(`.chat-join-btn[data-rain-id="${rainId}"]`);
@@ -3406,6 +3421,15 @@ if (socket) {
         updateBalanceDisplay();
         updateProfViews();
         // Don't saveToStorage right away to avoid loop if sync was from server
+    });
+
+    socket.on('balance:remote_sync', ({ userId, balance, balanceZh }) => {
+        if (!robloxUserId || String(userId) !== String(robloxUserId)) return;
+        if (typeof balance === 'number' && balance >= 0) roBalance = balance;
+        if (typeof balanceZh === 'number' && balanceZh >= 0) roBalanceZh = balanceZh;
+        updateBalanceDisplay();
+        updateProfViews();
+        if (typeof saveToStorage === 'function') saveToStorage();
     });
 
     socket.on('notification', ({ type, text }) => {
@@ -3786,9 +3810,18 @@ function updateRainBanner(rain) {
 
     if (joinBtn) {
         joinBtn.onclick = () => handleJoinRainLogic(joinBtn);
-        // type-safe check: server stores userId as numeric, normalise both sides
-        const alreadyJoined = rain.joiners.some(j => String(j) === String(robloxUserId));
-        if (alreadyJoined) {
+        const isCreator =
+            typeof robloxUserId !== 'undefined' &&
+            robloxUserId != null &&
+            rain.creatorUserId != null &&
+            String(rain.creatorUserId) === String(robloxUserId);
+        const alreadyJoined = rain.joiners.some((j) => String(j) === String(robloxUserId));
+        if (isCreator) {
+            joinBtn.disabled = true;
+            joinBtn.classList.remove('rain-joined');
+            joinBtn.classList.remove('loading');
+            joinBtn.innerHTML = 'YOUR RAIN';
+        } else if (alreadyJoined) {
             joinBtn.disabled = true;
             joinBtn.classList.add('rain-joined');
             joinBtn.innerHTML = '<i class="fa-solid fa-check"></i> JOINED';
