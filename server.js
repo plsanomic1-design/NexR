@@ -1609,6 +1609,240 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         robuxAfterTax: Math.floor(gamepassPrice * 0.7)
     });
 });
+// =====================================================================
+// REAL-TIME SOCIAL & PVP (SOCKET.IO)
+// =====================================================================
+/** In-memory state for active social events */
+let chatHistory = [];
+let activeRains = [];
+let activeFlips = [];
+
+io.on('connection', (socket) => {
+    console.log(`[Socket] Client connected: ${socket.id}`);
+
+    // Initial sync
+    socket.emit('chat:history', chatHistory.slice(-50));
+    socket.emit('rain:active', activeRains);
+    socket.emit('coinflip:list', activeFlips);
+    io.emit('online:count', io.engine.clientsCount);
+
+    socket.on('chat:message', async (data) => {
+        const { userId, username, message } = data;
+        if (!message || message.trim().length === 0) return;
+
+        const msgObj = {
+            id: Math.random().toString(36).substr(2, 9),
+            userId,
+            username,
+            text: message.substring(0, 200),
+            createdAt: Date.now()
+        };
+
+        chatHistory.push(msgObj);
+        if (chatHistory.length > 100) chatHistory.shift();
+        io.emit('chat:message', msgObj);
+    });
+
+    // TIP SYSTEM SVR
+    socket.on('tip:send', async ({ fromUserId, toTarget, amount }) => {
+        if (!fromUserId || !toTarget || amount < 1) return;
+        
+        try {
+            const senderSave = await readAccountJson(fromUserId);
+            if (!senderSave || senderSave.balance < amount) {
+                return socket.emit('notification', { type: 'error', text: 'Not enough balance for tip!' });
+            }
+
+            // Find recipient
+            let recipientId = parseInt(toTarget);
+            if (isNaN(recipientId)) {
+                // Try to find by name in DB
+                const res = await supabaseFetch(`transactions?type=eq.account_profile&game_name=ilike.*"${toTarget}"*`, { method: 'GET' });
+                if (res && res.length > 0) {
+                    for (const row of res) {
+                        try {
+                            const p = JSON.parse(row.game_name);
+                            if (p && p.username && p.username.toLowerCase() === toTarget.toLowerCase()) {
+                                recipientId = row.user_id;
+                                break;
+                            }
+                        } catch(e) {}
+                    }
+                }
+            }
+
+            if (!recipientId || recipientId === fromUserId) {
+                return socket.emit('notification', { type: 'error', text: 'Recipient not found!' });
+            }
+
+            const recSave = await readAccountJson(recipientId);
+            if (!recSave) return socket.emit('notification', { type: 'error', text: 'Recipient wallet not initialized.' });
+
+            // Atomic-ish transfer
+            senderSave.balance -= amount;
+            recSave.balance += amount;
+
+            await persistAccountSave(fromUserId, senderSave);
+            await persistAccountSave(recipientId, recSave);
+
+            socket.emit('notification', { type: 'success', text: `Tipped ${amount} ZH$ to ${recSave.username}!` });
+            socket.emit('balance:update', { balance: senderSave.balance });
+            
+            io.emit('chat:message', {
+                username: 'System',
+                text: `${senderSave.username} tipped ${amount} ZH$ to ${recSave.username}!`,
+                createdAt: Date.now()
+            });
+
+        } catch (e) {
+            console.error('[Tip Error]', e);
+        }
+    });
+
+    // RAIN SYSTEM SVR
+    socket.on('rain:create', async ({ userId, amount, duration, minWager }) => {
+        if (amount < 10) return;
+        
+        try {
+            const save = await readAccountJson(userId);
+            if (!save || save.balance < amount) return;
+
+            save.balance -= amount;
+            await persistAccountSave(userId, save);
+            socket.emit('balance:update', { balance: save.balance });
+
+            const rain = {
+                id: Math.random().toString(36).substr(2, 9),
+                creator: save.username,
+                amount,
+                minWager: minWager || 0,
+                endsAt: Date.now() + (duration * 1000),
+                joiners: []
+            };
+
+            activeRains.push(rain);
+            io.emit('rain:active', activeRains);
+            io.emit('chat:message', {
+                username: 'System',
+                text: `🌧️ ${save.username} started a Rain for ${amount} ZH$! Join now!`,
+                createdAt: Date.now()
+            });
+
+            setTimeout(async () => {
+                // End Rain
+                const idx = activeRains.findIndex(r => r.id === rain.id);
+                if (idx === -1) return;
+                const r = activeRains[idx];
+                activeRains.splice(idx, 1);
+
+                if (r.joiners.length === 0) {
+                    save.balance += amount;
+                    await persistAccountSave(userId, save);
+                    io.emit('chat:message', { username: 'System', text: 'Rain ended with no joiners. Refunded.', createdAt: Date.now() });
+                } else {
+                    const share = Math.floor((r.amount / r.joiners.length) * 100) / 100;
+                    for (const uid of r.joiners) {
+                        const js = await readAccountJson(uid);
+                        if (js) {
+                            js.balance += share;
+                            await persistAccountSave(uid, js);
+                        }
+                    }
+                    io.emit('chat:message', { 
+                        username: 'System', 
+                        text: `🌧️ Rain ended! ${r.joiners.length} players split ${r.amount} ZH$ (${share} each).`,
+                        createdAt: Date.now() 
+                    });
+                }
+                io.emit('rain:active', activeRains);
+            }, duration * 1000);
+
+        } catch (e) {
+            console.error('[Rain Error]', e);
+        }
+    });
+
+    socket.on('rain:join', ({ rainId, userId }) => {
+        const rain = activeRains.find(r => r.id === rainId);
+        if (rain && !rain.joiners.includes(userId)) {
+            rain.joiners.push(userId);
+        }
+    });
+
+    // COINFLIP SVR
+    socket.on('coinflip:create', async ({ userId, amount }) => {
+        if (amount < 1) return;
+        try {
+            const save = await readAccountJson(userId);
+            if (!save || save.balance < amount) return;
+
+            save.balance -= amount;
+            await persistAccountSave(userId, save);
+            socket.emit('balance:update', { balance: save.balance });
+
+            const flip = {
+                id: Math.random().toString(36).substr(2, 9),
+                amount,
+                player1: { userId, username: save.username, avatar: save.robloxAvatarUrl },
+                player2: null,
+                status: 'waiting',
+                createdAt: Date.now()
+            };
+
+            activeFlips.push(flip);
+            io.emit('coinflip:list', activeFlips);
+        } catch (e) {}
+    });
+
+    socket.on('coinflip:join', async ({ flipId, userId }) => {
+        const flip = activeFlips.find(f => f.id === flipId);
+        if (!flip || flip.status !== 'waiting' || flip.player1.userId === userId) return;
+
+        try {
+            const save = await readAccountJson(userId);
+            if (!save || save.balance < flip.amount) return;
+
+            save.balance -= flip.amount;
+            await persistAccountSave(userId, save);
+            socket.emit('balance:update', { balance: save.balance });
+
+            flip.player2 = { userId, username: save.username, avatar: save.robloxAvatarUrl };
+            flip.status = 'playing';
+            io.emit('coinflip:list', activeFlips);
+
+            // Execute Flip
+            setTimeout(async () => {
+                const winnerIdx = Math.random() < 0.5 ? 1 : 2;
+                const winner = winnerIdx === 1 ? flip.player1 : flip.player2;
+                const totalPot = flip.amount * 2;
+                const fee = Math.floor(totalPot * 0.05); // 5% fee
+                const payout = totalPot - fee;
+
+                const winSave = await readAccountJson(winner.userId);
+                if (winSave) {
+                    winSave.balance += payout;
+                    await persistAccountSave(winner.userId, winSave);
+                }
+
+                io.emit('coinflip:results', { flipId: flip.id, winnerIdx, winner, payout });
+                
+                setTimeout(() => {
+                    activeFlips = activeFlips.filter(f => f.id !== flipId);
+                    io.emit('coinflip:list', activeFlips);
+                }, 5000);
+            }, 500);
+
+        } catch (e) {}
+    });
+
+    socket.on('disconnect', () => {
+        io.emit('online:count', io.engine.clientsCount);
+        console.log(`[Socket] Client disconnected: ${socket.id}`);
+    });
+});
+
+app.use(express.static(ROOT));
+
 server.listen(PORT, () => {
     console.log(`Open http://localhost:${PORT}`);
     if (supabaseEnabled()) {
