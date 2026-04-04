@@ -1080,13 +1080,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if(cState === 'running' || cState === 'crashed') {
+                const tDraw = Math.max(0, timeMs);
                 const padX = 40;
                 const padY = 40;
                 const maxW = canvas.width - padX*2;
                 const maxH = canvas.height - padY*2 - 80;
                 
                 const maxY = Math.max(2.0, multi * 1.25);
-                const maxTime = Math.max(10000, timeMs * 1.25);
+                const maxTime = Math.max(10000, tDraw * 1.25);
                 
                 ctx.beginPath();
                 ctx.moveTo(padX, canvas.height - padY);
@@ -1097,7 +1098,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 for (let i = 0; i <= steps; i++) {
                     const frac = i / steps;
-                    const t = timeMs * frac;
+                    const t = tDraw * frac;
                     const m = 1.0 * Math.pow(Math.E, t * 0.00006);
 
                     let px = padX + (t / maxTime) * maxW;
@@ -1111,7 +1112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const k = 0.00006;
                 const dxdt = maxW / maxTime;
-                const dydt = -(k * Math.exp(timeMs * k) / (maxY - 1.0)) * maxH;
+                const dydt = -(k * Math.exp(tDraw * k) / (maxY - 1.0)) * maxH;
                 let tangentAngle = Math.atan2(dydt, dxdt);
                 if (!Number.isFinite(tangentAngle)) tangentAngle = -Math.PI / 2;
                 
@@ -1227,7 +1228,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             if (cState === 'running') {
-                let elapsed = Date.now() - startTime;
+                const elapsed = Math.max(0, Date.now() - startTime);
                 cMulti = 1.0 * Math.pow(Math.E, elapsed * 0.00006);
 
                 if (cBet > 0 && !hasCashedOut) {
@@ -1300,7 +1301,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 display.style.color = '#ff6b6b';
                 statusText.textContent = 'Crashed';
                 statusText.style.color = '#ff6b6b';
-                drawGraph(Date.now() - startTime, cCrashPoint);
+                drawGraph(Math.max(0, Date.now() - startTime), cCrashPoint);
             } else if (cState === 'starting') {
                 clearCrashCountdown();
                 stopCrashAnimLoop();
@@ -1349,7 +1350,7 @@ document.addEventListener('DOMContentLoaded', () => {
             display.style.color = '#ff6b6b';
             statusText.textContent = 'Crashed';
             statusText.style.color = '#ff6b6b';
-            drawGraph(Date.now() - startTime, cMulti);
+            drawGraph(Math.max(0, Date.now() - startTime), cMulti);
             
             if(typeof soundLose === 'function' && !hasCashedOut && cBet > 0) soundLose();
             if(!hasCashedOut && cBet > 0) postLiveFeedRound('crash', cBet, 0, -cBet);
