@@ -775,8 +775,8 @@ function getCusState(userId) {
             // Only intervene if they're on a noticeable win streak (> 2 wins)
             if (state.winStreak > 2) {
                 // Base chance to inject a loss increases slightly with streak
-                let chance = 0.055 + (state.winStreak * 0.05); 
-                if (chance > 0.355) chance = 0.355; // Cap intervention at 35.5% max
+                let chance = 0.042 + (state.winStreak * 0.05); 
+                if (chance > 0.342) chance = 0.342; // Cap intervention at 34.2% max
                 
                 // Extremely rare force loss on high streaks
                 if (state.winStreak >= 5 && Math.random() < 0.02) chance = 1.0; 
@@ -791,7 +791,7 @@ function getCusState(userId) {
         recordWin: function(isBigWin) {
             state.winStreak++;
             // Soften big win penalty
-            if (isBigWin && Math.random() < 0.155) { 
+            if (isBigWin && Math.random() < 0.142) { 
                 state.forceLossNext = true;
             }
         },
@@ -906,7 +906,7 @@ app.post('/api/game/crash/start', express.json(), (req, res) => {
     const { userId } = req.body;
     let e = 100;
     let cCrashPoint;
-    if ((userId && getCusState(userId).check()) || Math.random() < 0.005) {
+    if ((userId && getCusState(userId).check())) {
         cCrashPoint = 1.00;
         getCusState(userId).recordLoss();
     } else {
