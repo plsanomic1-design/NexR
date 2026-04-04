@@ -944,6 +944,7 @@ app.post('/api/roblox-verify', async (req, res) => {
 
 /** Game pass deposit: Robux paid = ZR$ credited. Keys must match client GAME_PASS_DEPOSIT_TIERS. */
 const GAME_PASS_CREDIT_BY_ID = {
+    1784194501: 7,
     1783449405: 8,
     1784128758: 9,
     1784222735: 10,
@@ -961,9 +962,35 @@ const GAME_PASS_CREDIT_BY_ID = {
     1784464674: 90,
     1783918985: 100
 };
-/** Prevents double-submit; not a daily cap. */
-const GAMEPASS_DEPOSIT_MIN_INTERVAL_MS = 2500;
-const lastGamepassDepositAt = new Map();
+
+/**
+ * Per-user, per-gamepass cooldown.
+ * After a successful deposit, the specific gamepass is locked for DEPOSIT_LOCK_MS
+ * to prevent spam-clicking.  After the timer expires the lock is cleared,
+ * so the user can delete the pass from their Roblox inventory, buy it fresh,
+ * and deposit again.
+ *
+ * Structure:  Map<userId, Set<gamePassId>>
+ */
+const DEPOSIT_LOCK_MS = 5000;
+const depositLocks = new Map();
+
+function isDepositLocked(userId, gamePassId) {
+    const s = depositLocks.get(userId);
+    return s ? s.has(gamePassId) : false;
+}
+
+function lockDeposit(userId, gamePassId) {
+    if (!depositLocks.has(userId)) depositLocks.set(userId, new Set());
+    depositLocks.get(userId).add(gamePassId);
+    setTimeout(() => {
+        const s = depositLocks.get(userId);
+        if (s) {
+            s.delete(gamePassId);
+            if (s.size === 0) depositLocks.delete(userId);
+        }
+    }, DEPOSIT_LOCK_MS);
+}
 
 function fetchUserOwnsGamePass(userId, gamePassId) {
     return new Promise((resolve) => {
@@ -975,6 +1002,7 @@ function fetchUserOwnsGamePass(userId, gamePassId) {
                 robRes.on('end', () => {
                     const raw = Buffer.concat(chunks).toString();
                     if (robRes.statusCode !== 200) {
+                        console.error(`[Deposit] Roblox is-owned ${robRes.statusCode} for user=${userId} gp=${gamePassId}: ${raw}`);
                         resolve({ ok: false, status: robRes.statusCode, raw });
                         return;
                     }
@@ -986,7 +1014,10 @@ function fetchUserOwnsGamePass(userId, gamePassId) {
                     }
                 });
             })
-            .on('error', () => resolve({ ok: false, status: 502, raw: null }));
+            .on('error', (err) => {
+                console.error(`[Deposit] Roblox is-owned network error for user=${userId} gp=${gamePassId}:`, err.message);
+                resolve({ ok: false, status: 502, raw: null });
+            });
     });
 }
 
@@ -1003,14 +1034,23 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     const userId = parseInt(String(body.userId != null ? body.userId : ''), 10);
 
     if (!userId || userId < 1) {
-        return res.status(400).json({ error: 'missing userId' });
+        return res.status(400).json({ error: 'Missing userId.' });
     }
 
-    // Rate-limit: prevent rapid double-clicks
-    const prevAt = lastGamepassDepositAt.get(userId) || 0;
-    if (Date.now() - prevAt < GAMEPASS_DEPOSIT_MIN_INTERVAL_MS) {
+    // ── Validate gamepass ID ──
+    const gamePassId = parseInt(String(body.gamePassId != null ? body.gamePassId : ''), 10);
+    if (!gamePassId || gamePassId < 1) {
+        return res.status(400).json({ error: 'Missing or invalid gamePassId.' });
+    }
+    const credit = GAME_PASS_CREDIT_BY_ID[gamePassId];
+    if (typeof credit !== 'number' || credit < 1) {
+        return res.status(400).json({ error: 'That game pass is not enabled for deposits.' });
+    }
+
+    // ── Per-gamepass cooldown (prevents spam-clicking the same tier) ──
+    if (isDepositLocked(userId, gamePassId)) {
         return res.status(429).json({
-            error: 'Please wait a couple of seconds between deposit verifications.'
+            error: 'You just deposited this tier. Wait a few seconds before trying again.'
         });
     }
 
@@ -1018,33 +1058,23 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         return res.status(503).json({ error: 'Account storage is not configured or unavailable.' });
     }
 
-    const gamePassId = parseInt(String(body.gamePassId != null ? body.gamePassId : ''), 10);
-    if (!gamePassId || gamePassId < 1) {
-        return res.status(400).json({ error: 'missing or invalid gamePassId' });
-    }
-    const credit = GAME_PASS_CREDIT_BY_ID[gamePassId];
-    if (typeof credit !== 'number' || credit < 1) {
-        return res.status(400).json({ error: 'That game pass is not enabled for deposits.' });
-    }
-
-    // ── Server-side Roblox ownership check (sole source of truth) ──
+    // ── Ask Roblox: does this user actually own this game pass right now? ──
     const own = await fetchUserOwnsGamePass(userId, gamePassId);
     if (!own.ok) {
         return res.status(502).json({
-            error: 'Could not verify with Roblox. Try again in a moment.'
+            error: 'Could not verify ownership with Roblox. Try again in a moment.'
         });
     }
     if (!own.owned) {
         return res.status(400).json({
-            error: 'That game pass was not found on this Roblox account. Buy the selected pass on Roblox, then verify again (it can take a few seconds after purchase).'
+            error: 'You do not own this game pass. Buy it on Roblox first, then come back and click Verify.'
         });
     }
 
-    // ── Ownership confirmed — load account from server only, then credit ──
+    // ── Ownership verified — load balance from Supabase, credit, save ──
     const diskSave = await readAccountJson(userId);
     const save = diskSave ? { ...diskSave } : { robloxUserId: userId, balance: 0, stats: {} };
     save.robloxUserId = userId;
-
     mergeFlipIntoBalance(save);
     if (!save.stats || typeof save.stats !== 'object') save.stats = {};
 
@@ -1052,7 +1082,6 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     save.balance = bal + credit;
     save.stats.deposited = (typeof save.stats.deposited === 'number' ? save.stats.deposited : 0) + credit;
     save.savedAt = Date.now();
-    lastGamepassDepositAt.set(userId, save.savedAt);
 
     if (!Array.isArray(save.transactions)) save.transactions = [];
     save.transactions.unshift({
@@ -1067,17 +1096,17 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     try {
         const result = await persistAccountSave(userId, save);
         if (!result.ok) {
-            return res.status(503).json({
-                error: 'Could not save account',
-                step: result.step,
-                detail: result.detail
-            });
+            return res.status(503).json({ error: 'Could not save account.', step: result.step, detail: result.detail });
         }
     } catch (e) {
-        console.error('gamepass persist:', e);
-        return res.status(503).json({ error: 'Could not save account', detail: String(e && e.message) });
+        console.error('[Deposit] persist error:', e);
+        return res.status(503).json({ error: 'Could not save account.', detail: String(e && e.message) });
     }
 
+    // ── Lock this tier for 5 seconds so they can't spam-click ──
+    lockDeposit(userId, gamePassId);
+
+    console.log(`[Deposit] user=${userId} gp=${gamePassId} credited=${credit} newBal=${save.balance}`);
     res.json({ ok: true, save, credited: credit });
 });
 

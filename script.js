@@ -1614,6 +1614,7 @@ function patchDiceBalance() {
 
 // ===== DEPOSIT MODAL (game pass tiers: Robux paid = same ZR$ credit; IDs must match server GAME_PASS_CREDIT_BY_ID) =====
 const GAME_PASS_DEPOSIT_TIERS = [
+    { id: 1784194501, robux: 7 },
     { id: 1783449405, robux: 8 },
     { id: 1784128758, robux: 9 },
     { id: 1784222735, robux: 10 },
