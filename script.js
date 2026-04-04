@@ -1070,25 +1070,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 const maxW = canvas.width - padX*2;
                 const maxH = canvas.height - padY*2 - 80;
                 
+                const maxY = Math.max(2.0, multi * 1.25);
+                const maxTime = Math.max(10000, timeMs * 1.25);
+                
                 ctx.beginPath();
                 ctx.moveTo(padX, canvas.height - padY);
                 
                 let steps = 50;
                 let lastX = padX;
                 let lastY = canvas.height - padY;
+                let prevX = padX, prevY = canvas.height - padY;
+                
                 for(let i=0; i<=steps; i++) {
                     let frac = i/steps;
                     let t = timeMs * frac;
                     let m = 1.00 * Math.pow(Math.E, t * 0.00006);
                     
-                    let px = padX + (t / (timeMs || 1)) * maxW;
-                    let py = (canvas.height - padY) - ((m - 1.0) / ((multi || 1.01) - 1.0)) * maxH;
+                    let px = padX + (t / maxTime) * maxW;
+                    let py = (canvas.height - padY) - ((m - 1.0) / (maxY - 1.0)) * maxH;
                     if(isNaN(py)) py = canvas.height - padY;
                     
                     ctx.lineTo(px, py);
+                    if (i === steps - 5) { prevX = px; prevY = py; }
                     lastX = px;
                     lastY = py;
                 }
+                if (lastX === prevX && lastY === prevY) { prevX = padX; prevY = canvas.height - padY; }
                 
                 ctx.lineWidth = 4;
                 ctx.strokeStyle = cState === 'crashed' ? '#ff6b6b' : '#f5af19';
@@ -1107,43 +1114,83 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fillStyle = gradient;
                 ctx.fill();
 
-                /** Marker at curve end — no emoji (canvas default fonts often lack color emoji → tofu boxes). */
+                /** Rocket Ship Rendering */
                 ctx.save();
                 ctx.translate(lastX, lastY);
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
                 if(cState === 'running') {
-                    ctx.fillStyle = '#ffffff';
-                    ctx.strokeStyle = '#f5af19';
+                    let angle = Math.atan2(lastY - prevY, lastX - prevX);
+                    ctx.rotate(angle + Math.PI/2);
+                    
+                    // Flame
+                    ctx.fillStyle = '#ff4d4d'; // Red flame base
+                    ctx.beginPath();
+                    ctx.moveTo(-6, 15);
+                    ctx.lineTo(0, 28 + Math.random()*8); // Dynamic flame length
+                    ctx.lineTo(6, 15);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.fillStyle = '#f5af19'; // Yellow inner flame
+                    ctx.beginPath();
+                    ctx.moveTo(-3, 15);
+                    ctx.lineTo(0, 20 + Math.random()*5);
+                    ctx.lineTo(3, 15);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Rocket Body (Capsule)
+                    ctx.fillStyle = '#ffffff'; 
+                    ctx.strokeStyle = '#94a3b8'; // Light outline
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.moveTo(0, -16);
-                    ctx.lineTo(12, 10);
-                    ctx.lineTo(0, 4);
-                    ctx.lineTo(-12, 10);
+                    ctx.moveTo(0, -22);    // Nose
+                    ctx.quadraticCurveTo(12, -8, 10, 16); // Right side
+                    ctx.lineTo(-10, 16);   // Bottom
+                    ctx.quadraticCurveTo(-12, -8, 0, -22); // Left side
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
-                    ctx.fillStyle = '#f5af19';
-                    ctx.beginPath();
-                    ctx.moveTo(-5, 10);
-                    ctx.lineTo(0, 20);
-                    ctx.lineTo(5, 10);
+                    
+                    // Left Fin
+                    ctx.fillStyle = '#ef4444'; 
+                    ctx.beginPath(); 
+                    ctx.moveTo(-10, 4);
+                    ctx.lineTo(-18, 18);
+                    ctx.lineTo(-10, 16);
                     ctx.closePath();
                     ctx.fill();
+                    
+                    // Right Fin
+                    ctx.fillStyle = '#ef4444'; 
+                    ctx.beginPath(); 
+                    ctx.moveTo(10, 4);
+                    ctx.lineTo(18, 18);
+                    ctx.lineTo(10, 16);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Window
+                    ctx.fillStyle = '#bae6fd'; // Light blue glass
+                    ctx.strokeStyle = '#0284c7'; // Dark blue outline
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, -2, 5, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.stroke();
+                    
                 } else if(cState === 'crashed') {
                     ctx.strokeStyle = '#ff6b6b';
                     ctx.lineWidth = 3;
-                    for(let i = 0; i < 8; i++) {
-                        const a = (i / 8) * Math.PI * 2;
+                    for(let i = 0; i < 12; i++) {
+                        const a = (i / 12) * Math.PI * 2;
+                        const dist = 10 + Math.random() * 15;
                         ctx.beginPath();
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(Math.cos(a) * 22, Math.sin(a) * 22);
+                        ctx.moveTo(Math.cos(a)*5, Math.sin(a)*5);
+                        ctx.lineTo(Math.cos(a)*dist, Math.sin(a)*dist);
                         ctx.stroke();
                     }
                     ctx.fillStyle = '#ff6b6b';
                     ctx.beginPath();
-                    ctx.arc(0, 0, 7, 0, Math.PI * 2);
+                    ctx.arc(0, 0, 8, 0, Math.PI * 2);
                     ctx.fill();
                 }
                 ctx.restore();
