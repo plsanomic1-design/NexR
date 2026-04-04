@@ -55,6 +55,10 @@
                 <i class="fa-solid fa-sitemap"></i>
                 <span>Plinko</span>
             </a>
+            <a href="#" class="nav-item" data-view="coinflip" title="Coinflip">
+                <i class="fa-solid fa-coins"></i>
+                <span>Coinflip</span>
+            </a>
             <a href="#" class="nav-item" data-view="rooms" title="Voice Chat">
                 <i class="fa-solid fa-microphone-lines"></i>
                 <span>Voice Chat</span>
@@ -62,11 +66,50 @@
         </div>
         
         <div class="sidebar-footer">
-            <a href="#" class="footer-icon discord"><i class="fa-brands fa-discord"></i></a>
+            <a href="#" class="footer-icon discord" target="_blank"><i class="fa-brands fa-discord"></i></a>
         </div>
+        <!-- Chat Toggle (Mobile) -->
+        <button class="mobile-chat-toggle" aria-label="Toggle Chat">
+            <i class="fa-solid fa-comments"></i>
+        </button>
     </div>
     
     <div class="main-wrapper">
+        <!-- New: Global Chat Sidebar (Right) -->
+        <aside class="chat-sidebar" id="global-chat">
+            <div class="chat-header">
+                <h3><i class="fa-solid fa-comments" style="color:var(--accent);"></i> Global Chat</h3>
+                <span class="online-count"><i class="fa-solid fa-circle" style="color:var(--green); font-size:8px;"></i> <span id="chat-online-count">--</span> Online</span>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will be injected here -->
+                <div class="chat-system-msg">Connecting to chat...</div>
+            </div>
+
+            <!-- Active Rain Banner (Hidden by default) -->
+            <div class="chat-rain-banner" id="chat-rain-banner" style="display:none;">
+                <div class="rain-banner-content">
+                    <span class="rain-emoji" aria-hidden="true">🌧️</span>
+                    <div class="rain-info">
+                        <span class="rain-title">Active Rain!</span>
+                        <span class="rain-timer" id="chat-rain-timer">--s</span>
+                    </div>
+                    <button class="btn-primary rain-join-btn" id="chat-rain-join-btn">JOIN</button>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <div class="chat-input-wrapper">
+                    <input type="text" id="chat-input" placeholder="Type a message..." maxlength="200">
+                    <button id="chat-send-btn" aria-label="Send Message"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+                <div class="chat-command-hints">
+                    Type <code>!rain</code> or <code>!tip</code> for more
+                </div>
+            </div>
+        </aside>
+
         <nav class="topbar">
             <div class="topbar-brand" onclick="document.querySelector('[data-view=home]').click()" title="Home">
                 <span class="brand-mark brand-mark--sm" aria-hidden="true">
@@ -481,6 +524,31 @@
                     <div class="game-area plinko-area">
                         <canvas id="plinko-canvas" width="600" height="400"></canvas>
                         <div id="plinko-buckets" class="plinko-buckets"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-coinflip" class="view">
+                <div class="coinflip-layout">
+                    <header class="coinflip-header">
+                        <div>
+                            <h2 style="font-size: 28px; font-weight: 800; display:flex; align-items:center; gap: 10px;">
+                                <i class="fa-solid fa-coins" style="color:var(--accent);"></i> Coinflip
+                            </h2>
+                            <p style="color:var(--text-secondary); margin-top:5px;">PVP. Winner takes all. 5% house fee.</p>
+                        </div>
+                        <div class="cf-create-card">
+                            <div class="input-group" style="margin-bottom:0;">
+                                <div class="input-wrapper" style="width:140px;">
+                                    <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                                    <input type="number" id="cf-create-amount" value="50" min="1">
+                                </div>
+                            </div>
+                            <button class="btn-primary" onclick="createCoinflip()" style="padding: 12px 20px;">Create Flip</button>
+                        </div>
+                    </header>
+
+                    <div class="cf-lobby-grid" id="cf-lobby-grid">
+                        <div class="chat-system-msg" style="grid-column: 1 / -1; padding: 40px;">No active coinflips. Create one to start!</div>
                     </div>
                 </div>
             </div>
@@ -1075,6 +1143,68 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="script.js"></script>
     <script src="chat.js"></script>
-    <script src="voice.js"></script>
+    <!-- ===== RAIN CONFIG MODAL ===== -->
+    <div class="modal-backdrop" id="rain-backdrop">
+        <div class="modal-box" style="max-width:450px; padding:30px;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-cloud-showers-heavy" style="color:var(--accent);"></i> Start a Rain</h2>
+                <button type="button" class="modal-close" onclick="closeRainModal()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p style="color:var(--text-secondary); font-size:14px; margin-bottom:20px;">
+                Spread some ZH$ to the community! Everyone who joins will split your amount.
+            </p>
+
+            <div style="display:flex; flex-direction:column; gap:15px;">
+                <div class="input-field">
+                    <label>Amount to give (ZH$)</label>
+                    <input type="number" id="rain-amount" value="100" min="10">
+                </div>
+                <div class="input-field">
+                    <label>Duration (Seconds)</label>
+                    <input type="number" id="rain-duration" value="60" min="30" max="3600">
+                </div>
+                <div class="input-field">
+                    <label>Min Wager Requirement (Optional)</label>
+                    <input type="number" id="rain-min-wager" value="0" min="0" placeholder="0 = None">
+                    <small style="color:var(--text-secondary); font-size:11px;">Must have wagered this much to join.</small>
+                </div>
+            </div>
+
+            <button type="button" class="btn-primary" id="rain-confirm-btn" style="width:100%; margin-top:25px; padding:15px;" onclick="confirmStartRain()">
+                Start the Rain!
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== TIP MODAL ===== -->
+    <div class="modal-backdrop" id="tip-backdrop">
+        <div class="modal-box" style="max-width:450px; padding:30px;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-hand-holding-dollar" style="color:var(--accent);"></i> Tip Player</h2>
+                <button type="button" class="modal-close" onclick="closeTipModal()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p style="color:var(--text-secondary); font-size:14px; margin-bottom:20px;">
+                Send ZH$ directly to another player's balance.
+            </p>
+
+            <div style="display:flex; flex-direction:column; gap:15px;">
+                <div class="input-field">
+                    <label>Recipient Username or Roblox ID</label>
+                    <input type="text" id="tip-recipient" placeholder="Enter username or ID...">
+                </div>
+                <div class="input-field">
+                    <label>Amount (ZH$)</label>
+                    <input type="number" id="tip-amount" value="10" min="1">
+                </div>
+            </div>
+
+            <button type="button" class="btn-primary" id="tip-confirm-btn" style="width:100%; margin-top:25px; padding:15px;" onclick="confirmSendTip()">
+                Send Tip
+            </button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>

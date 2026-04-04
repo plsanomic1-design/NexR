@@ -10,9 +10,18 @@
  */
 require('dotenv').config();
 const https = require('https');
+const http = require('http');
 const crypto = require('crypto');
 const express = require('express');
 const noblox = require('noblox.js');
+const { Server } = require('socket.io');
+
+const app = express();
+/** Create the HTTP server to attach Socket.io */
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: "*" }
+});
 
 const PORT = process.env.PORT || 8080;
 const ROOT = __dirname;
@@ -637,7 +646,6 @@ function formatTxDateServer() {
     return str.substring(0, 10) + ' ' + d.getFullYear() + ' ' + d.toTimeString().substring(0, 5);
 }
 
-const app = express();
 app.use(express.json({ limit: '2mb' }));
 
 /**
@@ -1601,14 +1609,11 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         robuxAfterTax: Math.floor(gamepassPrice * 0.7)
     });
 });
-
-app.use(express.static(ROOT));
-
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Open http://localhost:${PORT}`);
     if (supabaseEnabled()) {
         console.log('Account data: Supabase (user_balances + transactions)');
     } else {
-        console.warn('SUPABASE_URL / SUPABASE_ANON_KEY missing — account sync and deposits will return 503.');
+        console.log('Account data: Local JSON only (save/load endpoints available)');
     }
 });

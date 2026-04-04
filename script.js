@@ -2428,7 +2428,21 @@ function confirmBuyXp() {
 }
 
 // ===== PERSISTENCE (localStorage + optional server sync) =====
-const SAVE_KEY = 'zephrs_sim_v1';
+const SAVE_KEY = 'zephrs_save_v1';
+/** Real-time Socket connection */
+const socket = typeof io !== 'undefined' ? io() : null;
+
+if(socket) {
+    socket.on('chat-msg', (data) => {
+        if(data.text.startsWith('!rain')) {
+            const modal = document.getElementById('rain-modal');
+            if(modal) modal.style.display = 'flex';
+        } else if(data.text.startsWith('!tip')) {
+            const modal = document.getElementById('tip-modal');
+            if(modal) modal.style.display = 'flex';
+        }
+    });
+}
 
 function buildSaveObject() {
     return {
@@ -3195,3 +3209,293 @@ async function forcedVerifyDeletion() {
     }
 }
 
+// =====================================================================
+// REAL-TIME SOCIAL & PVP (CLIENT)
+// =====================================================================
+if (socket) {
+    socket.on('chat:message', (msg) => {
+        addChatMessage(msg);
+    });
+
+    socket.on('chat:history', (history) => {
+        const container = document.getElementById('chat-messages');
+        if (container) container.innerHTML = '';
+        history.forEach(addChatMessage);
+    });
+
+    socket.on('coinflip:list', (flips) => {
+        renderCFLobby(flips);
+    });
+
+    socket.on('coinflip:results', (data) => {
+        playCFAnimation(data);
+    });
+
+    socket.on('rain:active', (rains) => {
+        updateRainBanner(rains[0] || null);
+    });
+
+    socket.on('online:count', (count) => {
+        const el = document.getElementById('chat-online-count');
+        if (el) el.textContent = count;
+    });
+
+    socket.on('balance:update', ({ balance }) => {
+        roBalance = balance;
+        updateBalanceDisplay();
+        updateProfViews();
+        // Don't saveToStorage right away to avoid loop if sync was from server
+    });
+
+    socket.on('notification', ({ type, text }) => {
+        // For now use alert, or we could add a toast system
+        alert(text);
+    });
+}
+
+function renderCFLobby(flips) {
+    const grid = document.getElementById('cf-lobby-grid');
+    if (!grid) return;
+
+    if (!flips || flips.length === 0) {
+        grid.innerHTML = '<div class="chat-system-msg" style="grid-column: 1 / -1; padding: 40px;">No active coinflips. Create one to start!</div>';
+        return;
+    }
+
+    grid.innerHTML = '';
+    flips.forEach(f => {
+        const card = document.createElement('div');
+        card.className = 'cf-card';
+        card.id = `cf-game-${f.id}`;
+        
+        const isSelf = f.player1.userId === robloxUserId;
+        const canJoin = f.status === 'waiting' && !isSelf;
+
+        card.innerHTML = `
+            <div class="cf-card-header">
+                <span class="cf-amount">${f.amount.toFixed(2)} ZH$</span>
+                ${f.status === 'waiting' ? `<span class="badge badge-new">WAITING</span>` : `<span class="badge badge-popular">PLAYING</span>`}
+            </div>
+            <div class="cf-players">
+                <div class="cf-user">
+                    <img src="${f.player1.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=1'}" class="cf-avatar" id="cf-avatar-1-${f.id}">
+                    <span class="cf-username">${f.player1.username}</span>
+                </div>
+                <div class="cf-vs">VS</div>
+                <div class="cf-user">
+                    ${f.player2 ? `
+                        <img src="${f.player2.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=2'}" class="cf-avatar" id="cf-avatar-2-${f.id}">
+                        <span class="cf-username">${f.player2.username}</span>
+                    ` : `
+                        <div class="cf-empty-slot"><i class="fa-solid fa-user-plus"></i></div>
+                        <span class="cf-username">Waiting...</span>
+                    `}
+                </div>
+            </div>
+            ${canJoin ? `
+                <button class="btn-primary" onclick="joinCoinflip('${f.id}')" style="width:100%;">Join Game</button>
+            ` : f.status === 'waiting' ? `
+                <button class="btn-secondary" disabled style="width:100%; opacity:0.5;">Your Game</button>
+            ` : `
+                <div class="coin-container" id="coin-container-${f.id}">
+                    <div class="coin" id="coin-${f.id}">
+                        <div class="coin-face coin-front">Z</div>
+                        <div class="coin-face coin-back">R</div>
+                    </div>
+                </div>
+            `}
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function createCoinflip() {
+    const amt = parseFloat(document.getElementById('cf-create-amount')?.value) || 0;
+    if (amt < 1) return alert('Minimum flip is 1 ZH$');
+    if (amt > roBalance) return alert('Not enough balance!');
+
+    socket?.emit('coinflip:create', { userId: robloxUserId, amount: amt });
+}
+
+function joinCoinflip(id) {
+    socket?.emit('coinflip:join', { flipId: id, userId: robloxUserId });
+}
+
+function playCFAnimation({ flipId, winnerIdx, winner, payout }) {
+    const coin = document.getElementById(`coin-${flipId}`);
+    if (!coin) return;
+
+    // Determine target rotation
+    // 10 full turns (3600) + winner side
+    const baseRotation = 3600;
+    const sideRotation = winnerIdx === 1 ? 0 : 180;
+    const totalRotation = baseRotation + sideRotation;
+
+    coin.style.transform = `rotateY(${totalRotation}deg)`;
+
+    setTimeout(() => {
+        // Highlight winner
+        const winnerAvatar = document.getElementById(`cf-avatar-${winnerIdx}-${flipId}`);
+        if (winnerAvatar) winnerAvatar.classList.add('winner');
+
+        if (winner.userId === robloxUserId) {
+            alert(`You won ${payout.toFixed(2)} ZH$!`);
+        }
+    }, 3200);
+}
+
+function addChatMessage(msg) {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+
+    const div = document.createElement('div');
+    div.className = 'chat-msg';
+    
+    const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    div.innerHTML = `
+        <div class="chat-msg-header">
+            <span class="chat-msg-author" onclick="openTipFor('${msg.username}')">${msg.username}</span>
+            <span class="chat-msg-time">${time}</span>
+        </div>
+        <div class="chat-msg-text">${msg.text}</div>
+    `;
+    
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+// Command Handling
+const chatInput = document.getElementById('chat-input');
+if (chatInput) {
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendChatMessage();
+    });
+}
+document.getElementById('chat-send-btn')?.addEventListener('click', sendChatMessage);
+
+function sendChatMessage() {
+    const inp = document.getElementById('chat-input');
+    const msg = (inp?.value || '').trim();
+    if (!msg) return;
+
+    if (msg === '!rain') {
+        openRainModal();
+        inp.value = '';
+        return;
+    }
+    if (msg.startsWith('!tip')) {
+        const parts = msg.split(' ');
+        if (parts[1]) openTipFor(parts[1]);
+        else openTipModal();
+        inp.value = '';
+        return;
+    }
+
+    if (socket) {
+        socket.emit('chat:message', {
+            userId: robloxUserId,
+            username: currentUsername,
+            message: msg
+        });
+    }
+    inp.value = '';
+}
+
+// RAIN SYSTEM UI
+function openRainModal() {
+    document.getElementById('rain-backdrop')?.classList.add('show');
+}
+function closeRainModal() {
+    document.getElementById('rain-backdrop')?.classList.remove('show');
+}
+
+function confirmStartRain() {
+    const amount = parseFloat(document.getElementById('rain-amount').value) || 0;
+    const duration = parseInt(document.getElementById('rain-duration').value) || 60;
+    const minWager = parseFloat(document.getElementById('rain-min-wager').value) || 0;
+
+    if (amount < 10) return alert('Minimum rain amount is 10 ZH$');
+    if (amount > roBalance) return alert('Not enough balance!');
+
+    socket?.emit('rain:create', {
+        userId: robloxUserId,
+        username: currentUsername,
+        amount,
+        duration,
+        minWager
+    });
+
+    closeRainModal();
+}
+
+function updateRainBanner(rain) {
+    const banner = document.getElementById('chat-rain-banner');
+    const timer = document.getElementById('chat-rain-timer');
+    const joinBtn = document.getElementById('chat-rain-join-btn');
+
+    if (!rain) {
+        if (banner) banner.style.display = 'none';
+        return;
+    }
+
+    if (banner) banner.style.display = 'block';
+    
+    // Update timer
+    const updateTime = () => {
+        const left = Math.ceil((rain.endsAt - Date.now()) / 1000);
+        if (left <= 0) {
+            if (banner) banner.style.display = 'none';
+            return;
+        }
+        if (timer) timer.textContent = `${left}s`;
+        setTimeout(updateTime, 1000);
+    };
+    updateTime();
+
+    if (joinBtn) {
+        joinBtn.onclick = () => {
+            socket?.emit('rain:join', { rainId: rain.id, userId: robloxUserId });
+            joinBtn.disabled = true;
+            joinBtn.textContent = 'JOINED';
+        };
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'JOIN';
+    }
+}
+
+// TIP SYSTEM UI
+function openTipModal() {
+    document.getElementById('tip-backdrop')?.classList.add('show');
+}
+function openTipFor(user) {
+    const nameInp = document.getElementById('tip-recipient');
+    if (nameInp) nameInp.value = user;
+    openTipModal();
+}
+function closeTipModal() {
+    document.getElementById('tip-backdrop')?.classList.remove('show');
+}
+
+function confirmSendTip() {
+    const target = document.getElementById('tip-recipient')?.value.trim();
+    const amount = parseFloat(document.getElementById('tip-amount')?.value) || 0;
+
+    if (!target) return alert('Enter a recipient!');
+    if (amount < 1) return alert('Minimum tip is 1 ZH$');
+    if (amount > roBalance) return alert('Not enough balance!');
+
+    socket?.emit('tip:send', {
+        fromUserId: robloxUserId,
+        fromUsername: currentUsername,
+        toTarget: target,
+        amount
+    });
+
+    closeTipModal();
+}
+
+// CHAT TOGGLE (MOBILE)
+document.querySelector('.mobile-chat-toggle')?.addEventListener('click', () => {
+    document.getElementById('global-chat')?.classList.toggle('active');
+});
