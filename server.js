@@ -1649,8 +1649,8 @@ io.on('connection', (socket) => {
         
         try {
             const senderSave = await readAccountJson(fromUserId);
-            if (!senderSave || (senderSave.balanceZh || 0) < amount) {
-                return socket.emit('notification', { type: 'error', text: 'Not enough ZH$ balance for tip!' });
+            if (!senderSave || senderSave.balance < amount) {
+                return socket.emit('notification', { type: 'error', text: 'Not enough balance for tip!' });
             }
 
             // Find recipient — by numeric ID or username lookup in Supabase
@@ -1691,9 +1691,9 @@ io.on('connection', (socket) => {
             const recSave = await readAccountJson(recipientId);
             if (!recSave) return socket.emit('notification', { type: 'error', text: 'Recipient wallet not initialized.' });
 
-            // Transfer from ZH$ balance
-            senderSave.balanceZh = (senderSave.balanceZh || 0) - amount;
-            recSave.balanceZh = (recSave.balanceZh || 0) + amount;
+            // Transfer from main balance
+            senderSave.balance -= amount;
+            recSave.balance += amount;
 
             await persistAccountSave(fromUserId, senderSave);
             await persistAccountSave(recipientId, recSave);
