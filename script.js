@@ -38,6 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 view.classList.remove('active');
             }
         });
+
+        // Trigger active scanner when switching tabs if logged in
+        if (typeof performActiveGamepassScan === 'function') {
+            performActiveGamepassScan();
+        }
     }
 
     // Attach click events to nav links
@@ -1783,6 +1788,11 @@ async function confirmGamePassDeposit() {
         const credited = typeof j.credited === 'number' ? j.credited : 7;
         if(msg) msg.textContent = `+${credited.toFixed(2)} ZR$ added to your balance.`;
         goDepPage(4);
+        
+        // Scan immediately after successful deposit to trigger lock screen if needed
+        if (typeof performActiveGamepassScan === 'function') {
+            performActiveGamepassScan(true);
+        }
     } catch(e) {
         if(errEl) {
             errEl.textContent = e && typeof e.message === 'string' ? e.message : 'Verification failed.';
@@ -2820,33 +2830,66 @@ function initWelcomeModal() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initDepGamePassSelect();
+    
+    // Give login logic a moment to settle, then run a background scan
+    setTimeout(() => {
+        if(typeof performActiveGamepassScan === 'function') {
+            performActiveGamepassScan();
+        }
+    }, 2500);
 });
 
-// ===== Forced Inventory Lock Logic (Version 2: Delete-to-Reuse) =====
-function checkForcedLockState(stats) {
+// ===== Forced Inventory Lock Logic (Version 3: Live Active Scanner) =====
+
+let _isScanningPasses = false;
+
+async function performActiveGamepassScan(force = false) {
+    if(typeof robloxUserId !== 'number' || robloxUserId <= 0) return;
+    if(window.location.protocol === 'file:') return;
+    if(_isScanningPasses && !force) return;
+    
+    _isScanningPasses = true;
+
+    try {
+        const u = new URL('/api/scan-owned-passes', window.location.origin);
+        const res = await fetch(u.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: robloxUserId })
+        });
+        const j = await res.json();
+        
+        if (j.ok && Array.isArray(j.ownedPasses)) {
+            renderForcedLock(j.ownedPasses);
+        }
+    } catch(e) {
+        console.error('[Scan] Error scanning gamepasses', e);
+    } finally {
+        _isScanningPasses = false;
+    }
+}
+
+function renderForcedLock(ownedGps) {
     const lockEl = document.getElementById('forced-inventory-lock');
     const listEl = document.getElementById('forced-lock-list');
     if(!lockEl || !listEl) return;
 
-    // Use stats from payload if provided, otherwise fallback to global userStats
-    const mustDelete = (stats && Array.isArray(stats.mustDeleteGps)) ? stats.mustDeleteGps : userStats.mustDeleteGps;
-
-    console.log('[Lock] Checking state...', mustDelete);
-
-    if(mustDelete && mustDelete.length > 0) {
-        // Site IS locked
+    if(ownedGps && ownedGps.length > 0) {
         lockEl.style.setProperty('display', 'flex', 'important');
         let html = '<p style="margin-bottom:10px; font-weight:bold;">Tiers to delete before continuing:</p><ul>';
-        mustDelete.forEach(id => {
+        ownedGps.forEach(id => {
             const tier = GAME_PASS_DEPOSIT_TIERS.find(t => t.id === id);
-            const label = tier ? `${tier.robux} R$ (ID: ${id})` : `Gamepass ID: ${id}`;
-            html += `<li style="margin-bottom:5px;">${label}</li>`;
+            const label = tier ? `${tier.robux} R$ Tier` : `Tier`;
+            html += `<li style="margin-bottom:10px;">
+                        <a href="https://www.roblox.com/game-pass/${id}" target="_blank" style="color:var(--accent); text-decoration:underline;">
+                            ${label} (Click here to view & delete)
+                        </a>
+                     </li>`;
         });
         html += '</ul>';
         listEl.innerHTML = html;
-        document.body.style.overflow = 'hidden'; // stop scrolling
+        document.body.style.overflow = 'hidden';
     } else {
-        // Site IS unlocked
         lockEl.style.setProperty('display', 'none', 'important');
         document.body.style.overflow = '';
     }
@@ -2858,34 +2901,24 @@ async function forcedVerifyDeletion() {
     if(!btn || !errEl) return;
 
     btn.disabled = true;
-    btn.textContent = 'Checking...';
+    btn.textContent = 'Scanning Inventory...';
     errEl.style.display = 'none';
 
     try {
-        const res = await fetch(new URL('/api/deposit-verify-deletion', window.location.origin).href, {
+        const res = await fetch(new URL('/api/scan-owned-passes', window.location.origin).href, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: robloxUserId })
         });
         const j = await res.json();
-        if(!res.ok) throw new Error(j.error || 'Verification failed');
+        if(!res.ok) throw new Error(j.error || 'Scan failed');
         
-        if(j.save) applySavePayload(j.save);
-        
-        if(j.cleared > 0) {
-            // Some items were successfully deleted
-            if(j.save && j.save.stats && j.save.stats.mustDeleteGps && j.save.stats.mustDeleteGps.length > 0) {
-                // Some items are still left
-                errEl.textContent = `Cleared ${j.cleared} item(s), but you still own the others below!`;
-                errEl.style.display = 'block';
-            } else {
-                // ALL items are gone
-                checkForcedLockState(null); // unlocks immediately
-            }
-        } else {
-            // NO items were deleted
+        if(j.ownedPasses && j.ownedPasses.length > 0) {
             errEl.textContent = "We checked your account on Roblox but you STILL own these items! Double-check that you deleted them.";
             errEl.style.display = 'block';
+            renderForcedLock(j.ownedPasses);
+        } else {
+            renderForcedLock([]); // unlocking
         }
     } catch(e) {
         errEl.textContent = e.message;
