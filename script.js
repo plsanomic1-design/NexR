@@ -1331,6 +1331,29 @@ let roBalance = 0.00;
 let referralEarned = 0;
 let referredCount = 0;
 
+// ====== SOCIAL MODALS (GLOBAL) ======
+function openRainModal() {
+    const modal = document.getElementById('rain-backdrop');
+    if (modal) modal.style.display = 'flex';
+}
+function closeRainModal() {
+    const modal = document.getElementById('rain-backdrop');
+    if (modal) modal.style.display = 'none';
+}
+function openTipModal() {
+    const modal = document.getElementById('tip-backdrop');
+    if (modal) modal.style.display = 'flex';
+}
+function openTipFor(user) {
+    const nameInp = document.getElementById('tip-recipient');
+    if (nameInp) nameInp.value = user;
+    openTipModal();
+}
+function closeTipModal() {
+    const modal = document.getElementById('tip-backdrop');
+    if (modal) modal.style.display = 'none';
+}
+
 function getZephrsChatUser() {
     return {
         name: currentUsername || 'Guest',
@@ -3447,13 +3470,7 @@ function sendChatMessage() {
     inp.value = '';
 }
 
-// RAIN SYSTEM UI
-function openRainModal() {
-    document.getElementById('rain-backdrop')?.classList.add('show');
-}
-function closeRainModal() {
-    document.getElementById('rain-backdrop')?.classList.remove('show');
-}
+// RAIN SYSTEM UI (Confirmation)
 
 function confirmStartRain() {
     const amount = parseFloat(document.getElementById('rain-amount').value) || 0;
@@ -3528,18 +3545,7 @@ function handleJoinRainLogic(btn) {
     socket?.emit('rain:join', { rainId: rId, userId: robloxUserId });
 }
 
-// TIP SYSTEM UI
-function openTipModal() {
-    document.getElementById('tip-backdrop')?.classList.add('show');
-}
-function openTipFor(user) {
-    const nameInp = document.getElementById('tip-recipient');
-    if (nameInp) nameInp.value = user;
-    openTipModal();
-}
-function closeTipModal() {
-    document.getElementById('tip-backdrop')?.classList.remove('show');
-}
+// TIP SYSTEM UI (Confirmation)
 
 function confirmSendTip() {
     const target = document.getElementById('tip-recipient')?.value.trim();
