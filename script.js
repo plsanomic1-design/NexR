@@ -2024,7 +2024,9 @@ let userStats = {
     deposited: 0,
     withdrawn: 0,
     wagered: 0,
-    xp: 0
+    xp: 0,
+    lastWithdrawAt: 0,
+    claimedGps: []
 };
 let transactions = [];
 let currentUsername = 'artirzu';
@@ -2216,6 +2218,9 @@ function applySavePayload(data) {
         Object.keys(userStats).forEach(k => {
             if(typeof data.stats[k] === 'number') userStats[k] = data.stats[k];
         });
+        if(Array.isArray(data.stats.claimedGps)) {
+            userStats.claimedGps = data.stats.claimedGps;
+        }
     }
     if(Array.isArray(data.transactions)) transactions = data.transactions;
     
