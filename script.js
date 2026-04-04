@@ -1035,7 +1035,22 @@ document.addEventListener('DOMContentLoaded', () => {
         let cCrashPoint = 1.00;
         let startTime = 0;
         let animFrame = null;
+        let crashCountdownInterval = null;
         let hasCashedOut = false;
+
+        const stopCrashAnimLoop = () => {
+            if (animFrame != null) {
+                cancelAnimationFrame(animFrame);
+                animFrame = null;
+            }
+        };
+
+        const clearCrashCountdown = () => {
+            if (crashCountdownInterval != null) {
+                clearInterval(crashCountdownInterval);
+                crashCountdownInterval = null;
+            }
+        };
         
         const resizeCanvas = () => {
             const area = document.querySelector('.crash-area');
@@ -1205,48 +1220,56 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const updateCrash = () => {
-            if(cState === 'crashed') return; 
-            
+            if (cState === 'crashed') {
+                animFrame = null;
+                return;
+            }
             if (cState === 'running') {
                 let elapsed = Date.now() - startTime;
-                cMulti = 1.00 * Math.pow(Math.E, elapsed * 0.00006);
-                
-                if(cBet > 0 && !hasCashedOut) {
+                cMulti = 1.0 * Math.pow(Math.E, elapsed * 0.00006);
+
+                if (cBet > 0 && !hasCashedOut) {
                     crashPlayBtn.textContent = `Cashout (${cMulti.toFixed(2)} x)`;
-                    if(!crashPlayBtn.classList.contains('custom-cashout-btn')) {
+                    if (!crashPlayBtn.classList.contains('custom-cashout-btn')) {
                         crashPlayBtn.classList.add('custom-cashout-btn');
                     }
                 }
-                
+
                 display.textContent = cMulti.toFixed(2) + 'x';
                 drawGraph(elapsed, cMulti);
+                animFrame = requestAnimationFrame(updateCrash);
+            } else {
+                animFrame = null;
             }
-            
-            animFrame = requestAnimationFrame(updateCrash);
         };
         
         // Socket Handlers
         socket?.on('crash:starting', ({ countdown }) => {
+            stopCrashAnimLoop();
+            clearCrashCountdown();
             cState = 'starting';
             cBet = 0;
             hasCashedOut = false;
             display.style.color = 'white';
-            statusText.textContent = 'Starting soon';
+            statusText.textContent = 'Next round starting…';
             statusText.style.color = 'var(--text-secondary)';
             crashPlayBtn.textContent = 'Join next game';
             crashPlayBtn.classList.remove('custom-cashout-btn');
             crashPlayBtn.style.background = 'var(--accent)';
             crashPlayBtn.disabled = false;
             playersList.innerHTML = '';
-            
-            let left = countdown;
-            let intv = setInterval(() => {
+
+            let left = typeof countdown === 'number' && countdown > 0 ? countdown : 5;
+            display.textContent = left.toFixed(1) + 's';
+
+            crashCountdownInterval = setInterval(() => {
                 left -= 0.1;
-                if(left <= 0 || cState !== 'starting') clearInterval(intv);
-                else {
-                    display.textContent = left.toFixed(1) + 's';
-                    drawGraph(0, 1.0);
+                if (left <= 0 || cState !== 'starting') {
+                    clearCrashCountdown();
+                    return;
                 }
+                display.textContent = Math.max(0, left).toFixed(1) + 's';
+                drawGraph(0, 1.0);
             }, 100);
         });
 
@@ -1254,45 +1277,70 @@ document.addEventListener('DOMContentLoaded', () => {
             cState = data.state;
             startTime = data.startTime;
             cCrashPoint = data.target || 1.0;
-            
-            // Check if we were already betting on reconnects
-            const myPlayer = data.players.find(p => String(p.userId) === String(robloxUserId));
+
+            const myPlayer = data.players.find((p) => String(p.userId) === String(robloxUserId));
             if (myPlayer) {
                 cBet = myPlayer.bet;
                 hasCashedOut = myPlayer.cashedOut;
             }
-            
-            if(cState === 'running') {
+
+            if (cState === 'running') {
+                clearCrashCountdown();
+                stopCrashAnimLoop();
                 display.style.color = 'white';
                 statusText.textContent = 'Current payout';
                 statusText.style.color = 'var(--text-secondary)';
-                if(!animFrame) animFrame = requestAnimationFrame(updateCrash);
+                animFrame = requestAnimationFrame(updateCrash);
             } else if (cState === 'crashed') {
+                clearCrashCountdown();
+                stopCrashAnimLoop();
                 display.textContent = cCrashPoint.toFixed(2) + 'x';
                 display.style.color = '#ff6b6b';
                 statusText.textContent = 'Crashed';
                 statusText.style.color = '#ff6b6b';
                 drawGraph(Date.now() - startTime, cCrashPoint);
+            } else if (cState === 'starting') {
+                clearCrashCountdown();
+                stopCrashAnimLoop();
+                display.style.color = 'white';
+                statusText.textContent = 'Next round starting…';
+                statusText.style.color = 'var(--text-secondary)';
             }
-            
+
             playersList.innerHTML = '';
-            data.players.forEach(p => appendPlayer(p.userId, p.username, p.bet, p.cashedOut, p.winAmt, (p.winAmt/p.bet)));
+            data.players.forEach((p) =>
+                appendPlayer(
+                    p.userId,
+                    p.username,
+                    p.bet,
+                    p.cashedOut,
+                    p.winAmt,
+                    p.bet > 0 ? p.winAmt / p.bet : 0
+                )
+            );
         });
         
         socket?.on('crash:start', (data) => {
+            clearCrashCountdown();
+            stopCrashAnimLoop();
             cState = 'running';
             startTime = data.startTime;
             display.style.color = 'white';
             statusText.textContent = 'Current payout';
             statusText.style.color = 'var(--text-secondary)';
-            if(cBet > 0) {
+            if (cBet > 0) {
                 crashPlayBtn.textContent = 'Cashout';
                 crashPlayBtn.style.background = 'var(--green)';
             }
-            if(!animFrame) animFrame = requestAnimationFrame(updateCrash);
+            let elapsed = Date.now() - startTime;
+            cMulti = 1.0 * Math.pow(Math.E, Math.max(0, elapsed) * 0.00006);
+            display.textContent = cMulti.toFixed(2) + 'x';
+            animFrame = requestAnimationFrame(updateCrash);
         });
 
         socket?.on('crash:crashed', (data) => {
+            clearCrashCountdown();
+            stopCrashAnimLoop();
             cMulti = data.target;
             cState = 'crashed';
             display.textContent = cMulti.toFixed(2) + 'x';
@@ -1395,15 +1443,15 @@ let activeRains = [];
 // ====== SOCIAL MODALS (GLOBAL) ======
 function openRainModal() {
     const modal = document.getElementById('rain-backdrop');
-    if (modal) modal.style.display = 'flex';
+    if (modal) modal.classList.add('show');
 }
 function closeRainModal() {
     const modal = document.getElementById('rain-backdrop');
-    if (modal) modal.style.display = 'none';
+    if (modal) modal.classList.remove('show');
 }
 function openTipModal() {
     const modal = document.getElementById('tip-backdrop');
-    if (modal) modal.style.display = 'flex';
+    if (modal) modal.classList.add('show');
 }
 function openTipFor(user) {
     const nameInp = document.getElementById('tip-recipient');
@@ -1412,7 +1460,7 @@ function openTipFor(user) {
 }
 function closeTipModal() {
     const modal = document.getElementById('tip-backdrop');
-    if (modal) modal.style.display = 'none';
+    if (modal) modal.classList.remove('show');
 }
 
 function getZephrsChatUser() {
