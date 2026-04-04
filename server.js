@@ -1048,6 +1048,15 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         return res.status(400).json({ error: 'That game pass is not enabled for deposits.' });
     }
 
+    if (!save.stats || typeof save.stats !== 'object') save.stats = {};
+    if (!Array.isArray(save.stats.claimedGps)) save.stats.claimedGps = [];
+
+    if (save.stats.claimedGps.includes(gamePassId)) {
+        return res.status(400).json({
+            error: 'You have already deposited this exact tier. You must delete the item from your Roblox inventory, click "Reset Deleted Tiers" below, and purchase it again to deposit more.'
+        });
+    }
+
     const own = await fetchUserOwnsGamePass(userId, gamePassId);
     if (!own.ok) {
         return res.status(502).json({
@@ -1069,6 +1078,7 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     if (!save.stats || typeof save.stats !== 'object') save.stats = {};
     save.stats.deposited =
         (typeof save.stats.deposited === 'number' ? save.stats.deposited : 0) + credit;
+    save.stats.claimedGps.push(gamePassId);
     save.savedAt = Date.now();
     lastGamepassDepositAt.set(userId, save.savedAt);
 
@@ -1097,6 +1107,43 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     }
 
     res.json({ ok: true, save, credited: credit });
+});
+
+app.post('/api/deposit-reset-tiers', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const body = req.body || {};
+    const userId = parseInt(String(body.userId != null ? body.userId : ''), 10);
+
+    if (!userId || userId < 1) {
+        return res.status(400).json({ error: 'missing userId' });
+    }
+
+    const diskSave = await readAccountJson(userId);
+    if (!diskSave || !diskSave.stats || !Array.isArray(diskSave.stats.claimedGps) || diskSave.stats.claimedGps.length === 0) {
+        return res.json({ ok: true, cleared: 0, save: diskSave });
+    }
+
+    let clearedCount = 0;
+    const newClaimedGps = [];
+
+    // Check each claimed gamepass. If the user deleted it (no longer owns it), we free it up.
+    for (const gpId of diskSave.stats.claimedGps) {
+        const own = await fetchUserOwnsGamePass(userId, gpId);
+        if (own.ok && !own.owned) {
+            clearedCount++;
+        } else {
+            // Either they still own it, or Roblox API failed. Keep it blocked.
+            newClaimedGps.push(gpId);
+        }
+    }
+
+    if (clearedCount > 0) {
+        diskSave.stats.claimedGps = newClaimedGps;
+        diskSave.savedAt = Date.now();
+        await persistAccountSave(userId, diskSave);
+    }
+
+    res.json({ ok: true, cleared: clearedCount, save: diskSave });
 });
 
 // =====================================================================
@@ -1157,6 +1204,17 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(400).json({ error: 'Invalid gamepass ID extracted from the link.' });
     }
 
+    const diskSave = await readAccountJson(userId);
+    let save = diskSave ? { ...diskSave } : { balance: 0, balanceZh: 0, stats: {} };
+    if (!save.stats) save.stats = {};
+
+    const lastWd = save.stats.lastWithdrawAt || 0;
+    const cooldownMs = 30 * 60 * 1000;
+    if (Date.now() - lastWd < cooldownMs) {
+        const leftMin = Math.ceil((cooldownMs - (Date.now() - lastWd)) / 60000);
+        return res.status(429).json({ error: `Withdraw on cooldown. Please wait ${leftMin} more minute(s).` });
+    }
+
     // --- Step 1: Get gamepass product info from Roblox ---
     let productInfo;
     try {
@@ -1177,6 +1235,11 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(400).json({
             error: `Gamepass price mismatch. Expected ~${expectedRobux} R$ but found ${gamepassPrice} R$. Update the gamepass price to ${expectedRobux} R$ on Roblox and try again.`
         });
+    }
+
+    const afterTax = Math.floor(gamepassPrice * 0.7);
+    if (afterTax > 150) {
+        return res.status(400).json({ error: `Maximum withdrawal limit is 150 R$ after tax per transaction. Your request is ${afterTax} R$.` });
     }
 
     // --- Step 2: Verify the gamepass belongs to the requesting user ---
@@ -1231,13 +1294,28 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(400).json({ error: 'Bot could not purchase the gamepass: ' + msg });
     }
 
-    // --- Step 5: Deduct the ZR$ balance in Supabase ---
+    // --- Step 5: Deduct the ZR$ balance in Supabase & Persist Profile ---
     const newZr = Math.max(0, currentBal.balance_zr - zrCoins);
     const updateResult = await updateUserBalance(userId, newZr, currentBal.balance_zh);
+    
+    // Update local profile JSON for stats/cooldown
+    save.balance = newZr;
+    save.stats.withdrawn = (save.stats.withdrawn || 0) + zrCoins;
+    save.stats.lastWithdrawAt = Date.now();
+    if (!Array.isArray(save.transactions)) save.transactions = [];
+    save.transactions.unshift({
+        id: Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0'),
+        desc: `Withdrawal (${Math.floor(gamepassPrice * 0.7)} R$ received)`,
+        date: formatTxDateServer(),
+        amount: -zrCoins,
+        type: 'withdraw'
+    });
+    if (save.transactions.length > 100) save.transactions = save.transactions.slice(0, 100);
+    
+    await persistAccountSave(userId, save);
+
     if (!updateResult.ok) {
-        // Gamepass is already bought, but balance didn't save. Log prominently.
         console.error('[Withdraw] CRITICAL: Gamepass bought but balance update failed!', updateResult);
-        // Still return success to user — the Robux went out, which is the irreversible part.
     }
 
     return res.json({

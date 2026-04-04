@@ -817,6 +817,11 @@
                 <p id="dep-gamepass-tier-desc" class="dep-gamepass-tier-desc"></p>
                 <a href="#" target="_blank" rel="noopener noreferrer" class="dep-gamepass-link" id="dep-gamepass-store-link">Open selected game pass on Roblox <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:11px;"></i></a>
                 <p id="dep-gamepass-error" class="welcome-error" role="alert" style="display:none; margin-top:12px;"></p>
+                
+                <div id="dep-reset-tiers-wrap" style="margin-top: 15px; font-size: 12px; color: var(--text-secondary); text-align: center;">
+                    Already deposited this tier? Delete the shirt from your Roblox inventory, then <a href="javascript:void(0)" onclick="resetDeletedTiers()" style="color:var(--accent); text-decoration:underline;">Reset Deleted Tiers</a> to unlock it.
+                </div>
+
                 <div class="dep-actions" style="margin-top:22px;">
                     <button class="dep-back-btn" onclick="goDepPage(2)">Back</button>
                     <button type="button" class="btn-primary dep-confirm-btn" id="dep-gamepass-verify-btn" onclick="confirmGamePassDeposit()">Verify purchase</button>

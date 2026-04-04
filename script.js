@@ -1797,6 +1797,45 @@ async function confirmGamePassDeposit() {
     }
 }
 
+async function resetDeletedTiers() {
+    const errEl = document.getElementById('dep-gamepass-error');
+    if(!robloxUserId || robloxUserId < 1) {
+        if(errEl) { errEl.textContent = 'Please link your account first.'; errEl.style.display = 'block'; }
+        return;
+    }
+    
+    // Show spinner
+    const btn = document.getElementById('dep-gamepass-verify-btn');
+    const oldTxt = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking Roblox API...'; }
+
+    try {
+        const res = await fetch(new URL('/api/deposit-reset-tiers', window.location.origin).href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: robloxUserId })
+        });
+        const j = await res.json().catch(()=>({}));
+        if (!res.ok) throw new Error(j.error || 'Failed to check deleted tiers.');
+        
+        if (j.save && typeof j.save === 'object') applySavePayload(j.save);
+        
+        if (j.cleared > 0) {
+            alert(`Successfully detected and reset ${j.cleared} deleted deposit tiers! You can now repurchase them to deposit again.`);
+            if (errEl) errEl.style.display = 'none';
+        } else {
+            if (errEl) {
+                errEl.textContent = "No deleted tiers were found. Make sure you fully deleted the shirt from your Roblox inventory, wait a minute for Roblox clusters to sync, and try again.";
+                errEl.style.display = 'block';
+            }
+        }
+    } catch(e) {
+        if(errEl) { errEl.textContent = String(e.message || e); errEl.style.display = 'block'; }
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = oldTxt; }
+    }
+}
+
 // ===== WITHDRAW MODAL =====
 function openWithdrawModal() {
     const backdrop = document.getElementById('withdraw-backdrop');
@@ -1850,6 +1889,21 @@ if(wdAmtInput) {
         
         const bEl = document.getElementById('wd-before-tax');
         const aEl = document.getElementById('wd-after-tax');
+        const wdWrap = wdAmtInput.closest('.wd-input-wrap');
+        const errEl = document.getElementById('wd-error-msg');
+        
+        if (afterTax > 150) {
+            if (wdWrap) wdWrap.style.borderColor = 'var(--red)';
+            if (errEl) { errEl.textContent = 'Maximum withdrawal per transaction is 150 R$ after tax.'; errEl.style.display = 'block'; }
+            const btn = document.getElementById('wd-continue-btn');
+            if (btn) btn.disabled = true;
+        } else {
+            if (wdWrap) wdWrap.style.borderColor = '';
+            if (errEl) errEl.style.display = 'none';
+            const btn = document.getElementById('wd-continue-btn');
+            if (btn) btn.disabled = false;
+        }
+
         if(bEl) bEl.value = beforeTax;
         if(aEl) aEl.textContent = afterTax;
 
@@ -1885,6 +1939,13 @@ async function confirmWithdraw() {
         if(wdWrap) wdWrap.style.borderColor = 'var(--red)';
         setTimeout(() => { if(wdWrap) wdWrap.style.borderColor = ''; }, 2000);
         showErr('Minimum withdrawal is 7 R$ after tax.');
+        return;
+    }
+    
+    if(afterTax > 150) {
+        if(wdWrap) wdWrap.style.borderColor = 'var(--red)';
+        setTimeout(() => { if(wdWrap) wdWrap.style.borderColor = ''; }, 2000);
+        showErr('Maximum withdrawal is 150 R$ after tax per transaction.');
         return;
     }
 
