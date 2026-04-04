@@ -157,6 +157,8 @@
                 <button type="button" class="tb-icon-btn" id="tb-logout-btn" title="Log out"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
             </div>
         </nav>
+
+        <div id="tournament-banner-strip" class="tournament-banner-strip" style="display:none;" role="region" aria-label="Active tournaments"></div>
         
         <div class="page-content" id="page-content">
             <div id="view-home" class="view active">
@@ -835,6 +837,63 @@
                 <div id="admin-live-users-list" style="display:flex; flex-wrap:wrap; gap:8px;">
                     <span style="font-size:12px;color:var(--text-secondary);">Loading...</span>
                 </div>
+            </div>
+
+            <!-- Tournaments -->
+            <div class="admin-card admin-tournament-card" style="margin-top:14px;">
+                <h2 class="admin-card-title"><i class="fa-solid fa-trophy"></i> Tournaments</h2>
+                <p class="admin-hint">Scores use stats synced to the server after you create an event. Players are enrolled on their first account sync while the event is running (baseline snapshot). Prize is split evenly on ties.</p>
+                <div class="admin-tournament-form">
+                    <div class="admin-balance-row" style="flex-wrap:wrap;">
+                        <div class="admin-balance-block" style="flex:1;min-width:160px;">
+                            <label>Title</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="admin-tournament-title" placeholder="Weekend Crash Cup" maxlength="120">
+                            </div>
+                        </div>
+                        <div class="admin-balance-block" style="flex:1;min-width:200px;">
+                            <label>Metric</label>
+                            <div class="input-wrapper">
+                                <select id="admin-tournament-metric" style="width:100%;background:var(--bg-input);border:none;color:#fff;padding:10px 12px;border-radius:8px;font-family:inherit;">
+                                    <option value="delta_wagered">Highest total wagered (ZR$)</option>
+                                    <option value="delta_rain_winnings">Highest rain winnings (ZH$)</option>
+                                    <option value="delta_deposited">Highest deposited (ZR$)</option>
+                                    <option value="delta_withdrawn">Highest withdrawn (ZR$)</option>
+                                    <option value="delta_xp">Highest XP gained</option>
+                                    <option value="net_balance">Highest net ZR$ gained (balance)</option>
+                                    <option value="net_loss">Highest ZR$ lost from balance</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="admin-balance-row" style="flex-wrap:wrap;margin-top:10px;">
+                        <div class="admin-balance-block" style="min-width:120px;">
+                            <label>Prize pool</label>
+                            <div class="input-wrapper">
+                                <input type="number" id="admin-tournament-prize" min="1" step="1" placeholder="10000" value="1000">
+                            </div>
+                        </div>
+                        <div class="admin-balance-block" style="min-width:100px;">
+                            <label>Currency</label>
+                            <div class="input-wrapper">
+                                <select id="admin-tournament-currency" style="width:100%;background:var(--bg-input);border:none;color:#fff;padding:10px 12px;border-radius:8px;font-family:inherit;">
+                                    <option value="zr">ZR$</option>
+                                    <option value="zh">ZH$</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="admin-balance-block" style="min-width:100px;">
+                            <label>Days</label>
+                            <div class="input-wrapper">
+                                <input type="number" id="admin-tournament-days" min="1" max="60" step="1" value="3">
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="admin-btn admin-btn--green" style="margin-top:14px;" onclick="adminCreateTournament()">
+                        <i class="fa-solid fa-plus"></i> Create tournament
+                    </button>
+                </div>
+                <div id="admin-tournaments-list" class="admin-tournaments-list"></div>
             </div>
 
             <!-- User Card (hidden initially) -->

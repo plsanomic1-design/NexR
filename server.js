@@ -14,6 +14,8 @@ require('dotenv').config();
 const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const noblox = require('noblox.js');
 const { Server } = require('socket.io');
@@ -34,6 +36,7 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 8080;
 const ROOT = __dirname;
+const TOURNAMENTS_FILE = path.join(ROOT, 'data', 'tournaments.json');
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
 const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || '').trim();
@@ -1332,10 +1335,31 @@ app.post('/api/account-sync', async (req, res) => {
                 detail: result.detail
             });
         }
+        try {
+            await tournamentsOnAccountSync(userId, save);
+        } catch (te) {
+            console.error('[Tournaments] onAccountSync:', te && te.message);
+        }
         res.json({ ok: true });
     } catch (e) {
         console.error('POST /api/account-sync:', e);
         res.status(503).json({ error: 'write failed', detail: String(e && e.message) });
+    }
+});
+
+app.get('/api/tournaments', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json({ tournaments: getPublicTournamentsSnapshot() });
+});
+
+app.get('/api/tournaments/:id/leaderboard', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    try {
+        const top = await computeTournamentLeaderboard(req.params.id, 50);
+        res.json({ leaderboard: top });
+    } catch (e) {
+        console.error('[Tournaments] leaderboard:', e);
+        res.status(500).json({ error: 'Could not load leaderboard.' });
     }
 });
 
@@ -1958,6 +1982,206 @@ function emitBalanceRemoteSync(io, rawUserId, save) {
     }
 }
 
+// ----- Tournaments (file-backed; baselines captured on first account sync during window) -----
+const TOURNAMENT_METRIC_LABELS = {
+    delta_wagered: 'Highest total wagered (ZR$ volume)',
+    delta_rain_winnings: 'Highest rain winnings (ZH$)',
+    delta_deposited: 'Highest deposited (ZR$)',
+    delta_withdrawn: 'Highest withdrawn (ZR$)',
+    delta_xp: 'Highest XP gained',
+    net_balance: 'Highest net ZR$ gained (balance increase)',
+    net_loss: 'Highest ZR$ lost from balance'
+};
+
+const VALID_TOURNAMENT_METRICS = new Set(Object.keys(TOURNAMENT_METRIC_LABELS));
+
+let tournamentsState = { list: [] };
+
+function loadTournamentsSync() {
+    try {
+        const raw = fs.readFileSync(TOURNAMENTS_FILE, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.list)) tournamentsState.list = parsed.list;
+    } catch (_) {
+        tournamentsState.list = [];
+    }
+}
+
+function saveTournamentsSync() {
+    try {
+        fs.mkdirSync(path.dirname(TOURNAMENTS_FILE), { recursive: true });
+        fs.writeFileSync(TOURNAMENTS_FILE, JSON.stringify(tournamentsState, null, 2), 'utf8');
+    } catch (e) {
+        console.error('[Tournaments] save failed:', e && e.message);
+    }
+}
+
+function tournamentScore(metric, baseline, save) {
+    const s = save.stats && typeof save.stats === 'object' ? save.stats : {};
+    const bal = typeof save.balance === 'number' ? save.balance : 0;
+    const w = typeof s.wagered === 'number' ? s.wagered : 0;
+    const rw = typeof s.rainWinnings === 'number' ? s.rainWinnings : 0;
+    const dep = typeof s.deposited === 'number' ? s.deposited : 0;
+    const wd = typeof s.withdrawn === 'number' ? s.withdrawn : 0;
+    const xp = typeof s.xp === 'number' ? s.xp : 0;
+    switch (metric) {
+        case 'delta_wagered':
+            return w - baseline.wagered;
+        case 'delta_rain_winnings':
+            return rw - baseline.rainWinnings;
+        case 'delta_deposited':
+            return dep - baseline.deposited;
+        case 'delta_withdrawn':
+            return wd - baseline.withdrawn;
+        case 'delta_xp':
+            return xp - baseline.xp;
+        case 'net_balance':
+            return bal - baseline.balance;
+        case 'net_loss':
+            return Math.max(0, baseline.balance - bal);
+        default:
+            return 0;
+    }
+}
+
+function getPublicTournamentsSnapshot() {
+    return tournamentsState.list
+        .filter((t) => t.status === 'active')
+        .map((t) => ({
+            id: t.id,
+            title: t.title,
+            metric: t.metric,
+            metricLabel: TOURNAMENT_METRIC_LABELS[t.metric] || t.metric,
+            prizePool: t.prizePool,
+            prizeCurrency: t.prizeCurrency,
+            startsAt: t.startsAt,
+            endsAt: t.endsAt,
+            participantCount: t.participants ? Object.keys(t.participants).length : 0,
+            ended: Date.now() >= t.endsAt
+        }));
+}
+
+function broadcastTournamentsUpdate() {
+    try {
+        io.emit('tournaments:update', getPublicTournamentsSnapshot());
+    } catch (_) {}
+}
+
+async function tournamentsOnAccountSync(userId, save) {
+    if (!tournamentsState.list || tournamentsState.list.length === 0) return;
+    const now = Date.now();
+    let changed = false;
+    for (const t of tournamentsState.list) {
+        if (t.status !== 'active') continue;
+        if (now < t.startsAt || now >= t.endsAt) continue;
+        const uidStr = String(userId);
+        if (!t.participants) t.participants = {};
+        if (t.participants[uidStr]) continue;
+        const s = save.stats && typeof save.stats === 'object' ? save.stats : {};
+        t.participants[uidStr] = {
+            username: typeof save.username === 'string' && save.username.trim() ? save.username.trim() : uidStr,
+            at: now,
+            wagered: typeof s.wagered === 'number' ? s.wagered : 0,
+            rainWinnings: typeof s.rainWinnings === 'number' ? s.rainWinnings : 0,
+            deposited: typeof s.deposited === 'number' ? s.deposited : 0,
+            withdrawn: typeof s.withdrawn === 'number' ? s.withdrawn : 0,
+            xp: typeof s.xp === 'number' ? s.xp : 0,
+            balance: typeof save.balance === 'number' ? save.balance : 0
+        };
+        changed = true;
+    }
+    if (changed) {
+        saveTournamentsSync();
+        broadcastTournamentsUpdate();
+    }
+}
+
+async function computeTournamentLeaderboard(tournamentId, limit = 25) {
+    const t = tournamentsState.list.find((x) => x.id === tournamentId);
+    if (!t || !t.participants) return [];
+    const entries = [];
+    for (const [uidStr, baseline] of Object.entries(t.participants)) {
+        const uid = parseInt(uidStr, 10);
+        if (!uid || isNaN(uid)) continue;
+        const save = await readAccountJson(uid);
+        if (!save) continue;
+        const score = tournamentScore(t.metric, baseline, save);
+        entries.push({
+            userId: uidStr,
+            username: save.username || baseline.username || uidStr,
+            score
+        });
+    }
+    entries.sort((a, b) => b.score - a.score);
+    return entries.slice(0, limit);
+}
+
+async function finalizeTournamentById(tournamentId) {
+    const t = tournamentsState.list.find((x) => x.id === tournamentId);
+    if (!t || t.status !== 'active') {
+        return { ok: false, msg: 'Tournament not found or already closed.' };
+    }
+    if (!supabaseEnabled()) {
+        return { ok: false, msg: 'Supabase is required to finalize and pay prizes.' };
+    }
+    const participants = Object.entries(t.participants || {});
+    if (participants.length === 0) {
+        t.status = 'finalized';
+        t.winnerUserIds = [];
+        t.finalizedAt = Date.now();
+        saveTournamentsSync();
+        broadcastTournamentsUpdate();
+        return { ok: true, msg: 'Tournament finalized with no participants.', winners: [] };
+    }
+    const scores = [];
+    for (const [uidStr, baseline] of participants) {
+        const uid = parseInt(uidStr, 10);
+        if (!uid || isNaN(uid)) continue;
+        const save = await readAccountJson(uid);
+        if (!save) continue;
+        const score = tournamentScore(t.metric, baseline, save);
+        scores.push({ uid, uidStr, score, username: save.username || baseline.username });
+    }
+    if (scores.length === 0) {
+        t.status = 'finalized';
+        t.winnerUserIds = [];
+        t.finalizedAt = Date.now();
+        saveTournamentsSync();
+        broadcastTournamentsUpdate();
+        return { ok: true, msg: 'No readable accounts for scoring.', winners: [] };
+    }
+    const maxScore = Math.max(...scores.map((s) => s.score));
+    const winners = scores.filter((s) => s.score === maxScore);
+    const pool = typeof t.prizePool === 'number' && t.prizePool > 0 ? t.prizePool : 0;
+    const n = winners.length || 1;
+    const share = Math.round((pool / n) * 100) / 100;
+    const paid = [];
+    for (const w of winners) {
+        const save = await readAccountJson(w.uid);
+        if (!save) continue;
+        if (!save.stats || typeof save.stats !== 'object') save.stats = {};
+        if (t.prizeCurrency === 'zh') {
+            save.balanceZh = (typeof save.balanceZh === 'number' ? save.balanceZh : 0) + share;
+        } else {
+            save.balance = (typeof save.balance === 'number' ? save.balance : 0) + share;
+        }
+        const pr = await persistAccountSave(w.uid, save);
+        if (pr.ok) {
+            emitBalanceRemoteSync(io, w.uid, save);
+            paid.push({ userId: w.uid, username: w.username, score: w.score, prize: share });
+        }
+    }
+    t.status = 'finalized';
+    t.winnerUserIds = winners.map((w) => w.uid);
+    t.finalizedAt = Date.now();
+    t.finalTopScore = maxScore;
+    saveTournamentsSync();
+    broadcastTournamentsUpdate();
+    return { ok: true, winners: paid, topScore: maxScore };
+}
+
+loadTournamentsSync();
+
 io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
 
@@ -1965,6 +2189,7 @@ io.on('connection', (socket) => {
     socket.emit('chat:history', chatHistory.slice(-50));
     socket.emit('rain:active', activeRains);
     socket.emit('coinflip:list', activeFlips);
+    socket.emit('tournaments:update', getPublicTournamentsSnapshot());
     io.emit('online:count', io.engine.clientsCount);
 
     socket.on('player:identify', (data) => {
@@ -2561,6 +2786,87 @@ io.on('connection', (socket) => {
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating withdrawal cooldown.' });
         }
+    });
+
+    socket.on('admin:tournaments_list', ({ adminUserId }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        socket.emit('admin:tournaments_data', { tournaments: tournamentsState.list });
+    });
+
+    socket.on('admin:tournament_create', ({ adminUserId, title, metric, prizePool, prizeCurrency, durationDays }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        if (!VALID_TOURNAMENT_METRICS.has(String(metric))) {
+            return socket.emit('admin:action_result', { ok: false, msg: 'Invalid metric.' });
+        }
+        const pool = Number(prizePool);
+        if (!Number.isFinite(pool) || pool <= 0) {
+            return socket.emit('admin:action_result', { ok: false, msg: 'Prize pool must be a positive number.' });
+        }
+        const days = Number(durationDays);
+        if (!Number.isFinite(days) || days < 1 || days > 60) {
+            return socket.emit('admin:action_result', { ok: false, msg: 'Duration must be between 1 and 60 days.' });
+        }
+        const pc = prizeCurrency === 'zh' ? 'zh' : 'zr';
+        const startsAt = Date.now();
+        const endsAt = startsAt + Math.round(days * 86400000);
+        const id = `t_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+        const tour = {
+            id,
+            title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Tournament',
+            metric: String(metric),
+            prizePool: pool,
+            prizeCurrency: pc,
+            startsAt,
+            endsAt,
+            status: 'active',
+            participants: {},
+            createdAt: startsAt
+        };
+        tournamentsState.list.push(tour);
+        saveTournamentsSync();
+        broadcastTournamentsUpdate();
+        socket.emit('admin:action_result', {
+            ok: true,
+            msg: `Tournament "${tour.title}" created — ends ${new Date(endsAt).toLocaleString()}.`,
+            skipAdminLookup: true
+        });
+        socket.emit('admin:tournaments_data', { tournaments: tournamentsState.list });
+    });
+
+    socket.on('admin:tournament_finalize', async ({ adminUserId, tournamentId }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        const r = await finalizeTournamentById(String(tournamentId || ''));
+        let msg = r.msg || '';
+        if (r.ok && r.winners && r.winners.length) {
+            const cur = tournamentsState.list.find((x) => x.id === String(tournamentId));
+            const curLabel = cur && cur.prizeCurrency === 'zh' ? 'ZH$' : 'ZR$';
+            msg = `Finalized: ${r.winners.length} winner(s), top score ${r.topScore}. Each received ${r.winners[0].prize} ${curLabel}.`;
+        } else if (r.ok && !msg) {
+            msg = 'Tournament finalized.';
+        } else if (!r.ok) {
+            msg = r.msg || 'Finalize failed.';
+        }
+        socket.emit('admin:action_result', {
+            ok: r.ok,
+            msg,
+            skipAdminLookup: true
+        });
+        socket.emit('admin:tournaments_data', { tournaments: tournamentsState.list });
+    });
+
+    socket.on('admin:tournament_cancel', ({ adminUserId, tournamentId }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        const tid = String(tournamentId || '');
+        const t = tournamentsState.list.find((x) => x.id === tid);
+        if (!t || t.status !== 'active') {
+            return socket.emit('admin:action_result', { ok: false, msg: 'Tournament not found or already closed.' });
+        }
+        t.status = 'cancelled';
+        t.cancelledAt = Date.now();
+        saveTournamentsSync();
+        broadcastTournamentsUpdate();
+        socket.emit('admin:action_result', { ok: true, msg: 'Tournament cancelled (no prizes sent).', skipAdminLookup: true });
+        socket.emit('admin:tournaments_data', { tournaments: tournamentsState.list });
     });
 
     socket.on('disconnect', () => {

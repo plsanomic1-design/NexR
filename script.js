@@ -3579,6 +3579,14 @@ if (socket) {
         });
     });
 
+    socket.on('admin:tournaments_data', (data) => {
+        if (data && Array.isArray(data.tournaments)) renderAdminTournamentsList(data.tournaments);
+    });
+
+    socket.on('tournaments:update', (list) => {
+        renderTournamentBannerStrip(Array.isArray(list) ? list : []);
+    });
+
     socket.on('admin:lookup_result', (data) => {
         const card = document.getElementById('admin-user-card');
         const err = document.getElementById('admin-search-error');
@@ -3692,6 +3700,11 @@ if (socket) {
     socket.on('connect', () => {
         window.adminIdentify();
     });
+
+    fetch('/api/tournaments')
+        .then((r) => r.json())
+        .then((d) => renderTournamentBannerStrip(d.tournaments || []))
+        .catch(() => {});
 }
 
 function renderCFLobby(flips) {
@@ -4008,6 +4021,7 @@ window.openAdminModal = function(e) {
         const requestList = () => {
             if (typeof socket !== 'undefined' && socket && typeof robloxUserId !== 'undefined') {
                 socket.emit('admin:get_online_users', { adminUserId: robloxUserId });
+                socket.emit('admin:tournaments_list', { adminUserId: robloxUserId });
             }
         };
         queueMicrotask(requestList);
@@ -4126,6 +4140,132 @@ function updateAdminWithdrawAccessUI(revoked) {
         el.className = 'admin-wd-status clear';
     }
 }
+
+function escapeHtmlTournament(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+}
+
+function renderTournamentBannerStrip(tournaments) {
+    const strip = document.getElementById('tournament-banner-strip');
+    if (!strip) return;
+    if (!tournaments || tournaments.length === 0) {
+        strip.style.display = 'none';
+        strip.innerHTML = '';
+        return;
+    }
+    strip.style.display = 'block';
+    strip.innerHTML = tournaments
+        .map((t) => {
+            const pool = Number(t.prizePool || 0).toLocaleString('en-US');
+            const cur = t.prizeCurrency === 'zh' ? 'ZH$' : 'ZR$';
+            const end = new Date(t.endsAt);
+            const ended = t.ended;
+            const sub = ended
+                ? '<span class="tournament-banner__tag tournament-banner__tag--warn">Scoring window ended — awaiting finalize</span>'
+                : `<span class="tournament-banner__tag">Ends ${escapeHtmlTournament(end.toLocaleString())}</span>`;
+            return `<div class="tournament-banner__item"><span class="tournament-banner__icon" aria-hidden="true"><i class="fa-solid fa-trophy"></i></span><span class="tournament-banner__text"><strong>${escapeHtmlTournament(t.title)}</strong> · ${escapeHtmlTournament(t.metricLabel || '')} · Prize <strong>${pool} ${cur}</strong> · ${sub} · ${t.participantCount || 0} joined</span></div>`;
+        })
+        .join('');
+}
+
+function renderAdminTournamentsList(tournaments) {
+    const el = document.getElementById('admin-tournaments-list');
+    if (!el) return;
+    if (!tournaments || tournaments.length === 0) {
+        el.innerHTML = '<p class="admin-tournament-empty">No tournaments yet.</p>';
+        return;
+    }
+    const rows = [...tournaments]
+        .reverse()
+        .map((t) => {
+            const pool = Number(t.prizePool || 0).toLocaleString('en-US');
+            const cur = t.prizeCurrency === 'zh' ? 'ZH$' : 'ZR$';
+            const status = t.status || 'unknown';
+            const participants = t.participants ? Object.keys(t.participants).length : 0;
+            const metricLabel = t.metric ? (window.TOURNAMENT_METRIC_LABELS || {})[t.metric] || t.metric : '';
+            let actions = '';
+            if (status === 'active') {
+                actions = `<button type="button" class="admin-tourney-btn" data-action="lb" data-tid="${escapeHtmlTournament(t.id)}">Leaderboard</button>
+                    <button type="button" class="admin-tourney-btn admin-tourney-btn--danger" data-action="fin" data-tid="${escapeHtmlTournament(t.id)}">Finalize &amp; pay</button>
+                    <button type="button" class="admin-tourney-btn admin-tourney-btn--muted" data-action="can" data-tid="${escapeHtmlTournament(t.id)}">Cancel</button>`;
+            } else {
+                actions = `<span class="admin-tourney-status">${escapeHtmlTournament(status)}</span>`;
+            }
+            return `<div class="admin-tourney-row">
+                <div class="admin-tourney-main">
+                    <div class="admin-tourney-title">${escapeHtmlTournament(t.title)}</div>
+                    <div class="admin-tourney-meta">${escapeHtmlTournament(metricLabel)} · ${pool} ${cur} · ${participants} enrolled · ends ${escapeHtmlTournament(new Date(t.endsAt).toLocaleString())}</div>
+                </div>
+                <div class="admin-tourney-actions">${actions}</div>
+            </div>`;
+        })
+        .join('');
+    el.innerHTML = `<div class="admin-tourney-list-inner">${rows}</div>`;
+    el.querySelectorAll('button[data-action][data-tid]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const tid = btn.getAttribute('data-tid');
+            const act = btn.getAttribute('data-action');
+            if (act === 'lb') window.adminPreviewTournamentLeaderboard(tid);
+            if (act === 'fin') window.adminFinalizeTournament(tid);
+            if (act === 'can') window.adminCancelTournament(tid);
+        });
+    });
+}
+
+window.TOURNAMENT_METRIC_LABELS = {
+    delta_wagered: 'Highest total wagered (ZR$ volume)',
+    delta_rain_winnings: 'Highest rain winnings (ZH$)',
+    delta_deposited: 'Highest deposited (ZR$)',
+    delta_withdrawn: 'Highest withdrawn (ZR$)',
+    delta_xp: 'Highest XP gained',
+    net_balance: 'Highest net ZR$ gained (balance increase)',
+    net_loss: 'Highest ZR$ lost from balance'
+};
+
+window.adminCreateTournament = function () {
+    const title = document.getElementById('admin-tournament-title')?.value?.trim() || 'Tournament';
+    const metric = document.getElementById('admin-tournament-metric')?.value;
+    const prizePool = parseFloat(document.getElementById('admin-tournament-prize')?.value);
+    const prizeCurrency = document.getElementById('admin-tournament-currency')?.value || 'zr';
+    const durationDays = parseFloat(document.getElementById('admin-tournament-days')?.value);
+    socket?.emit('admin:tournament_create', {
+        adminUserId: robloxUserId,
+        title,
+        metric,
+        prizePool,
+        prizeCurrency,
+        durationDays
+    });
+};
+
+window.adminFinalizeTournament = function (tournamentId) {
+    if (!tournamentId) return;
+    if (!confirm('Finalize this tournament? Prizes will be sent to top scorer(s); ties split the pool.')) return;
+    socket?.emit('admin:tournament_finalize', { adminUserId: robloxUserId, tournamentId });
+};
+
+window.adminCancelTournament = function (tournamentId) {
+    if (!tournamentId) return;
+    if (!confirm('Cancel this tournament? No prizes will be sent.')) return;
+    socket?.emit('admin:tournament_cancel', { adminUserId: robloxUserId, tournamentId });
+};
+
+window.adminPreviewTournamentLeaderboard = async function (tournamentId) {
+    if (!tournamentId) return;
+    try {
+        const res = await fetch(`/api/tournaments/${encodeURIComponent(tournamentId)}/leaderboard`);
+        const data = await res.json();
+        const rows = (data.leaderboard || []).slice(0, 15);
+        const text = rows.length
+            ? rows.map((r, i) => `${i + 1}. ${r.username} — ${Number(r.score).toFixed(2)}`).join('\n')
+            : 'No participants yet.';
+        alert(text);
+    } catch (e) {
+        alert('Could not load leaderboard.');
+    }
+};
 
 // Global enter key listener for search
 document.getElementById('admin-search-input')?.addEventListener('keypress', (e) => {
