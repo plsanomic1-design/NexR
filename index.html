@@ -63,6 +63,11 @@
                 <i class="fa-solid fa-microphone-lines"></i>
                 <span>Voice Chat</span>
             </a>
+            <!-- ADMIN NAV ITEM — hidden by default, shown only for admin IDs -->
+            <a href="#" class="nav-item nav-item--admin" id="nav-item-admin" title="Admin Panel" style="display:none;" onclick="openAdminModal(event)">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>Admin</span>
+            </a>
         </div>
         
         <div class="sidebar-footer">
@@ -791,8 +796,111 @@
                 </div>
             </div>
         </div>
-    </div>
     </div><!-- /.app-shell -->
+
+    <!-- ===== ADMIN PANEL MODAL ===== -->
+    <div class="modal-backdrop" id="admin-modal-backdrop" onclick="closeAdminModal(event)">
+        <div class="modal-box" style="width:720px;max-width:95vw;max-height:88vh;overflow-y:auto;" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div class="admin-header-icon" style="width:36px;height:36px;border-radius:10px;font-size:16px;"><i class="fa-solid fa-shield-halved"></i></div>
+                    <div>
+                        <h2 style="margin:0;font-size:1.1rem;">Admin Control Panel</h2>
+                        <p style="margin:0;font-size:12px;color:var(--text-secondary);">Server-authoritative · actions validated server-side</p>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeAdminModal(null)"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- User Search -->
+            <div class="admin-card" style="margin-top:16px;">
+                <h2 class="admin-card-title"><i class="fa-solid fa-magnifying-glass"></i> Find User</h2>
+                <div class="admin-search-row">
+                    <div class="input-wrapper" style="flex:1;">
+                        <i class="fa-solid fa-user input-icon"></i>
+                        <input type="text" id="admin-search-input" placeholder="Username or Roblox ID...">
+                    </div>
+                    <button class="btn-primary" id="admin-search-btn" onclick="adminLookupUser()">
+                        <i class="fa-solid fa-search"></i> Search
+                    </button>
+                </div>
+                <p id="admin-search-error" class="admin-error" style="display:none;"></p>
+            </div>
+            
+            <!-- Live Online Users Section -->
+            <div class="admin-card" style="margin-top:14px;" id="admin-online-container">
+                <h3 style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:0;margin-bottom:12px;">
+                    <i class="fa-solid fa-users" style="color:var(--accent);"></i> Live Online Users
+                </h3>
+                <div id="admin-live-users-list" style="display:flex; flex-wrap:wrap; gap:8px;">
+                    <span style="font-size:12px;color:var(--text-secondary);">Loading...</span>
+                </div>
+            </div>
+
+            <!-- User Card (hidden initially) -->
+            <div class="admin-card admin-user-card" id="admin-user-card" style="display:none;margin-top:14px;">
+                <div class="admin-user-header">
+                    <img id="admin-user-avatar" src="" alt="" class="admin-avatar">
+                    <div class="admin-user-info">
+                        <div class="admin-user-name" id="admin-user-name">—</div>
+                        <div class="admin-user-id" id="admin-user-id">ID: —</div>
+                    </div>
+                    <div class="admin-rig-badge" id="admin-rig-badge">DEFAULT</div>
+                </div>
+
+                <!-- Balance Section -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-coins"></i> Balance</h3>
+                    <div class="admin-balance-row">
+                        <div class="admin-balance-block">
+                            <label>ZR$ Balance</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon" style="font-size:11px;font-weight:800;color:#93c5fd;">ZR$</span>
+                                <input type="number" id="admin-balance-zr" placeholder="0.00" min="0" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                    <button class="admin-btn admin-btn--green" onclick="adminSetBalance()">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Balance
+                    </button>
+                </div>
+
+                <!-- Game Rigging -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-dice"></i> Game Rigging</h3>
+                    <p class="admin-hint">Forces next game outcomes. Applies to Crash, Dice, Mines, Towers &amp; more.</p>
+                    <div class="admin-rig-btns">
+                        <button class="admin-rig-btn admin-rig-btn--win" id="rig-win-btn" onclick="adminSetRig('win')">
+                            <i class="fa-solid fa-trophy"></i> Force WIN
+                        </button>
+                        <button class="admin-rig-btn admin-rig-btn--lose" id="rig-lose-btn" onclick="adminSetRig('lose')">
+                            <i class="fa-solid fa-skull"></i> Force LOSE
+                        </button>
+                        <button class="admin-rig-btn admin-rig-btn--default" id="rig-default-btn" onclick="adminSetRig('default')">
+                            <i class="fa-solid fa-rotate-left"></i> Default
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Withdrawal Cooldown -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-clock"></i> Withdrawal Cooldown</h3>
+                    <div id="admin-wd-cooldown-status" class="admin-wd-status">—</div>
+                    <div class="admin-rig-btns" style="margin-top:12px;">
+                        <button class="admin-rig-btn admin-rig-btn--lose" onclick="adminSetWdCooldown('set')">
+                            <i class="fa-solid fa-lock"></i> Apply 30-Min Cooldown
+                        </button>
+                        <button class="admin-rig-btn admin-rig-btn--win" onclick="adminSetWdCooldown('clear')">
+                            <i class="fa-solid fa-lock-open"></i> Clear Cooldown
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status / Log -->
+                <div class="admin-action-log" id="admin-action-log"></div>
+            </div>
+        </div>
+    </div>
 
 
     <!-- ===== DEPOSIT MODAL ===== -->

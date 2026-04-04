@@ -2517,8 +2517,20 @@ function confirmBuyXp() {
 
 // ===== PERSISTENCE (localStorage + optional server sync) =====
 const SAVE_KEY = 'zephrs_save_v1';
-/** Real-time Socket connection */
-const socket = typeof io !== 'undefined' ? io() : null;
+/** Real-time Socket connection — same host by default; on split static/API deploy set window.SOCKET_IO_SERVER = 'https://your-api.onrender.com' */
+const _socketIoUrl =
+    typeof window !== 'undefined' &&
+    typeof window.SOCKET_IO_SERVER === 'string' &&
+    window.SOCKET_IO_SERVER.trim()
+        ? window.SOCKET_IO_SERVER.trim().replace(/\/$/, '')
+        : undefined;
+const _socketIoOpts = { transports: ['websocket', 'polling'], path: '/socket.io/' };
+const socket =
+    typeof io !== 'undefined'
+        ? _socketIoUrl
+            ? io(_socketIoUrl, _socketIoOpts)
+            : io(_socketIoOpts)
+        : null;
 
 if(socket) {
     socket.on('chat-msg', (data) => {
@@ -2551,7 +2563,13 @@ function applySavePayload(data) {
     if(!data || typeof data !== 'object') return;
     if(typeof data.username === 'string' && data.username.length > 0) currentUsername = data.username;
     if(typeof data.robloxUserId === 'number' && data.robloxUserId > 0) robloxUserId = data.robloxUserId;
-    else if(data.robloxUserId === null) robloxUserId = null;
+    else if(typeof data.robloxUserId === 'string') {
+        const t = data.robloxUserId.trim();
+        if(/^\d+$/.test(t)) {
+            const n = parseInt(t, 10);
+            if(n > 0) robloxUserId = n;
+        }
+    } else if(data.robloxUserId === null) robloxUserId = null;
     if(typeof data.robloxAvatarUrl === 'string' && /^https?:\/\//.test(data.robloxAvatarUrl)) {
         robloxAvatarUrl = data.robloxAvatarUrl;
     } else if(data.robloxAvatarUrl === null || data.robloxAvatarUrl === '') robloxAvatarUrl = null;
@@ -2566,6 +2584,10 @@ function applySavePayload(data) {
         });
     }
     if(Array.isArray(data.transactions)) transactions = data.transactions;
+
+    if(typeof window !== 'undefined' && typeof window.adminIdentify === 'function') {
+        queueMicrotask(() => window.adminIdentify());
+    }
 }
 
 async function fetchAccountFromServer(userId) {
@@ -2613,7 +2635,13 @@ function loadFromStorage() {
         const data = JSON.parse(raw);
         if(data.username && data.username.length > 0) currentUsername = data.username;
         if(typeof data.robloxUserId === 'number' && data.robloxUserId > 0) robloxUserId = data.robloxUserId;
-        else robloxUserId = null;
+        else if(typeof data.robloxUserId === 'string') {
+            const t = data.robloxUserId.trim();
+            if(/^\d+$/.test(t)) {
+                const n = parseInt(t, 10);
+                robloxUserId = n > 0 ? n : null;
+            } else robloxUserId = null;
+        } else robloxUserId = null;
         if(typeof data.robloxAvatarUrl === 'string' && /^https?:\/\//.test(data.robloxAvatarUrl)) robloxAvatarUrl = data.robloxAvatarUrl;
         else robloxAvatarUrl = null;
         if(typeof data.balance === 'number' && data.balance >= 0) roBalance = data.balance;
@@ -2803,8 +2831,13 @@ function performLogout() {
     applyUsername('Guest');
     updateBalanceDisplay();
     updateProfViews();
+    if(typeof window.adminIdentify === 'function') queueMicrotask(() => window.adminIdentify());
     window.location.hash = 'home';
     document.querySelector('.top-nav-links a[data-view="home"]')?.click();
+    
+    const adminNav = document.getElementById('nav-item-admin');
+    if (adminNav) adminNav.style.display = 'none';
+
     const welcomeBackdrop = document.getElementById('welcome-backdrop');
     if(welcomeBackdrop) {
         welcomeBackdrop.classList.add('show');
@@ -3099,6 +3132,7 @@ function initWelcomeModal() {
         saveToStorage();
         updateBalanceDisplay();
         updateProfViews();
+        if (typeof window.adminIdentify === 'function') window.adminIdentify();
     }
 
     if(confirmYes) confirmYes.addEventListener('click', () => void showVerifyStep());
@@ -3192,6 +3226,7 @@ function initWelcomeModal() {
         })();
         updateBalanceDisplay();
         updateProfViews();
+        if (typeof window.adminIdentify === 'function') window.adminIdentify();
         return;
     }
 
@@ -3303,6 +3338,10 @@ async function forcedVerifyDeletion() {
 // REAL-TIME SOCIAL & PVP (CLIENT)
 // =====================================================================
 if (socket) {
+    socket.on('presence:please_identify', () => {
+        if (typeof window.adminIdentify === 'function') window.adminIdentify();
+    });
+
     socket.on('chat:message', (msg) => {
         addChatMessage(msg);
     });
@@ -3388,6 +3427,142 @@ if (socket) {
             
             if (typeof saveToStorage === 'function') saveToStorage();
         }
+    });
+
+    // ADMIN LISTENERS
+    socket.on('admin:auth_success', () => {
+        const adminNav = document.getElementById('nav-item-admin');
+        if (adminNav) adminNav.style.display = 'flex';
+        console.log('[Admin] God Mode Authenticated');
+    });
+
+    socket.on('admin:online_users_list', (users) => {
+        const listDiv = document.getElementById('admin-live-users-list');
+        if (!listDiv) return;
+        if (!users || users.length === 0) {
+            listDiv.innerHTML = '<span style="font-size:12px;color:var(--text-secondary);">No other users online.</span>';
+            return;
+        }
+        
+        listDiv.innerHTML = '';
+        users.forEach(u => {
+            const badge = document.createElement('div');
+            badge.className = 'admin-online-badge';
+            badge.style.cssText = 'background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); padding:4px 10px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600; color:white; display:flex; gap:6px; align-items:center; transition:0.2s';
+            badge.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);"></span> ${u.username || 'Guest'} <span style="opacity:0.5;font-size:10px;">${u.userId}</span>`;
+            
+            badge.addEventListener('mouseenter', () => badge.style.background = 'rgba(59,130,246,0.25)');
+            badge.addEventListener('mouseleave', () => badge.style.background = 'rgba(59,130,246,0.1)');
+            badge.addEventListener('click', () => {
+                const searchInp = document.getElementById('admin-search-input');
+                if (searchInp) {
+                    searchInp.value = String(u.userId);
+                    if (typeof window.adminLookupUser === 'function') window.adminLookupUser();
+                }
+            });
+            listDiv.appendChild(badge);
+        });
+    });
+
+    socket.on('admin:lookup_result', (data) => {
+        const card = document.getElementById('admin-user-card');
+        const err = document.getElementById('admin-search-error');
+        const btn = document.getElementById('admin-search-btn');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-search"></i> Search';
+        }
+
+        if (data.error) {
+            if (err) {
+                err.textContent = data.error;
+                err.style.display = 'block';
+            }
+            if (card) card.style.display = 'none';
+            return;
+        }
+
+        if (err) err.style.display = 'none';
+        if (card) card.style.display = 'block';
+
+        // Update UI with user data
+        document.getElementById('admin-user-name').textContent = data.username;
+        document.getElementById('admin-user-id').textContent = `ID: ${data.userId}`;
+        document.getElementById('admin-user-avatar').src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(String(data.userId))}&backgroundColor=2c2f4a`;
+        document.getElementById('admin-balance-zr').value = Number(data.balance || 0).toFixed(2);
+        
+        // Rigging UI sync
+        updateAdminRigUI(data.rigState);
+
+        // Withdrawal Cooldown Status
+        const wdEl = document.getElementById('admin-wd-cooldown-status');
+        if (wdEl) {
+            if (data.wdCooldownEndsAt > Date.now()) {
+                const date = new Date(data.wdCooldownEndsAt);
+                wdEl.textContent = `COOLDOWN ACTIVE: Ends at ${date.toLocaleTimeString()}`;
+                wdEl.className = 'admin-wd-status active';
+            } else {
+                wdEl.textContent = 'NO COOLDOWN ACTIVE';
+                wdEl.className = 'admin-wd-status clear';
+            }
+        }
+
+        // Store active user ID for actions
+        window._activeAdminUserId = data.userId;
+    });
+
+    socket.on('admin:action_result', (data) => {
+        const log = document.getElementById('admin-action-log');
+        if (log) {
+            const entry = document.createElement('div');
+            entry.className = `admin-log-entry ${data.ok ? 'ok' : 'err'}`;
+            const time = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="admin-log-time">[${time}]</span> <span>${data.msg}</span>`;
+            log.prepend(entry);
+        }
+        if (data.ok) {
+            // Re-lookup to refresh UI state for consistency
+            if (window._activeAdminUserId) {
+                socket.emit('admin:lookup_user', { adminUserId: robloxUserId, query: String(window._activeAdminUserId) });
+            }
+        }
+    });
+
+    // Identification for current session (admin status + general online directory)
+    window.adminIdentify = function() {
+        if (typeof socket !== 'undefined' && socket) {
+            let numericRobloxId = null;
+            if (typeof robloxUserId === 'number' && robloxUserId > 0) numericRobloxId = robloxUserId;
+            else if (typeof robloxUserId === 'string' && /^\d+$/.test(robloxUserId.trim())) {
+                const n = parseInt(robloxUserId.trim(), 10);
+                if (n > 0) numericRobloxId = n;
+            }
+
+            if (numericRobloxId != null) {
+                socket.emit('admin:identify', { userId: numericRobloxId });
+            }
+
+            const sid = socket.id ? socket.id.substring(0, 6) : Math.random().toString(36).substring(2, 8);
+            const pId = numericRobloxId != null ? numericRobloxId : 'Guest-' + sid;
+            const uname =
+                typeof currentUsername === 'string' && currentUsername.trim()
+                    ? currentUsername.trim()
+                    : 'Guest';
+            socket.emit('player:identify', {
+                userId: pId,
+                username: uname,
+                balance: typeof roBalance !== 'undefined' ? roBalance : 0,
+                balanceZh: typeof roBalanceZh !== 'undefined' ? roBalanceZh : 0
+            });
+        }
+    };
+    
+    // Attempt identification immediately (if socket ready and login already finished)
+    window.adminIdentify();
+
+    // And also automatically attempt it anytime the socket connects/reconnects
+    socket.on('connect', () => {
+        window.adminIdentify();
     });
 }
 
@@ -3682,3 +3857,100 @@ function confirmSendTip() {
 document.querySelector('.mobile-chat-toggle')?.addEventListener('click', () => {
     document.getElementById('global-chat')?.classList.toggle('active');
 });
+
+// ============================================================
+// ADMIN PANEL UI LOGIC
+// ============================================================
+
+window.openAdminModal = function(e) {
+    if (e) e.preventDefault();
+    const backdrop = document.getElementById('admin-modal-backdrop');
+    if (backdrop) {
+        backdrop.classList.add('show');
+        if (typeof window.adminIdentify === 'function') window.adminIdentify();
+        const requestList = () => {
+            if (typeof socket !== 'undefined' && socket && typeof robloxUserId !== 'undefined') {
+                socket.emit('admin:get_online_users', { adminUserId: robloxUserId });
+            }
+        };
+        queueMicrotask(requestList);
+        setTimeout(requestList, 120);
+        setTimeout(() => {
+            document.getElementById('admin-search-input')?.focus();
+        }, 150);
+    }
+};
+
+window.closeAdminModal = function(e) {
+    // Called with null for X button, or with event for backdrop click
+    if (e && e.target && e.target.id !== 'admin-modal-backdrop') return;
+    const backdrop = document.getElementById('admin-modal-backdrop');
+    if (backdrop) backdrop.classList.remove('show');
+};
+
+window.adminLookupUser = function() {
+    const input = document.getElementById('admin-search-input');
+    const query = input?.value.trim();
+    if (!query) return;
+
+    const btn = document.getElementById('admin-search-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Finding...';
+    }
+
+    socket?.emit('admin:lookup_user', { adminUserId: robloxUserId, query });
+};
+
+window.adminSetBalance = function() {
+    if (!window._activeAdminUserId) return;
+    const balance = parseFloat(document.getElementById('admin-balance-zr')?.value) || 0;
+    
+    socket?.emit('admin:update_balance', { 
+        adminUserId: robloxUserId, 
+        targetUserId: window._activeAdminUserId, 
+        newBalance: balance 
+    });
+};
+
+window.adminSetRig = function(mode) {
+    if (!window._activeAdminUserId) return;
+    socket?.emit('admin:set_rig', { 
+        adminUserId: robloxUserId, 
+        targetUserId: window._activeAdminUserId, 
+        rigMode: mode 
+    });
+};
+
+window.adminSetWdCooldown = function(action) {
+    if (!window._activeAdminUserId) return;
+    socket?.emit('admin:set_wd_cooldown', { 
+        adminUserId: robloxUserId, 
+        targetUserId: window._activeAdminUserId, 
+        action 
+    });
+};
+
+function updateAdminRigUI(mode) {
+    const badge = document.getElementById('admin-rig-badge');
+    if (badge) {
+        badge.textContent = mode.toUpperCase();
+        badge.className = `admin-rig-badge ${mode}`;
+    }
+
+    // Update buttons
+    const btns = ['win', 'lose', 'default'];
+    btns.forEach(b => {
+        const el = document.getElementById(`rig-${b}-btn`);
+        if (el) {
+            if (b === mode) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+    });
+}
+
+// Global enter key listener for search
+document.getElementById('admin-search-input')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') adminLookupUser();
+});
+
