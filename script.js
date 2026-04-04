@@ -1638,40 +1638,67 @@ const GAME_PASS_DEPOSIT_TIERS = [
     { id: 1783918985, robux: 100 }
 ];
 
-function initDepGamePassSelect() {
-    const sel = document.getElementById('dep-gamepass-select');
-    if(!sel) return;
+let selectedDepTierId = null;
+
+function initDepGamePassGrid() {
+    const grid = document.getElementById('dep-tiers-grid');
+    if (!grid) return;
+    
     const sorted = [...GAME_PASS_DEPOSIT_TIERS].sort((a, b) => a.robux - b.robux);
-    sel.innerHTML = sorted
-        .map(
-            (t) =>
-                `<option value="${t.id}">${t.robux} Robux - ${t.robux} ZR$</option>`
-        )
-        .join('');
-    sel.removeEventListener('change', syncDepGamePassLink);
-    sel.addEventListener('change', syncDepGamePassLink);
+    
+    // Filter out already deposited tiers
+    const usedIds = Array.isArray(userStats.depositedPassIds) ? userStats.depositedPassIds : [];
+    const available = sorted.filter(t => !usedIds.includes(t.id));
+    
+    if (available.length === 0) {
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: var(--text-secondary);">
+            <i class="fa-solid fa-check-circle" style="font-size: 32px; color: var(--green); margin-bottom: 10px; display: block;"></i>
+            No tiers available. You've deposited everything!
+        </div>`;
+        return;
+    }
+
+    grid.innerHTML = available.map(t => `
+        <div class="dep-tier-btn ${selectedDepTierId === t.id ? 'active' : ''}" data-id="${t.id}" onclick="selectDepTier(this, ${t.id})">
+            <div class="dep-tier-robux">
+                <i class="fa-solid fa-gem"></i>
+                ${t.robux}
+            </div>
+            <div class="dep-tier-zr">${t.robux} ZR$</div>
+        </div>
+    `).join('');
+    
+    syncDepGamePassLink();
+}
+
+function selectDepTier(el, id) {
+    selectedDepTierId = id;
+    document.querySelectorAll('.dep-tier-btn').forEach(btn => btn.classList.remove('active'));
+    el.classList.add('active');
     syncDepGamePassLink();
 }
 
 function syncDepGamePassLink() {
-    const sel = document.getElementById('dep-gamepass-select');
     const link = document.getElementById('dep-gamepass-store-link');
     const desc = document.getElementById('dep-gamepass-tier-desc');
-    if(!sel || !link) return;
-    const id = parseInt(sel.value, 10);
-    const tier = GAME_PASS_DEPOSIT_TIERS.find((t) => t.id === id);
-    if(!tier) return;
+    if (!link) return;
+    
+    const tier = GAME_PASS_DEPOSIT_TIERS.find(t => t.id === selectedDepTierId);
+    if (!tier) {
+        link.style.display = 'none';
+        if (desc) desc.textContent = 'Select a tier above to see details.';
+        return;
+    }
+    
+    link.style.display = 'block';
     link.href = `https://www.roblox.com/game-pass/${tier.id}/${tier.robux}`;
-    if(desc) {
+    if (desc) {
         desc.textContent = `You pay ${tier.robux} Robux on Roblox; we credit ${tier.robux} ZR$ after verification.`;
     }
 }
 
 function getSelectedDepGamePassId() {
-    const sel = document.getElementById('dep-gamepass-select');
-    if(!sel) return 0;
-    const n = parseInt(sel.value, 10);
-    return n > 0 ? n : 0;
+    return selectedDepTierId || 0;
 }
 
 // ===== DEPOSIT MODAL =====
@@ -1702,7 +1729,7 @@ function goDepPage(num) {
 function updateDepGamePassUi() {
     const btn = document.getElementById('dep-gamepass-verify-btn');
     if(btn && !btn.disabled) btn.textContent = 'Verify purchase';
-    syncDepGamePassLink();
+    initDepGamePassGrid();
 }
 
 function showComingSoon() {
@@ -1996,7 +2023,8 @@ let userStats = {
     withdrawn: 0,
     wagered: 0,
     xp: 0,
-    lastWithdrawAt: 0
+    lastWithdrawAt: 0,
+    depositedPassIds: []
 };
 let transactions = [];
 let currentUsername = 'artirzu';
@@ -2823,7 +2851,7 @@ function initWelcomeModal() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    initDepGamePassSelect();
+    initDepGamePassGrid();
     
     // Give login logic a moment to settle, then run a background scan
     setTimeout(() => {

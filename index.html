@@ -812,9 +812,11 @@
                 </div>
                 <h2>Game pass deposit</h2>
                 <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Pick how much you want to add. Buy <strong>that</strong> game pass on Roblox, then press <strong>Verify purchase</strong>. We match Roblox ownership to your account and credit the same amount in ZR$ (wait a few seconds between verifications).</p>
-                <label class="dep-gamepass-label" for="dep-gamepass-select">Amount</label>
-                <select id="dep-gamepass-select" class="dep-gamepass-select" aria-describedby="dep-gamepass-tier-desc"></select>
-                <p id="dep-gamepass-tier-desc" class="dep-gamepass-tier-desc"></p>
+                <label class="dep-gamepass-label">Choose an amount</label>
+                <div id="dep-tiers-grid" class="dep-tiers-grid">
+                    <!-- Populated by script.js -->
+                </div>
+                <p id="dep-gamepass-tier-desc" class="dep-gamepass-tier-desc">Select a tier above to see details.</p>
                 <a href="#" target="_blank" rel="noopener noreferrer" class="dep-gamepass-link" id="dep-gamepass-store-link">Open selected game pass on Roblox <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:11px;"></i></a>
                 <p id="dep-gamepass-error" class="welcome-error" role="alert" style="display:none; margin-top:12px;"></p>
                 

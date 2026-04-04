@@ -1077,10 +1077,17 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     save.robloxUserId = userId;
     mergeFlipIntoBalance(save);
     if (!save.stats || typeof save.stats !== 'object') save.stats = {};
+    if (!Array.isArray(save.stats.depositedPassIds)) save.stats.depositedPassIds = [];
+
+    // Check if this specific gamepass ID has already been credited to this user account
+    if (save.stats.depositedPassIds.includes(gamePassId)) {
+        return res.status(400).json({ error: 'This game pass has already been used for a deposit. Buy a different tier or wait for new ones.' });
+    }
 
     const bal = typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0;
     save.balance = bal + credit;
     save.stats.deposited = (typeof save.stats.deposited === 'number' ? save.stats.deposited : 0) + credit;
+    save.stats.depositedPassIds.push(gamePassId);
     save.savedAt = Date.now();
 
     if (!Array.isArray(save.transactions)) save.transactions = [];

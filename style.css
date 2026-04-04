@@ -1877,28 +1877,94 @@ input:checked + .slider:before { transform: translateX(14px); }
     font-weight: 600;
     color: var(--text-secondary);
 }
-.dep-gamepass-select {
-    width: 100%;
-    padding: 12px 14px;
-    font-size: 14px;
-    font-weight: 600;
-    font-family: inherit;
-    color: var(--text-primary);
-    background: var(--bg-input);
+/* Deposit method grid */
+.dep-tiers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    margin-top: 15px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 5px 5px 15px;
+}
+
+.dep-tier-btn {
+    background: var(--bg-panel-light);
     border: 1px solid var(--border-color);
     border-radius: 10px;
+    padding: 18px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: center;
+    user-select: none;
 }
-.dep-gamepass-select:focus {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+
+.dep-tier-btn:hover {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.08);
+    transform: translateY(-2px);
 }
+
+.dep-tier-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+    transform: translateY(-2px) scale(1.02);
+}
+
+.dep-tier-robux {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dep-tier-robux i {
+    font-size: 14px;
+    color: #0084ff;
+}
+
+.dep-tier-btn.active .dep-tier-robux, 
+.dep-tier-btn.active .dep-tier-robux i {
+    color: white;
+}
+
+.dep-tier-zr {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.dep-tier-btn.active .dep-tier-zr {
+    color: rgba(255, 255, 255, 0.9);
+}
+
 .dep-gamepass-tier-desc {
     margin: 12px 0 0;
     font-size: 13px;
     color: #8b9dc3;
     line-height: 1.45;
+    text-align: center;
+    min-height: 1.45em;
 }
+
+.dep-gamepass-link {
+    display: block;
+    text-align: center;
+    margin-top: 15px;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+}
+.dep-gamepass-link:hover { text-decoration: underline; }
 
 /* Withdraw modal — matches deposit modal rhythm */
 .wd-lead {
