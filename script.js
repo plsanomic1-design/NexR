@@ -2038,10 +2038,48 @@ function closeWithdrawModal(event) {
     const backdrop = document.getElementById('withdraw-backdrop');
     if(backdrop) backdrop.classList.remove('show');
     
+    if(wdCooldownInterval) {
+        clearInterval(wdCooldownInterval);
+        wdCooldownInterval = null;
+    }
+
     const inp = document.getElementById('wd-amount-input');
     if(inp) {
         inp.value = 15;
         inp.dispatchEvent(new Event('input'));
+    }
+}
+
+let wdCooldownInterval = null;
+function refreshWithdrawCooldown() {
+    const btn = document.getElementById('wd-continue-btn');
+    if(!btn) return;
+
+    const lastWd = userStats.lastWithdrawAt || 0;
+    const cooldownMs = 30 * 60 * 1000;
+    const now = Date.now();
+    const diff = now - lastWd;
+
+    if(diff < cooldownMs) {
+        const remaining = cooldownMs - diff;
+        const mins = Math.floor(remaining / 60000);
+        const secs = Math.floor((remaining % 60000) / 1000);
+        const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+        
+        btn.disabled = true;
+        btn.textContent = `On Cooldown (${timeStr})`;
+        btn.style.opacity = '0.7';
+        return true; // on cooldown
+    } else {
+        // Only reset text/style if it was on cooldown, don't just enable (amount check might still want it disabled)
+        if(btn.textContent.includes('Cooldown')) {
+            btn.textContent = 'Withdraw — Bot Buys Instantly';
+            btn.style.opacity = '';
+            // Trigger an input event to let the amount validator decide the final disabled state
+            const inp = document.getElementById('wd-amount-input');
+            if(inp) inp.dispatchEvent(new Event('input'));
+        }
+        return false; // not on cooldown
     }
 }
 
@@ -2053,6 +2091,17 @@ function goWdPage(num) {
     if(num === 2) {
         const avail = document.getElementById('wd-avail-bal');
         if(avail) avail.textContent = roBalance.toFixed(2);
+        
+        // Start cooldown check timer
+        if(!wdCooldownInterval) {
+            refreshWithdrawCooldown();
+            wdCooldownInterval = setInterval(refreshWithdrawCooldown, 1000);
+        }
+    } else {
+        if(wdCooldownInterval) {
+            clearInterval(wdCooldownInterval);
+            wdCooldownInterval = null;
+        }
     }
 }
 
@@ -2089,7 +2138,10 @@ if(wdAmtInput) {
             if (wdWrap) wdWrap.style.borderColor = '';
             if (errEl) errEl.style.display = 'none';
             const btn = document.getElementById('wd-continue-btn');
-            if (btn) btn.disabled = false;
+            // If button text is NOT on cooldown, we can enable it
+            if (btn && !btn.textContent.includes('Cooldown')) {
+                btn.disabled = false;
+            }
         }
 
         if(bEl) bEl.value = beforeTax;
@@ -2189,6 +2241,7 @@ async function confirmWithdraw() {
         // SUCCESS - now deduct balance locally and persist
         roBalance -= coins;
         userStats.withdrawn += coins;
+        userStats.lastWithdrawAt = Date.now();
         addTransaction('Withdrawal (' + afterTax + ' R$ received)', -coins, 'withdraw');
         updateBalanceDisplay();
         updateProfViews();
