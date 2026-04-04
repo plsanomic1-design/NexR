@@ -2080,9 +2080,9 @@ if(wdAmtInput) {
         const wdWrap = wdAmtInput.closest('.wd-input-wrap');
         const errEl = document.getElementById('wd-error-msg');
         
-        if (afterTax > 150) {
+        if (beforeTax > 150) {
             if (wdWrap) wdWrap.style.borderColor = 'var(--red)';
-            if (errEl) { errEl.textContent = 'Maximum withdrawal per transaction is 150 R$ after tax.'; errEl.style.display = 'block'; }
+            if (errEl) { errEl.textContent = 'Maximum withdrawal per transaction is 150 R$.'; errEl.style.display = 'block'; }
             const btn = document.getElementById('wd-continue-btn');
             if (btn) btn.disabled = true;
         } else {
@@ -2130,10 +2130,10 @@ async function confirmWithdraw() {
         return;
     }
     
-    if(afterTax > 150) {
+    if(beforeTax > 150) {
         if(wdWrap) wdWrap.style.borderColor = 'var(--red)';
         setTimeout(() => { if(wdWrap) wdWrap.style.borderColor = ''; }, 2000);
-        showErr('Maximum withdrawal is 150 R$ after tax per transaction.');
+        showErr('Maximum withdrawal is 150 R$ per transaction.');
         return;
     }
 

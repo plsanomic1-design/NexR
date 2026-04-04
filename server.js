@@ -1514,8 +1514,8 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
     }
 
     const afterTax = Math.floor(gamepassPrice * 0.7);
-    if (afterTax > 150) {
-        return res.status(400).json({ error: `Maximum withdrawal limit is 150 R$ after tax per transaction. Your request is ${afterTax} R$.` });
+    if (gamepassPrice > 150) {
+        return res.status(400).json({ error: `Maximum withdrawal limit is 150 R$ per transaction. Your request is ${gamepassPrice} R$.` });
     }
 
     // --- Step 2: Verify the gamepass belongs to the requesting user ---
