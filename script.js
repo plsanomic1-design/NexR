@@ -2213,8 +2213,8 @@ function applySavePayload(data) {
     if(typeof data.referralEarned === 'number' && data.referralEarned >= 0) referralEarned = data.referralEarned;
     if(typeof data.referredCount === 'number' && data.referredCount >= 0) referredCount = data.referredCount;
     if(data.stats && typeof data.stats === 'object') {
-        Object.keys(userStats).forEach(k => {
-            if(typeof data.stats[k] === 'number') userStats[k] = data.stats[k];
+        Object.keys(data.stats).forEach(k => {
+            userStats[k] = data.stats[k];
         });
     }
     if(Array.isArray(data.transactions)) transactions = data.transactions;
@@ -2450,7 +2450,7 @@ function performLogout() {
     roBalance = 0;
     referralEarned = 0;
     referredCount = 0;
-    userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0 };
+    userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0, depositedPassIds: [] };
     transactions = [];
     applyUsername('Guest');
     updateBalanceDisplay();
@@ -2742,7 +2742,7 @@ function initWelcomeModal() {
                 roBalance = 0;
                 referralEarned = 0;
                 referredCount = 0;
-                userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0 };
+                userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0, depositedPassIds: [] };
                 transactions = [];
             }
         }
