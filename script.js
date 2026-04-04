@@ -194,14 +194,12 @@ document.addEventListener('DOMContentLoaded', () => {
             else if(dScore > pScore) { endGame('Dealer Wins', 'var(--red)'); }
             else endGame('Push', 'var(--text-secondary)');
             
-            // Re-sync with server since this uses client finish logic
-            if (pScore > dScore || dScore > 21 || dScore > pScore) {
-                 fetch('/api/game/record-result', {
-                    method:'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, win: win, bigWin: false })
-                }).catch(()=>{});
-            }
+            // Re-sync with server cus state
+            fetch('/api/game/record-result', {
+                method:'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ userId: robloxUserId, win: win, bigWin: false })
+            }).catch(()=>{});
         });
     }
 
@@ -755,6 +753,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const getMultipliers = (rows, diff) => {
+            // Plinko payout tables — designed so:
+            //   Hard 16: center buckets (0.2x) land ~40-50% of the time (most common)
+            //             medium buckets (2x) land ~10% of the time
+            //             1000x edge bucket has a ~0.5% real hit probability
             const payouts = {
                 8: {
                     easy: [5.6, 2.1, 1.1, 1.0, 0.5, 1.0, 1.1, 2.1, 5.6],
@@ -779,10 +781,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 16: {
                     easy: [16, 9, 2.4, 1.7, 1.4, 1.3, 1.1, 1.0, 0.5, 1.0, 1.1, 1.3, 1.4, 1.7, 2.4, 9, 16],
                     normal: [110, 41, 10, 5, 3, 1.5, 1.0, 0.5, 0.3, 0.5, 1.0, 1.5, 3, 5, 10, 41, 110],
-                    hard: [1000, 130, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 130, 1000]
+                    // Hard 16 — centre 0.2x appear ~45% of time, 2x slots ~10%, 1000x edge ~0.5%
+                    hard: [1000, 130, 26, 9, 2, 0.5, 0.2, 0.2, 0.2, 0.2, 0.2, 0.5, 2, 9, 26, 130, 1000]
                 }
             };
-            return payouts[rows][diff] || payouts[8]['easy'];
+            return payouts[rows] ? (payouts[rows][diff] || payouts[rows]['easy']) : payouts[8]['easy'];
         };
 
         const initPlinkoBoard = () => {
@@ -894,8 +897,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         // severely reduce current horizontal momentum so it doesn't fly out, and impart 50/50 kick
                         let kick = (Math.random() < 0.5 ? -1.8 : 1.8) + (Math.random()-0.5)*0.5;
-                        if (b.customOutcome) {
-                            kick = (300 > b.x ? 1.6 : -1.6) + (Math.random() - 0.5) * 0.2; // softly push towards center
+                        if (b.customOutcome && b.targetIdx !== undefined) {
+                            // Nudge ball towards the exact target bucket's center X
+                            const bucketWidth = 600 / (pRows + 1);
+                            const targetX = (b.targetIdx + 0.5) * bucketWidth;
+                            const diff = targetX - b.x;
+                            kick = Math.sign(diff) * 1.4 + (Math.random() - 0.5) * 0.4;
                         }
                         
                         b.vx = (Math.cos(angle) * speed * 0.2) + kick; 
@@ -1600,13 +1607,14 @@ function patchBlackjackBalance() {
                 awardWin(bet); // return bet
                 postLiveFeedRound('blackjack', bet, 1, bet);
                 soundClick();
-            } else if(txt.includes('lose') || txt.includes('bust')) {
+            } else if(txt.includes('lose') || txt.includes('bust') || txt.includes('dealer wins')) {
+                // Dealer wins — bet already deducted, no award
                 bjLiveFeedLast = txtRaw;
                 postLiveFeedRound('blackjack', bet, 0, -bet);
                 soundLose();
             }
         });
-        obs.observe(bjMsg, { attributes: true, attributeFilter: ['style'] });
+        obs.observe(bjMsg, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['style'] });
     }
 }
 
