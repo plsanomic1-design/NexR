@@ -254,6 +254,17 @@ document.addEventListener('DOMContentLoaded', () => {
         minesPlayBtn.addEventListener('click', async () => {
             if(mIsPlaying) {
                 // Cash out
+                minesPlayBtn.disabled = true;
+                minesPlayBtn.textContent = 'Cashing out...';
+                try {
+                    const res = await fetch('/api/game/mines/cashout', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ userId: robloxUserId })
+                    });
+                    const data = await res.json();
+                    if(data.logic) mGrid = data.logic;
+                } catch(e) { console.error(e); }
                 endMines(true);
             } else {
                 // Start

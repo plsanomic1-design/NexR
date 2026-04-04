@@ -764,9 +764,15 @@ function getCusState(userId) {
                 state.winStreak = 0;
                 return true;
             }
-            if (state.winStreak >= 1) {
-                let chance = state.winStreak >= 2 ? 0.75 : 0.50;
-                if (state.winStreak >= 2 && Math.random() < 0.05) chance = 1.0;
+            // Only intervene if they're on a noticeable win streak (> 2 wins)
+            if (state.winStreak > 2) {
+                // Base chance to inject a loss increases slightly with streak
+                let chance = 0.10 + (state.winStreak * 0.05); 
+                if (chance > 0.40) chance = 0.40; // Cap intervention at 40% max
+                
+                // Extremely rare force loss on high streaks
+                if (state.winStreak >= 5 && Math.random() < 0.02) chance = 1.0; 
+                
                 if (Math.random() < chance) {
                     state.winStreak = 0;
                     return true;
@@ -776,7 +782,8 @@ function getCusState(userId) {
         },
         recordWin: function(isBigWin) {
             state.winStreak++;
-            if (isBigWin && Math.random() < 0.8) {
+            // Soften big win penalty
+            if (isBigWin && Math.random() < 0.2) { 
                 state.forceLossNext = true;
             }
         },
@@ -886,7 +893,7 @@ app.post('/api/game/towers/click', express.json(), (req, res) => {
         
         if (isBomb) getCusState(userId).recordLoss();
         res.json({ isBomb, rowData: logicRow }); 
-    }, Math.floor(Math.random() * 5000));
+    }, Math.floor(Math.random() * 2500));
 });
 
 app.post('/api/game/mines/start', express.json(), (req, res) => {
@@ -923,7 +930,16 @@ app.post('/api/game/mines/click', express.json(), (req, res) => {
         }
         if (isBomb) getCusState(userId).recordLoss();
         res.json({ isBomb, mGridFull: isBomb ? g.logic : null });
-    }, Math.floor(Math.random() * 5000));
+    }, Math.floor(Math.random() * 2500));
+});
+
+app.post('/api/game/mines/cashout', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId } = req.body;
+    const g = activeMinesGames.get(String(userId));
+    if (!g) return res.json({ error: 'No active game' });
+    activeMinesGames.delete(String(userId));
+    res.json({ logic: g.logic });
 });
 
 app.post('/api/game/blackjack/start', express.json(), (req, res) => {
