@@ -1052,7 +1052,7 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
 
     if (save.stats.claimedGps.includes(gamePassId)) {
         return res.status(400).json({
-            error: 'You have already deposited this exact tier. You must delete the item from your Roblox inventory, click "Reset Deleted Tiers" below, and purchase it again to deposit more.'
+            error: 'You have already deposited this exact tier. You can only deposit each tier once.'
         });
     }
 
@@ -1106,43 +1106,6 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     }
 
     res.json({ ok: true, save, credited: credit });
-});
-
-app.post('/api/deposit-reset-tiers', async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    const body = req.body || {};
-    const userId = parseInt(String(body.userId != null ? body.userId : ''), 10);
-
-    if (!userId || userId < 1) {
-        return res.status(400).json({ error: 'missing userId' });
-    }
-
-    const diskSave = await readAccountJson(userId);
-    if (!diskSave || !diskSave.stats || !Array.isArray(diskSave.stats.claimedGps) || diskSave.stats.claimedGps.length === 0) {
-        return res.json({ ok: true, cleared: 0, save: diskSave });
-    }
-
-    let clearedCount = 0;
-    const newClaimedGps = [];
-
-    // Check each claimed gamepass. If the user deleted it (no longer owns it), we free it up.
-    for (const gpId of diskSave.stats.claimedGps) {
-        const own = await fetchUserOwnsGamePass(userId, gpId);
-        if (own.ok && !own.owned) {
-            clearedCount++;
-        } else {
-            // Either they still own it, or Roblox API failed. Keep it blocked.
-            newClaimedGps.push(gpId);
-        }
-    }
-
-    if (clearedCount > 0) {
-        diskSave.stats.claimedGps = newClaimedGps;
-        diskSave.savedAt = Date.now();
-        await persistAccountSave(userId, diskSave);
-    }
-
-    res.json({ ok: true, cleared: clearedCount, save: diskSave });
 });
 
 // =====================================================================
