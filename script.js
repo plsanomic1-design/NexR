@@ -73,33 +73,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const pScoreEl = document.getElementById('bj-player-score');
         const bjMsg = document.getElementById('bj-message');
 
-        let deck = [];
         let dHand = [];
         let pHand = [];
         let isPlaying = false;
-
-        function buildDeck() {
-            /** ASCII suit letters — Unicode suit glyphs and some FA icons are missing in fonts / free sets. */
-            const suits = [
-                { letter: 'S', isRed: false },
-                { letter: 'H', isRed: true },
-                { letter: 'D', isRed: true },
-                { letter: 'C', isRed: false }
-            ];
-            const values = [{v:'2',s:2},{v:'3',s:3},{v:'4',s:4},{v:'5',s:5},{v:'6',s:6},{v:'7',s:7},{v:'8',s:8},{v:'9',s:9},{v:'10',s:10},{v:'J',s:10},{v:'Q',s:10},{v:'K',s:10},{v:'A',s:11}];
-            deck = [];
-            for(const suit of suits) {
-                for(let val of values) {
-                    deck.push({
-                        suitLetter: suit.letter,
-                        value: val.v,
-                        score: val.s,
-                        isRed: suit.isRed
-                    });
-                }
-            }
-            deck.sort(() => Math.random() - 0.5);
-        }
+        let cDeck = [];
 
         function getScore(hand) {
             let score = 0;
@@ -152,28 +129,52 @@ document.addEventListener('DOMContentLoaded', () => {
             bjMsg.style.display = 'block';
         }
 
-        bjPlayBtn.addEventListener('click', () => {
+        bjPlayBtn.addEventListener('click', async () => {
             if(isPlaying) return;
-            buildDeck();
-            pHand = [deck.pop(), deck.pop()];
-            dHand = [deck.pop(), deck.pop()];
             isPlaying = true;
             bjMsg.style.display = 'none';
             
-            bjHitBtn.disabled = false;
-            bjStandBtn.disabled = false;
+            bjHitBtn.disabled = true;
+            bjStandBtn.disabled = true;
             bjPlayBtn.disabled = true;
-            bjPlayBtn.textContent = 'Playing...';
+            bjPlayBtn.textContent = 'Connecting...';
             
-            renderHands();
-            if(getScore(pHand) === 21) {
-                endGame('Blackjack! You Win', 'var(--gold)');
+            // Build temporary deck for server
+            const suits = [{ letter: 'S', isRed: false }, { letter: 'H', isRed: true }, { letter: 'D', isRed: true }, { letter: 'C', isRed: false }];
+            const values = [{v:'2',s:2},{v:'3',s:3},{v:'4',s:4},{v:'5',s:5},{v:'6',s:6},{v:'7',s:7},{v:'8',s:8},{v:'9',s:9},{v:'10',s:10},{v:'J',s:10},{v:'Q',s:10},{v:'K',s:10},{v:'A',s:11}];
+            let newDeck = [];
+            for(const suit of suits) {
+                for(let val of values) newDeck.push({suitLetter: suit.letter, value: val.v, score: val.s, isRed: suit.isRed});
+            }
+            newDeck.sort(() => Math.random() - 0.5);
+
+            try {
+                const res = await fetch('/api/game/blackjack/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId, deck: newDeck })
+                });
+                const data = await res.json();
+                cDeck = data.deck;
+                pHand = data.pHand;
+                dHand = data.dHand;
+                
+                bjHitBtn.disabled = false;
+                bjStandBtn.disabled = false;
+                bjPlayBtn.textContent = 'Playing...';
+                
+                renderHands();
+                if(getScore(pHand) === 21) {
+                    endGame('Blackjack! You Win', 'var(--gold)');
+                }
+            } catch(e) {
+                endGame('Error starting', 'var(--red)');
             }
         });
 
         bjHitBtn.addEventListener('click', () => {
             if(!isPlaying) return;
-            pHand.push(deck.pop());
+            pHand.push(cDeck.pop());
             renderHands();
             if(getScore(pHand) > 21) endGame('Bust! You Lose', 'var(--red)');
         });
@@ -181,15 +182,26 @@ document.addEventListener('DOMContentLoaded', () => {
         bjStandBtn.addEventListener('click', () => {
             if(!isPlaying) return;
             while(getScore(dHand) < 17) {
-                dHand.push(deck.pop());
+                dHand.push(cDeck.pop());
             }
             const pScore = getScore(pHand);
             const dScore = getScore(dHand);
             
-            if(dScore > 21) endGame('Dealer Busts! You Win', 'var(--green)');
-            else if(pScore > dScore) endGame('You Win!', 'var(--green)');
-            else if(dScore > pScore) endGame('Dealer Wins', 'var(--red)');
+            let win = false;
+            let bigWin = false;
+            if(dScore > 21) { win=true; endGame('Dealer Busts! You Win', 'var(--green)'); }
+            else if(pScore > dScore) { win=true; endGame('You Win!', 'var(--green)'); }
+            else if(dScore > pScore) { endGame('Dealer Wins', 'var(--red)'); }
             else endGame('Push', 'var(--text-secondary)');
+            
+            // Re-sync with server since this uses client finish logic
+            if (pScore > dScore || dScore > 21 || dScore > pScore) {
+                 fetch('/api/game/record-result', {
+                    method:'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId, win: win, bigWin: false })
+                }).catch(()=>{});
+            }
         });
     }
 
@@ -239,64 +251,97 @@ document.addEventListener('DOMContentLoaded', () => {
             minesPlayBtn.style.background = '';
         }
 
-        minesPlayBtn.addEventListener('click', () => {
+        minesPlayBtn.addEventListener('click', async () => {
             if(mIsPlaying) {
                 // Cash out
                 endMines(true);
             } else {
                 // Start
-                mIsPlaying = true;
-                minesMsg.style.display = 'none';
                 currentBet = parseFloat(betInp.value) || 0;
                 let bombs = parseInt(countInp.value) || 3;
                 if(bombs < 1) bombs = 1; if(bombs > 24) bombs = 24;
                 
-                mGrid = Array(25).fill(false);
-                let placed = 0;
-                while(placed < bombs) {
-                    let idx = Math.floor(Math.random() * 25);
-                    if(!mGrid[idx]) { mGrid[idx] = true; placed++; }
+                minesMsg.style.display = 'none';
+                minesPlayBtn.disabled = true;
+                minesPlayBtn.textContent = 'Connecting...';
+                
+                try {
+                    const res = await fetch('/api/game/mines/start', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ userId: robloxUserId, bombs })
+                    });
+                    if (!res.ok) throw new Error();
+                    
+                    mIsPlaying = true;
+                    mGrid = Array(25).fill(false); // local dummy array for endMines logic
+                    mRevealed = 0;
+                    mMultiplier = 1.0;
+                    earningsInp.value = currentBet.toFixed(2);
+                    minesPlayBtn.disabled = true; // must reveal at least one gem first
+                    syncMinesCashoutButton();
+                    
+                    const tiles = minesGrid.querySelectorAll('.mines-tile');
+                    tiles.forEach((t) => {
+                        t.className = 'mines-tile';
+                        t.innerHTML = '<span class="tile-mark">G</span>';
+                    });
+                } catch(e) {
+                    minesMsg.textContent = 'Error starting game';
+                    minesMsg.style.color = 'var(--red)';
+                    minesMsg.style.display = 'block';
+                    minesPlayBtn.disabled = false;
+                    minesPlayBtn.textContent = 'Start new game';
                 }
-                
-                mRevealed = 0;
-                mMultiplier = 1.0;
-                earningsInp.value = currentBet.toFixed(2);
-                minesPlayBtn.disabled = true; // must reveal at least one gem first
-                syncMinesCashoutButton();
-                
-                const tiles = minesGrid.querySelectorAll('.mines-tile');
-                tiles.forEach((t) => {
-                    t.className = 'mines-tile';
-                    t.innerHTML = '<span class="tile-mark">G</span>';
-                });
             }
         });
 
-        function handleTileClick(i, tileEl) {
-            if(!mIsPlaying || tileEl.classList.contains('revealed')) return;
+        async function handleTileClick(i, tileEl) {
+            if(!mIsPlaying || tileEl.classList.contains('revealed') || tileEl.classList.contains('loading')) return;
             
-            tileEl.classList.add('revealed');
-            if(mGrid[i]) {
-                // Bomb hit — SFX only here (not DOM observer) so gem+bomb never stack
-                tileEl.classList.add('bomb');
-                tileEl.innerHTML = '<span class="tile-mark">B</span>';
-                soundBomb();
-                endMines(false);
-            } else {
-                // Gem hit
-                tileEl.classList.add('gem');
-                tileEl.innerHTML = '<span class="tile-mark">G</span>';
-                soundGem();
-                mRevealed++;
-                minesPlayBtn.disabled = false; // can now cashout
-                let bombs = parseInt(countInp.value) || 3;
-                mMultiplier = getMulti(bombs, mRevealed);
-                earningsInp.value = (currentBet * parseFloat(mMultiplier)).toFixed(2);
-                syncMinesCashoutButton();
+            tileEl.classList.add('loading');
+            tileEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            minesPlayBtn.disabled = true;
+            
+            try {
+                const res = await fetch('/api/game/mines/click', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId, tileIdx: i })
+                });
+                const data = await res.json();
                 
-                if(mRevealed + bombs === 25) {
-                    endMines(true); // auto cashout if all found
+                tileEl.classList.remove('loading');
+                tileEl.classList.add('revealed');
+                
+                if(data.isBomb) {
+                    mGrid = data.mGridFull || mGrid;
+                    tileEl.classList.add('bomb');
+                    tileEl.innerHTML = '<span class="tile-mark">B</span>';
+                    soundBomb();
+                    endMines(false);
+                } else {
+                    tileEl.classList.add('gem');
+                    tileEl.innerHTML = '<span class="tile-mark">G</span>';
+                    soundGem();
+                    mRevealed++;
+                    minesPlayBtn.disabled = false; // can now cashout
+                    let bombs = parseInt(countInp.value) || 3;
+                    mMultiplier = getMulti(bombs, mRevealed);
+                    earningsInp.value = (currentBet * parseFloat(mMultiplier)).toFixed(2);
+                    syncMinesCashoutButton();
+                    
+                    if(mRevealed + bombs === 25) {
+                        endMines(true); // auto cashout if all found
+                    }
                 }
+            } catch(e) {
+                minesMsg.textContent = 'Network Error';
+                minesMsg.style.color = 'var(--red)';
+                minesMsg.style.display = 'block';
+                tileEl.classList.remove('loading');
+                tileEl.innerHTML = '<span class="tile-mark">G</span>';
+                minesPlayBtn.disabled = false;
             }
         }
 
@@ -325,6 +370,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 minesMsg.textContent = `Won ${(currentBet * parseFloat(mMultiplier)).toFixed(2)}`;
                 minesMsg.style.color = 'var(--green)';
                 minesMsg.style.display = 'block';
+                
+                fetch('/api/game/record-result', {
+                    method:'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId, win: true, bigWin: mMultiplier >= 3.0 })
+                }).catch(()=>{});
             } else if (!win) {
                 minesMsg.textContent = 'Busted!';
                 minesMsg.style.color = 'var(--red)';
@@ -388,71 +439,103 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         initTowersUI();
 
-        tPlayBtn.addEventListener('click', () => {
+        tPlayBtn.addEventListener('click', async () => {
             if(tIsPlaying) {
                 // Cashout
                 endTowers(true);
             } else {
-                tIsPlaying = true;
-                tMsg.style.display = 'none';
                 curRow = 0;
                 curBet = parseFloat(tBetInp.value) || 0;
                 const cfg = getDiffConfig();
-                tMulti = 1.0;
-                tLogic = [];
                 
-                for(let r=0; r<rows; r++) {
-                    let rArr = Array(cfg.w).fill(false);
-                    let placed = 0;
-                    while(placed < cfg.b) {
-                        let i = Math.floor(Math.random()*cfg.w);
-                        if(!rArr[i]) { rArr[i] = true; placed++; }
-                    }
-                    tLogic.push(rArr);
-                }
+                tMsg.style.display = 'none';
+                tPlayBtn.disabled = true;
+                tPlayBtn.textContent = 'Connecting...';
                 
-                tPlayBtn.textContent = 'Cashout';
-                tPlayBtn.style.background = 'var(--green)';
-                tPlayBtn.disabled = true; // must pick at least one tile first
-                
-                // Reset UI classes
-                Array.from(tGrid.children).forEach((row, i) => {
-                    row.className = 'tower-row ' + (i===0 ? 'active-row' : '');
-                    Array.from(row.children).forEach(t => {
-                        let origVal = Math.pow(cfg.base, i+1).toFixed(2);
-                        t.className = 'tower-tile';
-                        t.innerHTML = `${origVal}x <span class="tower-zr-suffix">ZH$</span>`;
-                        t.style.pointerEvents = (i===0) ? 'auto' : 'none';
+                try {
+                    const res = await fetch('/api/game/towers/start', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ userId: robloxUserId, rows: rows, width: cfg.w, bombs: cfg.b })
                     });
-                });
+                    if(!res.ok) throw new Error();
+                    
+                    tIsPlaying = true;
+                    tMulti = 1.0;
+                    tLogic = []; // only used locally for tracking rendering layout
+                    
+                    tPlayBtn.textContent = 'Cashout';
+                    tPlayBtn.style.background = 'var(--green)';
+                    tPlayBtn.disabled = true; // must pick at least one tile first
+                    
+                    // Reset UI classes
+                    Array.from(tGrid.children).forEach((row, i) => {
+                        row.className = 'tower-row ' + (i===0 ? 'active-row' : '');
+                        Array.from(row.children).forEach(t => {
+                            let origVal = Math.pow(cfg.base, i+1).toFixed(2);
+                            t.className = 'tower-tile';
+                            t.innerHTML = `${origVal}x <span class="tower-zr-suffix">ZH$</span>`;
+                            t.style.pointerEvents = (i===0) ? 'auto' : 'none';
+                        });
+                    });
+                } catch(e) {
+                    tMsg.textContent = 'Error starting game';
+                    tMsg.style.color = 'var(--red)';
+                    tMsg.style.display = 'block';
+                    tPlayBtn.disabled = false;
+                    tPlayBtn.textContent = 'Start new game';
+                }
             }
         });
 
-        function handleTowerClick(r, c, tileEl) {
-            if(!tIsPlaying || r !== curRow) return;
+        async function handleTowerClick(r, c, tileEl) {
+            if(!tIsPlaying || r !== curRow || tileEl.classList.contains('loading')) return;
             const cfg = getDiffConfig();
             
-            if(tLogic[curRow][c]) {
-                tileEl.classList.add('bomb');
-                tileEl.innerHTML = '<span class="tile-mark">B</span>';
-                endTowers(false);
-            } else {
-                tileEl.classList.add('gem');
-                tileEl.innerHTML = '<span class="tile-mark">S</span>';
-                tMulti = Math.pow(cfg.base, curRow+1);
-                curRow++;
-                tPlayBtn.disabled = false; // can now cashout
+            tileEl.classList.add('loading');
+            tileEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            tPlayBtn.disabled = true; // disable cashout while loading
+            
+            try {
+                const res = await fetch('/api/game/towers/click', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId, row: r, col: c })
+                });
+                const data = await res.json();
+                tileEl.classList.remove('loading');
                 
-                const rElements = Array.from(tGrid.children);
-                rElements[curRow-1].classList.remove('active-row');
-                rElements[curRow-1].classList.add('passed');
+                tLogic[curRow] = data.rowData; // Sync from server
                 
-                if(curRow >= rows) {
-                    endTowers(true);
+                if(data.isBomb) {
+                    tileEl.classList.add('bomb');
+                    tileEl.innerHTML = '<span class="tile-mark">B</span>';
+                    endTowers(false);
                 } else {
-                    rElements[curRow].classList.add('active-row');
-                    Array.from(rElements[curRow].children).forEach(t => t.style.pointerEvents='auto');
+                    tileEl.classList.add('gem');
+                    tileEl.innerHTML = '<span class="tile-mark">S</span>';
+                    tMulti = Math.pow(cfg.base, curRow+1);
+                    curRow++;
+                    tPlayBtn.disabled = false; // can now cashout
+                    
+                    const rElements = Array.from(tGrid.children);
+                    rElements[curRow-1].classList.remove('active-row');
+                    rElements[curRow-1].classList.add('passed');
+                    
+                    if(curRow >= rows) {
+                        endTowers(true);
+                    } else {
+                        rElements[curRow].classList.add('active-row');
+                        Array.from(rElements[curRow].children).forEach(t => t.style.pointerEvents='auto');
+                    }
                 }
+            } catch(e) {
+                tMsg.textContent = 'Network error fetching step.';
+                tMsg.style.color = 'var(--red)';
+                tMsg.style.display = 'block';
+                tileEl.classList.remove('loading');
+                tileEl.innerHTML = 'Retry';
+                tPlayBtn.disabled = false;
             }
         }
 
@@ -467,20 +550,28 @@ document.addEventListener('DOMContentLoaded', () => {
             if(!win) {
                 const rElements = Array.from(tGrid.children);
                 const crow = rElements[curRow];
-                Array.from(crow.children).forEach((el, idx) => {
-                    if(!el.classList.contains('bomb') && !el.classList.contains('gem')) {
-                        if(tLogic[curRow][idx]) {
-                            el.classList.add('bomb');
-                            el.innerHTML = '<span class="tile-mark" style="opacity:0.5">B</span>';
+                if (tLogic[curRow]) {
+                    Array.from(crow.children).forEach((el, idx) => {
+                        if(!el.classList.contains('bomb') && !el.classList.contains('gem')) {
+                            if(tLogic[curRow][idx]) {
+                                el.classList.add('bomb');
+                                el.innerHTML = '<span class="tile-mark" style="opacity:0.5">B</span>';
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
 
             if(win && curRow > 0) {
                 tMsg.textContent = `Won ${(curBet * tMulti).toFixed(2)}`;
                 tMsg.style.color = 'var(--green)';
                 tMsg.style.display = 'block';
+                
+                 fetch('/api/game/record-result', {
+                    method:'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId, win: true, bigWin: tMulti >= 3.0 })
+                }).catch(()=>{});
             } else if (!win) {
                 tMsg.textContent = 'Busted!';
                 tMsg.style.color = 'var(--red)';
@@ -568,37 +659,52 @@ document.addEventListener('DOMContentLoaded', () => {
             updateFromSlider();
         });
 
-        dPlayBtn.addEventListener('click', () => {
+        dPlayBtn.addEventListener('click', async () => {
             dPlayBtn.disabled = true;
             resultMarker.classList.remove('show');
             
-            // simulate roll
-            setTimeout(() => {
-                let roll = (Math.random() * 100).toFixed(2);
-                let target = parseFloat(targetInp.value);
-                let win = isOver ? (roll > target) : (roll < target);
+            let target = parseFloat(targetInp.value);
+            let multi = parseFloat(multiInp.value) || 1;
+            
+            try {
+                const res = await fetch('/api/game/dice', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId, target, isOver, multi })
+                });
+                const data = await res.json();
                 
-                resultMarker.style.left = roll + '%';
-                resultMarker.textContent = roll;
-                resultMarker.className = 'dice-result-marker show ' + (win ? 'win' : '');
+                // simulate roll animation delay
+                setTimeout(() => {
+                    let roll = data.roll.toFixed(2);
+                    let win = data.win;
+                    
+                    resultMarker.style.left = roll + '%';
+                    resultMarker.textContent = roll;
+                    resultMarker.className = 'dice-result-marker show ' + (win ? 'win' : '');
+                    
+                    // Add to history
+                    const pill = document.createElement('div');
+                    pill.className = 'history-pill ' + (win ? 'win' : 'lose');
+                    pill.textContent = parseFloat(multiInp.value).toFixed(2) + 'x';
+                    historyCon.prepend(pill);
+                    if(historyCon.children.length > 8) historyCon.lastChild.remove(); // keep 8 history
+                    
+                    // Balance update styling
+                    if(win) {
+                        profInp.style.color = 'var(--green)';
+                    } else {
+                        profInp.style.color = 'var(--red)';
+                    }
+                    setTimeout(() => profInp.style.color = 'var(--text-secondary)', 1500);
+                    
+                    dPlayBtn.disabled = false;
+                }, 300);
                 
-                // Add to history
-                const pill = document.createElement('div');
-                pill.className = 'history-pill ' + (win ? 'win' : 'lose');
-                pill.textContent = parseFloat(multiInp.value).toFixed(2) + 'x';
-                historyCon.prepend(pill);
-                if(historyCon.children.length > 8) historyCon.lastChild.remove(); // keep 8 history
-                
-                // Balance update styling
-                if(win) {
-                    profInp.style.color = 'var(--green)';
-                } else {
-                    profInp.style.color = 'var(--red)';
-                }
-                setTimeout(() => profInp.style.color = 'var(--text-secondary)', 1500);
-                
+            } catch(e) {
+                console.error(e);
                 dPlayBtn.disabled = false;
-            }, 300);
+            }
         });
         
         updateFromSlider();
@@ -777,6 +883,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         // severely reduce current horizontal momentum so it doesn't fly out, and impart 50/50 kick
                         let kick = (Math.random() < 0.5 ? -1.8 : 1.8) + (Math.random()-0.5)*0.5;
+                        if (b.customOutcome) {
+                            kick = (300 > b.x ? 1.6 : -1.6) + (Math.random() - 0.5) * 0.2; // softly push towards center
+                        }
+                        
                         b.vx = (Math.cos(angle) * speed * 0.2) + kick; 
                         b.vy = Math.sin(angle) * speed;
                         
@@ -802,6 +912,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(idx < 0) idx = 0;
                     if(idx > pRows) idx = pRows; // pRows + 1 buckets
                     
+                    if (b.customOutcome && b.targetIdx !== undefined) idx = b.targetIdx; // Guarantee correct visual target based on server rigging
+                    
                     const bucketEl = bucketsContainer.children[idx];
                     if(bucketEl) {
                         bucketEl.classList.add('hit');
@@ -814,6 +926,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else {
                             if(typeof soundLose === 'function') soundLose();
                         }
+                        
+                        fetch('/api/game/record-result', {
+                            method:'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ userId: robloxUserId, win: multi >= 1.0, bigWin: multi >= 3.0 })
+                        }).catch(()=>{});
                     }
                 }
             }
@@ -828,7 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        pPlayBtn.addEventListener('click', (e) => {
+        pPlayBtn.addEventListener('click', async (e) => {
             const bet = parseFloat(document.getElementById('plinko-bet-input').value) || 0;
             if(bet <= 0 || bet > roBalance) {
                 e.stopImmediatePropagation();
@@ -840,21 +958,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            deductBet(bet);
-            
-            balls.push({
-                x: 300 + (Math.random()-0.5)*2, // start exactly at top center with tiny variance
-                y: 15,
-                vx: 0,
-                vy: 0,
-                r: 6,
-                bet: bet,
-                done: false
-            });
-            
-            if(!pIsAnimating) {
-                pIsAnimating = true;
-                requestAnimationFrame(updatePhysics);
+            try {
+                const res = await fetch('/api/game/plinko', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId, pRows })
+                });
+                const data = await res.json();
+                
+                deductBet(bet);
+                
+                balls.push({
+                    x: 300 + (Math.random()-0.5)*2,
+                    y: 15,
+                    vx: 0,
+                    vy: 0,
+                    r: 6,
+                    bet: bet,
+                    done: false,
+                    customOutcome: data.customOutcome,
+                    targetIdx: data.idx
+                });
+                
+                if(!pIsAnimating) {
+                    pIsAnimating = true;
+                    requestAnimationFrame(updatePhysics);
+                }
+            } catch(err) {
+                console.error(err);
             }
         });
     }
@@ -1053,14 +1184,23 @@ document.addEventListener('DOMContentLoaded', () => {
             animFrame = requestAnimationFrame(updateCrash);
         };
         
-        const startRunning = () => {
+        const startRunning = async () => {
             cState = 'running';
             hasCashedOut = false;
             startTime = 0;
             
-            let e = 100;
-            if(Math.random() < 0.05) cCrashPoint = 1.00;
-            else cCrashPoint = Math.max(1.00, (e / (e - Math.random() * e)) * 0.99);
+            try {
+                const res = await fetch('/api/game/crash/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: cBet > 0 ? robloxUserId : null })
+                });
+                const data = await res.json();
+                cCrashPoint = data.cCrashPoint !== undefined ? data.cCrashPoint : 1.00;
+            } catch(e) {
+                let eVal = 100;
+                cCrashPoint = Math.max(1.00, (eVal / (eVal - Math.random() * eVal)) * 0.99);
+            }
             if(cCrashPoint > 1000) cCrashPoint = 1000;
             
             display.style.color = 'white';
