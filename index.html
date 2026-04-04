@@ -573,137 +573,113 @@
                 </div>
             </div>
             <div id="view-profile" class="view">
-                <div class="profile-layout" style="display:flex; gap: 30px; align-items:flex-start; margin-top: 10px;">
-                    <!-- Left Profile Card -->
-                    <div class="profile-card" style="width: 340px; background: var(--bg-panel); border-radius: 12px; padding: 30px; border: 1px solid rgba(255,255,255,0.05);">
-                        <div style="display:flex; align-items:center; gap: 15px; margin-bottom: 30px;">
-                            <img id="profile-main-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" style="width: 60px; height: 60px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.1);">
-                            <div>
-                                <div id="prof-username-disp" style="font-size:20px; font-weight:700;">artirzu</div>
-                                <div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">UID: 8cd7d3d0...</div>
+                <div class="profile-new-layout">
+                    <!-- Banner & Identity -->
+                    <div class="prof-header">
+                        <div class="prof-banner"></div>
+                        <div class="prof-identity">
+                            <img id="profile-main-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" class="prof-avatar" alt="Avatar">
+                            <div class="prof-info">
+                                <div id="prof-username-disp" class="prof-uname">artirzu</div>
+                                <div class="prof-uid">UID: <span id="prof-uid-val">8cd7d3d0...</span></div>
                             </div>
                         </div>
-                        
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px 10px; margin-bottom: 30px;">
-                            <div>
-                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">Rain Winnings</div>
-                                <div id="prof-rain" style="font-size:20px; font-weight:600;">0</div>
-                            </div>
-                            <div>
-                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">Total deposited</div>
-                                <div id="prof-deposited" style="font-size:20px; font-weight:600;">0</div>
-                            </div>
-                            <div>
-                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">Total withdrawn</div>
-                                <div id="prof-withdrawn" style="font-size:20px; font-weight:600;">0</div>
-                            </div>
-                            <div>
-                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">Total wagered</div>
-                                <div id="prof-wagered" style="font-size:20px; font-weight:600;">0</div>
-                            </div>
-                            <div>
-                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">XP Balance</div>
-                                <div id="prof-xp" style="font-size:20px; font-weight:600;">0</div>
-                            </div>
-                        </div>
-                        <div style="color:var(--text-secondary); font-size:12px; text-align:center;">Stat update in 3m 45s</div>
                     </div>
 
-                    <!-- Right Content Area -->
-                    <div style="flex:1;">
-                        <!-- Navigation Tabs -->
-                        <div class="profile-tabs" style="display:flex; gap:25px; margin-bottom:30px; font-weight: 600; font-size: 14px;">
+                    <!-- Glassmorphic Stat Row -->
+                    <div class="prof-stats-grid">
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Rain Winnings</div>
+                            <div id="prof-rain" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Total deposited</div>
+                            <div id="prof-deposited" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Total withdrawn</div>
+                            <div id="prof-withdrawn" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Total wagered</div>
+                            <div id="prof-wagered" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">XP Balance</div>
+                            <div id="prof-xp" class="prof-stat-val">0</div>
+                        </div>
+                    </div>
+                    <div style="color:var(--text-secondary); font-size:12px; text-align:center; margin-bottom: 25px;">Stat update in 3m 45s</div>
+
+                    <!-- Tabs & Content -->
+                    <div class="prof-content-area">
+                        <div class="profile-tabs centered-tabs" style="display:flex; gap:25px; font-weight: 600; font-size: 14px;">
                             <button class="prof-tab active" data-ptab="transactions">Transactions</button>
                             <button class="prof-tab" data-ptab="deposits">Deposits</button>
                             <button class="prof-tab" data-ptab="withdrawals">Withdrawals</button>
                             <button class="prof-tab" data-ptab="settings">Settings</button>
-                            <button class="prof-tab" data-ptab="buyxp">Buy XP</button>
-                        </div>
-                        
-                        <!-- Tab Contents -->
-                        <!-- Transactions -->
-                        <div class="ptab-content" id="ptab-transactions" style="display:block;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                                <h2 style="font-size:22px; font-weight:600;">Transactions</h2>
-                                <select class="prof-select" style="background:var(--bg-panel); color:var(--text-secondary); border:1px solid rgba(255,255,255,0.05); padding:10px 15px; border-radius:6px; outline:none; font-family:inherit; min-width:120px; font-size:13px; font-weight:600;">
-                                    <option>Games</option>
-                                </select>
-                            </div>
-                            <div class="table-wrap">
-                                <!-- Table Headers -->
-                                <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
-                                    <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
-                                </div>
-                                <!-- Table Body -->
-                                <div id="prof-tx-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
-                                    <!-- Dynamic rows -->
-                                    <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No transactions yet.</div>
-                                </div>
-                            </div>
                         </div>
 
-                        <!-- Deposits -->
-                        <div class="ptab-content" id="ptab-deposits" style="display:none;">
-                            <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Deposits</h2>
-                            <div class="table-wrap">
-                                <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
-                                    <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                        <div class="prof-tab-boards">
+                            <!-- Transactions -->
+                            <div class="ptab-content" id="ptab-transactions" style="display:block;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                                    <h2 style="font-size:22px; font-weight:600;">Transactions</h2>
+                                    <select class="prof-select" style="background:var(--bg-panel); color:var(--text-secondary); border:1px solid rgba(255,255,255,0.05); padding:10px 15px; border-radius:6px; outline:none; font-family:inherit; min-width:120px; font-size:13px; font-weight:600;">
+                                        <option>Games</option>
+                                    </select>
                                 </div>
-                                <div id="prof-dep-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
-                                    <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No deposits yet.</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Withdrawals -->
-                        <div class="ptab-content" id="ptab-withdrawals" style="display:none;">
-                            <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Withdrawals</h2>
-                            <div class="table-wrap">
-                                <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
-                                    <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
-                                </div>
-                                <div id="prof-wd-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
-                                    <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No withdrawals yet.</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Settings -->
-                        <div class="ptab-content" id="ptab-settings" style="display:none;">
-                            <div style="display:flex; gap: 40px;">
-                                <div style="width:200px; display:flex; flex-direction:column; gap:20px; font-size:14px; font-weight:600;">
-                                    <div style="color:white; cursor:pointer;" class="settings-menu-item active">Change Username</div>
-                                    <div style="color:var(--text-secondary); cursor:pointer;" class="settings-menu-item">Provably Fair</div>
-                                </div>
-                                <div style="flex:1; max-width: 480px;">
-                                    <h3 style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:20px; letter-spacing:1px;">CHANGE USERNAME</h3>
-                                    <div class="input-wrapper" style="background:var(--bg-panel); border-radius:8px; border:1px solid rgba(255,255,255,0.05); height: 50px; margin-bottom:20px;">
-                                        <input type="text" id="prof-new-username" placeholder="Enter new username" style="width:100%; padding:0 20px; background:transparent; border:none; color:white; font-size:14px; font-family:inherit; outline:none;" value="artirzu">
+                                <div class="table-wrap">
+                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
                                     </div>
-                                    <button class="btn-primary" style="width:100%; padding:15px;" onclick="saveProfUsername()">Save Changes</button>
+                                    <div id="prof-tx-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                        <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No transactions yet.</div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Buy XP -->
-                        <div class="ptab-content" id="ptab-buyxp" style="display:none;">
-                            <h2 style="font-size:24px; font-weight:700; margin-bottom:15px;">Swap ZR$ to XP</h2>
-                            <p style="color:var(--text-secondary); margin-bottom:40px; font-size:15px;">Convert ZR$ into XP. Minimum 200 ZR$ per swap.</p>
-                            
-                            <div style="max-width: 480px;">
-                                <div style="color:var(--text-secondary); font-size:13px; font-weight:600; margin-bottom:10px;">ZR$ amount</div>
-                                <div class="input-wrapper" style="background:var(--bg-panel); border-radius:8px; border: 1px solid rgba(255,255,255,0.05); height: 56px; margin-bottom: 30px;">
-                                    <span class="input-icon currency-input-mark" style="opacity:0.5; margin-left:18px;" aria-hidden="true">ZH$</span>
-                                    <input type="number" id="xp-buy-amount" value="200" min="200" style="width:100%; padding-left:15px; border:none; background:transparent; color:white; font-size:16px; font-weight:600; outline:none; font-family:inherit;">
+                            <!-- Deposits -->
+                            <div class="ptab-content" id="ptab-deposits" style="display:none;">
+                                <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Deposits</h2>
+                                <div class="table-wrap">
+                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                    </div>
+                                    <div id="prof-dep-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                        <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No deposits yet.</div>
+                                    </div>
                                 </div>
+                            </div>
 
-                                <div style="text-align:center; margin-bottom: 40px;">
-                                    <div style="color:var(--text-secondary); font-size:12px; font-weight:700; letter-spacing:1px; margin-bottom:12px;">YOU WILL RECEIVE</div>
-                                    <div style="font-size:32px; font-weight:800; color:var(--green);"><span id="xp-buy-receive">1</span> XP</div>
-                                    <div style="color:var(--text-secondary); font-size:13px; font-weight:500; margin-top:20px;">200 ZR$ = 1 XP</div>
+                            <!-- Withdrawals -->
+                            <div class="ptab-content" id="ptab-withdrawals" style="display:none;">
+                                <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Withdrawals</h2>
+                                <div class="table-wrap">
+                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                    </div>
+                                    <div id="prof-wd-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                        <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No withdrawals yet.</div>
+                                    </div>
                                 </div>
+                            </div>
 
-                                <button class="btn-primary" id="btn-buyxp" style="width:100%; padding:15px; font-size:15px; font-weight:700; height: 56px;" onclick="confirmBuyXp()">Confirm Swap</button>
+                            <!-- Settings -->
+                            <div class="ptab-content" id="ptab-settings" style="display:none;">
+                                <div style="display:flex; gap: 40px; justify-content:center; max-width:800px; margin: 0 auto;">
+                                    <div style="width:200px; display:flex; flex-direction:column; gap:20px; font-size:14px; font-weight:600;">
+                                        <div style="color:white; cursor:pointer;" class="settings-menu-item active">Change Username</div>
+                                        <div style="color:var(--text-secondary); cursor:pointer;" class="settings-menu-item">Provably Fair</div>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <h3 style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:20px; letter-spacing:1px;">CHANGE USERNAME</h3>
+                                        <div class="input-wrapper" style="background:var(--bg-input); border-radius:8px; border:1px solid rgba(255,255,255,0.05); height: 50px; margin-bottom:20px;">
+                                            <input type="text" id="prof-new-username" placeholder="Enter new username" style="width:100%; padding:0 20px; background:transparent; border:none; color:white; font-size:14px; font-family:inherit; outline:none;" value="artirzu">
+                                        </div>
+                                        <button class="btn-primary" style="width:100%; padding:15px;" onclick="saveProfUsername()">Save Changes</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
