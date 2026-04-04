@@ -3273,3 +3273,39 @@ input:checked + .slider:before { transform: translateX(14px); }
     from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* Chat Interactive Elements */
+.chat-join-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+    margin-left: 8px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    box-shadow: 0 0 10px rgba(59,130,246,0.2);
+}
+
+.chat-join-btn:hover:not(:disabled) {
+    background: #2563eb;
+    transform: scale(1.05);
+}
+
+.chat-join-btn:disabled {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-secondary);
+    cursor: default;
+    box-shadow: none;
+}
+
+.chat-join-btn.loading {
+    opacity: 0.7;
+    cursor: wait;
+}

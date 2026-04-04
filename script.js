@@ -3231,6 +3231,30 @@ if (socket) {
         playCFAnimation(data);
     });
 
+    socket.on('coinflip:created', () => {
+        const btn = document.getElementById('cf-create-btn-main'); // I'll add this ID to the button
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = 'Create Flip';
+        }
+    });
+
+    socket.on('rain:join-confirmed', ({ rainId }) => {
+        // Find the button in chat and update it
+        const btns = document.querySelectorAll(`.chat-join-btn[data-rain-id="${rainId}"]`);
+        btns.forEach(btn => {
+            btn.classList.remove('loading');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> JOINED';
+        });
+        // Also update banner join btn
+        const bannerBtn = document.getElementById('chat-rain-join-btn');
+        if (bannerBtn) {
+            bannerBtn.disabled = true;
+            bannerBtn.innerHTML = 'JOINED';
+        }
+    });
+
     socket.on('rain:active', (rains) => {
         updateRainBanner(rains[0] || null);
     });
@@ -3314,6 +3338,13 @@ function createCoinflip() {
     if (amt < 1) return alert('Minimum flip is 1 ZH$');
     if (amt > roBalance) return alert('Not enough balance!');
 
+    // Start loading
+    const btn = document.getElementById('cf-create-btn-main'); // I'll add this ID to button in HTML
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CREATING...';
+    }
+
     socket?.emit('coinflip:create', { userId: robloxUserId, amount: amt });
 }
 
@@ -3353,12 +3384,26 @@ function addChatMessage(msg) {
     
     const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
+    let text = msg.text;
+    let suffix = '';
+
+    // Detect Rain Announcement: "Player has hosted a 1000ZH$ RAIN"
+    const rainMatch = text.match(/(.+) started a Rain for ([\d\.]+) ZH\$!/);
+    if (msg.username === 'System' && rainMatch) {
+        // We add a join button
+        // Since we don't have the rainId here easily (unless we pass it), 
+        // we'll assume it's the latest active rain or wait for a specific ID.
+        // For simplicity, we'll try to find an active rain.
+        const rainId = 'active'; // We can use the global active rain list
+        suffix = ` <button class="chat-join-btn" data-rain-id="${rainId}" onclick="handleInlineJoinRain(this)">JOIN</button>`;
+    }
+
     div.innerHTML = `
         <div class="chat-msg-header">
             <span class="chat-msg-author" onclick="openTipFor('${msg.username}')">${msg.username}</span>
             <span class="chat-msg-time">${time}</span>
         </div>
-        <div class="chat-msg-text">${msg.text}</div>
+        <div class="chat-msg-text">${text}${suffix}</div>
     `;
     
     container.appendChild(div);
@@ -3454,14 +3499,33 @@ function updateRainBanner(rain) {
     updateTime();
 
     if (joinBtn) {
-        joinBtn.onclick = () => {
-            socket?.emit('rain:join', { rainId: rain.id, userId: robloxUserId });
+        joinBtn.onclick = () => handleJoinRainLogic(joinBtn);
+        // Check if already joined
+        if (rain.joiners.includes(robloxUserId)) {
             joinBtn.disabled = true;
-            joinBtn.textContent = 'JOINED';
-        };
-        joinBtn.disabled = false;
-        joinBtn.textContent = 'JOIN';
+            joinBtn.innerHTML = 'JOINED';
+        } else {
+            joinBtn.disabled = false;
+            joinBtn.innerHTML = 'JOIN';
+        }
     }
+}
+
+function handleInlineJoinRain(btn) {
+    handleJoinRainLogic(btn);
+}
+
+function handleJoinRainLogic(btn) {
+    if (btn.disabled || btn.classList.contains('loading')) return;
+    
+    const rId = btn.dataset.rainId === 'active' ? (activeRains[0]?.id) : btn.dataset.rainId;
+    if (!rId) return;
+
+    btn.classList.add('loading');
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> JOINING...';
+    
+    // Attempt join
+    socket?.emit('rain:join', { rainId: rId, userId: robloxUserId });
 }
 
 // TIP SYSTEM UI

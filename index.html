@@ -135,6 +135,8 @@
                 <a href="#" data-view="profile" style="display:none;">Profile</a>
                 <a href="#">Rewards</a>
                 <a href="#" onclick="openWithdrawModal(); return false;">Withdraw</a>
+                <a href="#" onclick="openRainModal(); return false;"><i class="fa-solid fa-cloud-showers-heavy" style="color:var(--accent); font-size:12px;"></i> Rain</a>
+                <a href="#" onclick="openTipModal(); return false;"><i class="fa-solid fa-hand-holding-dollar" style="color:var(--gold); font-size:12px;"></i> Tip</a>
             </div>
             <div class="topbar-right">
                 <div class="balance-chip" onclick="openDepositModal()">
@@ -166,7 +168,13 @@
                             <span class="balance-name">ZR$</span>
                             <span class="balance-val" id="home-balance">0.00</span>
                         </div>
-                        <button type="button" class="btn-primary btn-deposit-full" id="home-deposit-btn" onclick="openDepositModal()">Add funds</button>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <button type="button" class="btn-primary btn-deposit-full" id="home-deposit-btn" onclick="openDepositModal()">Add funds</button>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                                <button type="button" class="btn-secondary" onclick="openRainModal()" style="padding:10px; font-size:12px; font-weight:700;"><i class="fa-solid fa-cloud-showers-heavy" style="color:var(--accent);"></i> Rain</button>
+                                <button type="button" class="btn-secondary" onclick="openTipModal()" style="padding:10px; font-size:12px; font-weight:700;"><i class="fa-solid fa-hand-holding-dollar" style="color:var(--gold);"></i> Tip</button>
+                            </div>
+                        </div>
                     </aside>
                 </header>
 
@@ -543,7 +551,7 @@
                                     <input type="number" id="cf-create-amount" value="50" min="1">
                                 </div>
                             </div>
-                            <button class="btn-primary" onclick="createCoinflip()" style="padding: 12px 20px;">Create Flip</button>
+                            <button class="btn-primary" id="cf-create-btn-main" onclick="createCoinflip()" style="width:100%; padding:15px;">Create Flip</button>
                         </div>
                     </header>
 

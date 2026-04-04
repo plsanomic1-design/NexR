@@ -1724,7 +1724,7 @@ io.on('connection', (socket) => {
             io.emit('rain:active', activeRains);
             io.emit('chat:message', {
                 username: 'System',
-                text: `🌧️ ${save.username} started a Rain for ${amount} ZH$! Join now!`,
+                text: `${save.username} started a Rain for ${amount} ZH$!`,
                 createdAt: Date.now()
             });
 
@@ -1766,12 +1766,20 @@ io.on('connection', (socket) => {
         const rain = activeRains.find(r => r.id === rainId);
         if (rain && !rain.joiners.includes(userId)) {
             rain.joiners.push(userId);
+            socket.emit('rain:join-confirmed', { rainId });
         }
     });
 
     // COINFLIP SVR
     socket.on('coinflip:create', async ({ userId, amount }) => {
         if (amount < 1) return;
+        
+        // LIMIT: 1 active flip per player
+        const hasActive = activeFlips.some(f => f.player1.userId === userId || (f.player2 && f.player2.userId === userId));
+        if (hasActive) {
+            return socket.emit('notification', { type: 'error', text: 'You already have an active coinflip!' });
+        }
+
         try {
             const save = await readAccountJson(userId);
             if (!save || save.balance < amount) return;
@@ -1779,6 +1787,7 @@ io.on('connection', (socket) => {
             save.balance -= amount;
             await persistAccountSave(userId, save);
             socket.emit('balance:update', { balance: save.balance });
+            socket.emit('coinflip:created'); // Confirm success to clear loading state
 
             const flip = {
                 id: Math.random().toString(36).substr(2, 9),
