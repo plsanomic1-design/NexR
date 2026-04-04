@@ -2603,7 +2603,7 @@ function initWelcomeModal() {
                 robloxAvatarUrl = pr.avatarUrl;
             }
         } else {
-            roBalance = 0.12;
+            roBalance = 0;
             referralEarned = 0;
             referredCount = 0;
             userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0 };
