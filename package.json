@@ -1,0 +1,11 @@
+{
+  "name": "zephrs-simulation",
+  "private": true,
+  "description": "ZephR$ UI + API proxy for Roblox username lookup and game pass deposits.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

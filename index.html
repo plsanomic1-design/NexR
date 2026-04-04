@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZephR$</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-shell">
+    <div class="sidebar">
+        <div class="logo-area logo-area--compact" style="cursor: pointer;" onclick="document.querySelector('[data-view=home]').click()" title="Home">
+            <span class="brand-mark" aria-hidden="true">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                    <defs>
+                        <linearGradient id="brandGradNav" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#38bdf8"/>
+                            <stop offset="1" stop-color="#818cf8"/>
+                        </linearGradient>
+                    </defs>
+                    <rect x="2" y="2" width="36" height="36" rx="10" fill="#14142a" stroke="rgba(129,140,248,0.45)" stroke-width="1"/>
+                    <path d="M11 12h18v2.8H14.8L29.2 31H31v2.8H11V31h14.4L11 14.8V12z" fill="url(#brandGradNav)"/>
+                </svg>
+            </span>
+        </div>
+        
+        <div class="nav-links">
+            <a href="#" class="nav-item" data-view="crash" title="Crash">
+                <i class="fa-solid fa-rocket"></i>
+                <span>Crash</span>
+            </a>
+            <a href="#" class="nav-item" data-view="blackjack" title="Blackjack">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>Blackjack</span>
+            </a>
+            <a href="#" class="nav-item" data-view="dice" title="Dice">
+                <i class="fa-solid fa-dice"></i>
+                <span>Dice</span>
+            </a>
+            <a href="#" class="nav-item" data-view="mines" title="Mines">
+                <i class="fa-solid fa-gem"></i>
+                <span>Mines</span>
+            </a>
+            <a href="#" class="nav-item" data-view="towers" title="Towers">
+                <i class="fa-brands fa-fort-awesome"></i>
+                <span>Towers</span>
+            </a>
+            <a href="#" class="nav-item" data-view="plinko" title="Plinko">
+                <i class="fa-solid fa-sitemap"></i>
+                <span>Plinko</span>
+            </a>
+            <a href="#" class="nav-item" data-view="rooms" title="Rooms">
+                <i class="fa-solid fa-door-open"></i>
+                <span>Rooms</span>
+            </a>
+        </div>
+        
+        <div class="sidebar-footer">
+            <a href="#" class="footer-icon"><i class="fa-solid fa-shield-halved"></i></a>
+            <a href="#" class="footer-icon discord"><i class="fa-brands fa-discord"></i></a>
+        </div>
+    </div>
+    
+    <div class="main-wrapper">
+        <nav class="topbar">
+            <div class="topbar-brand" onclick="document.querySelector('[data-view=home]').click()" title="Home">
+                <span class="brand-mark brand-mark--sm" aria-hidden="true">
+                    <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                        <defs>
+                            <linearGradient id="brandGradTop" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#38bdf8"/>
+                                <stop offset="1" stop-color="#818cf8"/>
+                            </linearGradient>
+                        </defs>
+                        <rect x="2" y="2" width="36" height="36" rx="10" fill="#14142a" stroke="rgba(129,140,248,0.45)" stroke-width="1"/>
+                        <path d="M11 12h18v2.8H14.8L29.2 31H31v2.8H11V31h14.4L11 14.8V12z" fill="url(#brandGradTop)"/>
+                    </svg>
+                </span>
+                <span class="topbar-logo-text">Zeph<span class="logo-highlight">R$</span></span>
+            </div>
+            <div class="top-nav-links">
+                <a href="#" class="active" data-view="home">Home</a>
+                <a href="#" data-view="profile" style="display:none;">Profile</a>
+                <a href="#">Rewards</a>
+                <a href="#" onclick="openWithdrawModal(); return false;">Withdraw</a>
+            </div>
+            <div class="topbar-right">
+                <div class="balance-chip" onclick="openDepositModal()">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" class="tb-avatar" alt="avatar" title="View Profile" style="cursor:pointer;" onclick="document.querySelector('[data-view=profile]').click(); event.stopPropagation();">
+                    <div class="tb-balance-info">
+                        <span class="tb-coin-label">ZR$</span>
+                        <span class="tb-coin-val" id="tb-balance">0.08</span>
+                    </div>
+                    <div class="tb-coin-badge tb-coin-badge--hex" title="ZR$"><span class="tb-zr-mark">ZH$</span></div>
+                </div>
+                <button type="button" class="tb-icon-btn" title="Notifications"><i class="fa-regular fa-bell"></i></button>
+                <button type="button" class="tb-icon-btn tb-plus" title="Deposit" onclick="openDepositModal()"><i class="fa-solid fa-plus"></i></button>
+                <button type="button" class="tb-icon-btn" id="tb-logout-btn" title="Log out"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+            </div>
+        </nav>
+        
+        <div class="page-content" id="page-content">
+            <div id="view-home" class="view active">
+                <div class="home-header">
+                    <h2>Popular games</h2>
+                    <div class="carousel-nav">
+                        <button type="button" class="nav-btn" aria-label="Previous"><span class="nav-carousel-char" aria-hidden="true">&lsaquo;</span></button>
+                        <button type="button" class="nav-btn" aria-label="Next"><span class="nav-carousel-char" aria-hidden="true">&rsaquo;</span></button>
+                    </div>
+                </div>
+                
+                <div class="games-grid">
+                    <div class="game-card crash" onclick="document.querySelector('[data-view=crash]').click()">
+                        <div class="game-card-visual crash-visual" aria-hidden="true"></div>
+                        <div class="badge badge-popular">Popular</div>
+                        <span class="game-card-glyph" aria-hidden="true">X</span>
+                        <h3 class="card-title">CRASH</h3>
+                    </div>
+                    <div class="game-card blackjack" onclick="document.querySelector('[data-view=blackjack]').click()">
+                        <div class="game-card-visual bj-visual" aria-hidden="true"></div>
+                        <div class="badge badge-new">New Release</div>
+                        <span class="game-card-glyph" aria-hidden="true">B</span>
+                        <h3 class="card-title">BLACKJACK</h3>
+                    </div>
+                    <div class="game-card dice" onclick="document.querySelector('[data-view=dice]').click()">
+                        <div class="game-card-visual dice-visual" aria-hidden="true"></div>
+                        <div class="badge badge-popular">Popular</div>
+                        <span class="game-card-glyph" aria-hidden="true">D</span>
+                        <h3 class="card-title">DICE</h3>
+                    </div>
+                    <div class="game-card mines" onclick="document.querySelector('[data-view=mines]').click()">
+                        <div class="game-card-visual mines-visual" aria-hidden="true"></div>
+                        <div class="badge badge-new">New Release</div>
+                        <span class="game-card-glyph" aria-hidden="true">M</span>
+                        <h3 class="card-title">MINES</h3>
+                    </div>
+                </div>
+
+                <div class="home-info-row">
+                    <div class="refer-card">
+                        <div class="refer-bg-glow"></div>
+                        <h3>Refer friends</h3>
+                        <div class="refer-stats">
+                            <div class="stat">
+                                <span class="stat-label">Total earned</span>
+                                <span class="stat-value" id="home-refer-earned">0.00 <span class="currency-inline">ZR$</span></span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Users referred</span>
+                                <span class="stat-value" id="home-refer-count">0</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-primary" style="margin-top:20px; width:200px">Make an affiliate code</button>
+                        <p class="refer-desc" style="margin-top:10px; color:var(--text-secondary); font-size:11px; max-width:80%;">Share ZephR$ with friends and earn ZR$! Everyone you invite will get a free case when they join.</p>
+                    </div>
+                    
+                    <div class="balances-card">
+                        <h3>Your Balances</h3>
+                        <div class="balance-item">
+                            <div class="balance-icon zr"><span class="balance-zr-letter">ZH$</span></div>
+                            <span class="balance-name">ZR$</span>
+                            <span class="balance-val" id="home-balance">0.08</span>
+                        </div>
+                        <button type="button" class="btn-primary btn-deposit-full" id="home-deposit-btn" onclick="openDepositModal()">Deposit</button>
+                        <p class="balances-footnote">What are the differences?</p>
+                    </div>
+                </div>
+
+                <div class="live-feed-section">
+                    <div class="feed-header">
+                        <h2>Live feed</h2>
+                    </div>
+                    <div class="feed-tabs">
+                        <button class="feed-tab active">All Games</button>
+                        <button class="feed-tab">High wins</button>
+                        <button class="feed-tab">Lucky wins</button>
+                    </div>
+                    
+                    <table class="feed-table">
+                        <thead>
+                            <tr>
+                                <th>Game</th>
+                                <th>Username</th>
+                                <th>Amount</th>
+                                <th>Multiplier</th>
+                                <th>Payout</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="live-feed-body">
+                            <!-- populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="view-blackjack" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                            <button class="bet-tab">Auto</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                                <input type="number" id="bj-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('bj-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('bj-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bj-actions">
+                            <button class="bj-action-btn" id="bj-hit-btn" disabled>Hit <i class="fa-solid fa-hand-pointer"></i></button>
+                            <button class="bj-action-btn" id="bj-stand-btn" disabled>Stand <i class="fa-solid fa-hand"></i></button>
+                            <button class="bj-action-btn" id="bj-double-btn" disabled>Double <i class="fa-solid fa-check-double"></i></button>
+                            <button class="bj-action-btn" id="bj-split-btn" disabled>Split <i class="fa-solid fa-arrows-split-up-and-left"></i></button>
+                        </div>
+                        
+                        <div style="margin-top:20px; display:flex; align-items:center; gap:10px;">
+                            <label class="switch">
+                                <input type="checkbox">
+                                <span class="slider round"></span>
+                            </label>
+                            <span style="font-size:12px; color:var(--text-secondary);">Basic Strategy Hints <i class="fa-solid fa-info-circle"></i></span>
+                        </div>
+
+                        <button class="btn-primary" id="bj-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Place bet</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area bj-area">
+                        <div class="bj-table">
+                            <div class="bj-center-text">
+                                <div class="bj-pays">BLACKJACK PAYS 3 TO 2</div>
+                                <div class="bj-ins">INSURANCE PAYS 2 TO 1</div>
+                            </div>
+                            
+                            <div class="dealer-area">
+                                <div class="hand-score" id="bj-dealer-score" style="display:none;">0</div>
+                                <div class="cards-container" id="bj-dealer-cards">
+                                    <!-- Cards go here -->
+                                </div>
+                            </div>
+                            
+                            <div class="player-area">
+                                <div class="cards-container" id="bj-player-cards">
+                                    <!-- Cards go here -->
+                                </div>
+                                <div class="hand-score" id="bj-player-score" style="display:none;">0</div>
+                            </div>
+
+                            <div class="bj-message" id="bj-message" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-mines" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                            <button class="bet-tab">Auto</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                                <input type="number" id="mines-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('mines-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('mines-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Mines</label>
+                            <div class="input-wrapper">
+                                <input type="number" id="mines-count-input" value="3" min="1" max="24" style="padding-left:15px;">
+                                <div class="input-actions" style="margin-right: -4px;">
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 1">1</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 3">3</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 5">5</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 10">10</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 24">24</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Total earnings</label>
+                            <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
+                                <span class="input-icon currency-input-mark" style="color:var(--green)" aria-hidden="true">ZH$</span>
+                                <input type="text" id="mines-earnings" value="0.00" readonly style="color:var(--green)">
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="mines-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Start new game</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area mines-area">
+                        <div class="mines-grid" id="mines-grid">
+                            <!-- JS generates 25 tiles -->
+                        </div>
+                        <div class="mines-message" id="mines-message" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-towers" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                            <button class="bet-tab">Auto</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                                <input type="number" id="towers-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('towers-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('towers-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Difficulty</label>
+                            <div class="towers-diff-tabs" id="towers-diff-tabs">
+                                <button class="diff-btn active" data-diff="easy">Easy</button>
+                                <button class="diff-btn" data-diff="normal">Normal</button>
+                                <button class="diff-btn" data-diff="hard">Hard</button>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="towers-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Start new game</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area towers-area">
+                        <div class="towers-grid-container" id="towers-grid-container">
+                            <!-- JS generates tower rows -->
+                        </div>
+                        <div class="towers-message" id="towers-message" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-dice" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                                <input type="number" id="dice-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('dice-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('dice-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Total Profit (x<span id="dice-profit-multi">1.98</span>)</label>
+                            <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
+                                <span class="input-icon currency-input-mark" style="color:var(--text-secondary)" aria-hidden="true">ZH$</span>
+                                <input type="text" id="dice-profit-input" value="49.50" readonly style="color:var(--text-secondary)">
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="dice-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Place bet</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area dice-area">
+                        <div class="dice-slider-container">
+                            <div class="dice-history-bars" id="dice-history">
+                                <!-- Previous rolls -->
+                            </div>
+                            
+                            <div class="slider-track-bg"></div>
+                            <div class="slider-track-fill" id="dice-track-fill"></div>
+                            <input type="range" min="2" max="98" value="50" class="dice-slider" id="dice-slider">
+                            
+                            <div class="dice-slider-labels">
+                                <span>0</span>
+                                <span>25</span>
+                                <span>50</span>
+                                <span>75</span>
+                                <span>100</span>
+                            </div>
+                            <div class="dice-result-marker" id="dice-result-marker">00.00</div>
+                        </div>
+
+                        <div class="dice-controls-row">
+                            <div class="dice-ctrl-box">
+                                <label>Multiplier</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="dice-multi-input" value="1.98" step="0.01">
+                                    <i class="fa-solid fa-xmark input-icon"></i>
+                                </div>
+                            </div>
+                            <div class="dice-ctrl-box">
+                                <label>Roll Over</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="dice-target-input" value="50">
+                                    <i class="fa-solid fa-arrows-rotate input-icon" style="cursor:pointer;" id="dice-toggle-dir"></i>
+                                </div>
+                            </div>
+                            <div class="dice-ctrl-box">
+                                <label>Win Chance</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="dice-chance-input" value="50">
+                                    <i class="fa-solid fa-percent input-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dice-message" id="dice-message" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-plinko" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                            <button class="bet-tab">Auto</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Difficulty</label>
+                            <div class="towers-diff-tabs" id="plinko-diff-tabs" style="display:flex; gap:5px; margin-bottom: 5px;">
+                                <button class="diff-btn active" data-diff="easy">Easy</button>
+                                <button class="diff-btn" data-diff="normal">Normal</button>
+                                <button class="diff-btn" data-diff="hard">Hard</button>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                                <input type="number" id="plinko-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('plinko-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('plinko-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Amount of rows</label>
+                            <div class="input-wrapper" style="padding: 4px;">
+                                <input type="number" id="plinko-rows-input" value="10" readonly style="margin-left: 10px; width: 40px; border: none; background: transparent; color: white;">
+                                <div class="plinko-row-btns input-actions" style="margin-left: auto;">
+                                    <button class="row-btn" data-r="8">8</button>
+                                    <button class="row-btn active" style="background:var(--bg-panel); color:white;" data-r="10">10</button>
+                                    <button class="row-btn" data-r="12">12</button>
+                                    <button class="row-btn" data-r="14">14</button>
+                                    <button class="row-btn" data-r="16">16</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="plinko-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Start new game</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area plinko-area">
+                        <canvas id="plinko-canvas" width="600" height="400"></canvas>
+                        <div id="plinko-buckets" class="plinko-buckets"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-rooms" class="view preview-view">
+                <div class="preview-overlay">
+                    <h2>Rooms</h2>
+                    <p>Coming soon - create or join a room.</p>
+                </div>
+            </div>
+            <div id="view-crash" class="view">
+                <div class="crash-layout" style="display:flex; gap:20px; align-items:flex-start;">
+                    <!-- Left Column -->
+                    <div style="width: 300px; display:flex; flex-direction:column; gap:20px;">
+                        <!-- Betting Panel -->
+                        <div class="bet-panel">
+                            <div class="bet-tabs">
+                                <button class="bet-tab active">Manual</button>
+                                <button class="bet-tab">Auto</button>
+                            </div>
+                            
+                            <div class="input-group">
+                                <label>Bet amount</label>
+                                <div class="input-wrapper">
+                                    <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                                    <input type="number" id="crash-bet-input" value="30" min="1">
+                                    <div class="input-actions">
+                                        <button onclick="document.getElementById('crash-bet-input').value /= 2">1/2</button>
+                                        <button onclick="document.getElementById('crash-bet-input').value *= 2">2x</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label>Auto cashout (multiplier)</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="crash-auto-input" value="2.00" step="0.10">
+                                    <div class="input-actions">
+                                        <button onclick="document.getElementById('crash-auto-input').value = ''">Disable</button>
+                                        <button onclick="document.getElementById('crash-auto-input').value = '2.00'">2.00x</button>
+                                        <button onclick="document.getElementById('crash-auto-input').value = '10.00'">10.00x</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary" id="crash-play-btn" style="width:100%; margin-top: 15px; padding: 15px;">Join next game</button>
+                        </div>
+
+                        <!-- Players List -->
+                        <div class="bet-panel" style="min-height: 250px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                                <span style="font-weight: 700; font-size: 14px;">0 Players</span>
+                                <span style="font-size: 13px; color: var(--text-secondary);">0 <span class="currency-inline">ZR$</span></span>
+                            </div>
+                            <div class="crash-players-list" style="color:var(--text-secondary); font-size:12px; text-align:center; padding-top: 20px;">
+                                <!-- Players would go here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column (Game Area) -->
+                    <div class="game-area crash-area" style="flex:1; position:relative; overflow:hidden; background: linear-gradient(to bottom, #2c3258, #16182a); padding:0; display:flex; flex-direction:column; border-radius:12px; min-height:550px;">
+                        
+                        <!-- Top Header inside area -->
+                        <div style="display:flex; justify-content:space-between; padding: 20px; z-index: 10;">
+                            <div class="crash-history" id="crash-history" style="display:flex; gap:6px;">
+                                <span class="history-pill win">10.41</span>
+                                <span class="history-pill" style="background:#f5af19; color:#1a1c2d;">2.01</span>
+                                <span class="history-pill win">7.91</span>
+                                <span class="history-pill lose">1.12</span>
+                                <span class="history-pill" style="background:#f5af19; color:#1a1c2d;">3.16</span>
+                                <span class="history-pill lose">1.00</span>
+                                <span class="history-pill lose">1.16</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); display:flex; align-items:center; gap:10px;">
+                                <span><i class="fa-solid fa-question text-secondary"></i> Fairness</span>
+                                <span>Network status <i class="fa-solid fa-wifi" style="color:var(--green)"></i></span>
+                            </div>
+                        </div>
+
+                        <!-- Main Screen Display -->
+                        <div style="position:absolute; top: 120px; left:0; width:100%; text-align:center; z-index:5;">
+                            <div id="crash-multi-display" style="font-size: 84px; font-weight: 800; color: white;">1.00x</div>
+                            <div id="crash-status-text" style="font-size: 18px; color: var(--text-secondary); margin-top:-10px;">Current payout</div>
+                        </div>
+
+                        <!-- Canvas -->
+                        <canvas id="crash-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:2;"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div id="view-profile" class="view">
+                <div class="profile-layout" style="display:flex; gap: 30px; align-items:flex-start; margin-top: 10px;">
+                    <!-- Left Profile Card -->
+                    <div class="profile-card" style="width: 340px; background: var(--bg-panel); border-radius: 12px; padding: 30px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div style="display:flex; align-items:center; gap: 15px; margin-bottom: 30px;">
+                            <img id="profile-main-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" style="width: 60px; height: 60px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.1);">
+                            <div>
+                                <div id="prof-username-disp" style="font-size:20px; font-weight:700;">artirzu</div>
+                                <div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">UID: 8cd7d3d0...</div>
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px 10px; margin-bottom: 30px;">
+                            <div>
+                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">Rain Winnings</div>
+                                <div id="prof-rain" style="font-size:20px; font-weight:600;">0</div>
+                            </div>
+                            <div>
+                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">Total deposited</div>
+                                <div id="prof-deposited" style="font-size:20px; font-weight:600;">0</div>
+                            </div>
+                            <div>
+                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">Total withdrawn</div>
+                                <div id="prof-withdrawn" style="font-size:20px; font-weight:600;">0</div>
+                            </div>
+                            <div>
+                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">Total wagered</div>
+                                <div id="prof-wagered" style="font-size:20px; font-weight:600;">0</div>
+                            </div>
+                            <div>
+                                <div style="color:var(--text-secondary); font-size:12px; margin-bottom:6px;">XP Balance</div>
+                                <div id="prof-xp" style="font-size:20px; font-weight:600;">0</div>
+                            </div>
+                        </div>
+                        <div style="color:var(--text-secondary); font-size:12px; text-align:center;">Stat update in 3m 45s</div>
+                    </div>
+
+                    <!-- Right Content Area -->
+                    <div style="flex:1;">
+                        <!-- Navigation Tabs -->
+                        <div class="profile-tabs" style="display:flex; gap:25px; margin-bottom:30px; font-weight: 600; font-size: 14px;">
+                            <button class="prof-tab active" data-ptab="transactions">Transactions</button>
+                            <button class="prof-tab" data-ptab="deposits">Deposits</button>
+                            <button class="prof-tab" data-ptab="withdrawals">Withdrawals</button>
+                            <button class="prof-tab" data-ptab="settings">Settings</button>
+                            <button class="prof-tab" data-ptab="buyxp">Buy XP</button>
+                        </div>
+                        
+                        <!-- Tab Contents -->
+                        <!-- Transactions -->
+                        <div class="ptab-content" id="ptab-transactions" style="display:block;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                                <h2 style="font-size:22px; font-weight:600;">Transactions</h2>
+                                <select class="prof-select" style="background:var(--bg-panel); color:var(--text-secondary); border:1px solid rgba(255,255,255,0.05); padding:10px 15px; border-radius:6px; outline:none; font-family:inherit; min-width:120px; font-size:13px; font-weight:600;">
+                                    <option>Games</option>
+                                </select>
+                            </div>
+                            <div class="table-wrap">
+                                <!-- Table Headers -->
+                                <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                    <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                </div>
+                                <!-- Table Body -->
+                                <div id="prof-tx-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                    <!-- Dynamic rows -->
+                                    <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No transactions yet.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Deposits -->
+                        <div class="ptab-content" id="ptab-deposits" style="display:none;">
+                            <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Deposits</h2>
+                            <div class="table-wrap">
+                                <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                    <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                </div>
+                                <div id="prof-dep-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                    <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No deposits yet.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Withdrawals -->
+                        <div class="ptab-content" id="ptab-withdrawals" style="display:none;">
+                            <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Withdrawals</h2>
+                            <div class="table-wrap">
+                                <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                    <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                </div>
+                                <div id="prof-wd-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                    <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No withdrawals yet.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Settings -->
+                        <div class="ptab-content" id="ptab-settings" style="display:none;">
+                            <div style="display:flex; gap: 40px;">
+                                <div style="width:200px; display:flex; flex-direction:column; gap:20px; font-size:14px; font-weight:600;">
+                                    <div style="color:white; cursor:pointer;" class="settings-menu-item active">Change Username</div>
+                                    <div style="color:var(--text-secondary); cursor:pointer;" class="settings-menu-item">Provably Fair</div>
+                                </div>
+                                <div style="flex:1; max-width: 480px;">
+                                    <h3 style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:20px; letter-spacing:1px;">CHANGE USERNAME</h3>
+                                    <div class="input-wrapper" style="background:var(--bg-panel); border-radius:8px; border:1px solid rgba(255,255,255,0.05); height: 50px; margin-bottom:20px;">
+                                        <input type="text" id="prof-new-username" placeholder="Enter new username" style="width:100%; padding:0 20px; background:transparent; border:none; color:white; font-size:14px; font-family:inherit; outline:none;" value="artirzu">
+                                    </div>
+                                    <button class="btn-primary" style="width:100%; padding:15px;" onclick="saveProfUsername()">Save Changes</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Buy XP -->
+                        <div class="ptab-content" id="ptab-buyxp" style="display:none;">
+                            <h2 style="font-size:24px; font-weight:700; margin-bottom:15px;">Swap ZR$ to XP</h2>
+                            <p style="color:var(--text-secondary); margin-bottom:40px; font-size:15px;">Convert ZR$ into XP. Minimum 200 ZR$ per swap.</p>
+                            
+                            <div style="max-width: 480px;">
+                                <div style="color:var(--text-secondary); font-size:13px; font-weight:600; margin-bottom:10px;">ZR$ amount</div>
+                                <div class="input-wrapper" style="background:var(--bg-panel); border-radius:8px; border: 1px solid rgba(255,255,255,0.05); height: 56px; margin-bottom: 30px;">
+                                    <span class="input-icon currency-input-mark" style="opacity:0.5; margin-left:18px;" aria-hidden="true">ZH$</span>
+                                    <input type="number" id="xp-buy-amount" value="200" min="200" style="width:100%; padding-left:15px; border:none; background:transparent; color:white; font-size:16px; font-weight:600; outline:none; font-family:inherit;">
+                                </div>
+
+                                <div style="text-align:center; margin-bottom: 40px;">
+                                    <div style="color:var(--text-secondary); font-size:12px; font-weight:700; letter-spacing:1px; margin-bottom:12px;">YOU WILL RECEIVE</div>
+                                    <div style="font-size:32px; font-weight:800; color:var(--green);"><span id="xp-buy-receive">1</span> XP</div>
+                                    <div style="color:var(--text-secondary); font-size:13px; font-weight:500; margin-top:20px;">200 ZR$ = 1 XP</div>
+                                </div>
+
+                                <button class="btn-primary" id="btn-buyxp" style="width:100%; padding:15px; font-size:15px; font-weight:700; height: 56px;" onclick="confirmBuyXp()">Confirm Swap</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div><!-- /.app-shell -->
+
+    <aside class="chat-rail" id="chat-rail" aria-label="Chat">
+        <div class="chat-rail-header">
+            <div class="chat-rail-title">
+                <span>Chat</span>
+                <span class="chat-online" id="chat-online-count"><span class="chat-online-dot" aria-hidden="true"></span> <span id="chat-online-num">-</span> online</span>
+            </div>
+            <button type="button" class="chat-collapse-btn" id="chat-collapse-btn" title="Collapse chat" aria-expanded="true"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div class="chat-messages-wrap">
+            <div class="chat-messages" id="chat-messages"></div>
+        </div>
+        <div class="chat-input-row">
+            <input type="text" class="chat-input" id="chat-input" placeholder="Say something..." maxlength="280" autocomplete="off">
+            <button type="button" class="chat-send-btn" id="chat-send-btn" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+        <p class="chat-hint" id="chat-status">Connecting...</p>
+    </aside>
+
+    <!-- ===== DEPOSIT MODAL ===== -->
+    <div class="modal-backdrop" id="deposit-backdrop" onclick="closeDepositModal(event)">
+        <div class="modal-box">
+            <!-- Page 1: Choose method -->
+            <div class="dep-page" id="dep-page-1">
+                <div class="modal-header">
+                    <h2>Deposit</h2>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="dep-methods">
+                    <div class="dep-method dep-robux" onclick="goDepPage(2)">
+                        <div class="dep-method-label">Robux</div>
+                        <div class="dep-icon-wrap">
+                            <div class="dep-icon-robux dep-method-mono" aria-hidden="true">R</div>
+                        </div>
+                        <div class="dep-currency-badge"><span class="dep-currency-letter">ZH$</span></div>
+                    </div>
+                    <div class="dep-method dep-card" onclick="showComingSoon()">
+                        <div class="dep-method-label">Credit/Debit Cards</div>
+                        <div class="dep-icon-wrap">
+                            <div class="dep-icon-card dep-method-mono" aria-hidden="true">D</div>
+                        </div>
+                        <div class="dep-currency-badge"><span class="dep-currency-letter">D</span></div>
+                    </div>
+                    <div class="dep-method dep-crypto" onclick="showComingSoon()">
+                        <div class="dep-method-label">Crypto</div>
+                        <div class="dep-icon-wrap">
+                            <div class="dep-icon-crypto dep-method-mono" aria-hidden="true">C</div>
+                        </div>
+                        <div class="dep-currency-badge"><span class="dep-currency-letter">C</span></div>
+                    </div>
+                    <div class="dep-method dep-promo" onclick="showComingSoon()">
+                        <div class="dep-method-label">Promo Code</div>
+                        <div class="dep-icon-wrap">
+                            <div class="dep-icon-promo dep-method-mono" aria-hidden="true">P</div>
+                        </div>
+                        <div class="dep-currency-badge"><span class="dep-currency-letter">P</span></div>
+                    </div>
+                </div>
+                <p class="dep-diff-link">What's the difference?</p>
+            </div>
+
+            <!-- Page 2: Confirm Roblox account -->
+            <div class="dep-page" id="dep-page-2" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Robux</div>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Deposit Robux for ZR$</h2>
+                <div style="margin-top:20px;">
+                    <p style="font-size:14px; font-weight:600; color:var(--accent);">Is this your account?</p>
+                    <p style="font-size:13px; color:var(--text-secondary); margin-top:4px;">Please confirm this is the correct Roblox account</p>
+                </div>
+                <div class="roblox-account-card">
+                    <img id="dep-modal-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" style="width:44px;height:44px;border-radius:8px;">
+                    <div style="margin-left:14px;">
+                        <div id="dep-account-name" style="font-weight:700;">@artirzu</div>
+                        <div id="dep-account-id" style="font-size:12px; color:var(--text-secondary);">ID: --</div>
+                    </div>
+                </div>
+                <div class="dep-actions">
+                    <button class="dep-back-btn" onclick="goDepPage(1)">Go back</button>
+                    <button class="btn-primary dep-yes-btn" onclick="goDepPage(3)">Yes, that's me</button>
+                </div>
+            </div>
+
+            <!-- Page 3: Game pass purchase (tiers) -->
+            <div class="dep-page" id="dep-page-3" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> <span onclick="goDepPage(2)">Robux</span></div>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Game pass deposit</h2>
+                <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Pick how much you want to add. Buy <strong>that</strong> game pass on Roblox, then press <strong>Verify purchase</strong>. We match Roblox ownership to your account and credit the same amount in ZR$ (wait a few seconds between verifications).</p>
+                <label class="dep-gamepass-label" for="dep-gamepass-select">Amount</label>
+                <select id="dep-gamepass-select" class="dep-gamepass-select" aria-describedby="dep-gamepass-tier-desc"></select>
+                <p id="dep-gamepass-tier-desc" class="dep-gamepass-tier-desc"></p>
+                <a href="#" target="_blank" rel="noopener noreferrer" class="dep-gamepass-link" id="dep-gamepass-store-link">Open selected game pass on Roblox <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:11px;"></i></a>
+                <p id="dep-gamepass-error" class="welcome-error" role="alert" style="display:none; margin-top:12px;"></p>
+                <div class="dep-actions" style="margin-top:22px;">
+                    <button class="dep-back-btn" onclick="goDepPage(2)">Back</button>
+                    <button type="button" class="btn-primary dep-confirm-btn" id="dep-gamepass-verify-btn" onclick="confirmGamePassDeposit()">Verify purchase</button>
+                </div>
+            </div>
+
+            <!-- Page 4: Success -->
+            <div class="dep-page" id="dep-page-4" style="display:none;">
+                <div class="modal-header">
+                    <h2></h2>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div style="text-align:center; padding: 30px 20px;">
+                    <div class="modal-success-glyph" aria-hidden="true">OK</div>
+                    <h2 style="color:var(--green); margin-bottom:12px;">Deposit Successful!</h2>
+                    <p id="dep-success-msg" style="color:var(--text-secondary); font-size:14px;">Your ZR$ balance has been updated.</p>
+                    <button class="btn-primary" style="margin-top:25px; width:100%;" onclick="closeDepositModal(null)">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== WITHDRAW MODAL (layout mirrors deposit modal) ===== -->
+    <div class="modal-backdrop" id="withdraw-backdrop" onclick="closeWithdrawModal(event)">
+        <div class="modal-box">
+            <!-- Page 1: Choose method (same grid pattern as deposit) -->
+            <div class="wd-page" id="wd-page-1" style="display:block;">
+                <div class="modal-header">
+                    <h2>Withdraw</h2>
+                    <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="dep-methods">
+                    <div class="dep-method dep-robux" onclick="goWdPage(2)">
+                        <div class="dep-method-label">Robux</div>
+                        <div class="dep-icon-wrap">
+                            <div class="dep-icon-robux dep-method-mono" aria-hidden="true">R</div>
+                        </div>
+                        <div class="dep-currency-badge"><span class="dep-currency-letter">ZH$</span></div>
+                    </div>
+                    <div class="dep-method dep-card" onclick="showWdComingSoon()">
+                        <div class="dep-method-label">Credit/Debit Cards</div>
+                        <div class="dep-icon-wrap">
+                            <div class="dep-icon-card dep-method-mono" aria-hidden="true">D</div>
+                        </div>
+                        <div class="dep-currency-badge"><span class="dep-currency-letter">D</span></div>
+                    </div>
+                    <div class="dep-method dep-crypto" onclick="showWdComingSoon()">
+                        <div class="dep-method-label">Crypto</div>
+                        <div class="dep-icon-wrap">
+                            <div class="dep-icon-crypto dep-method-mono" aria-hidden="true">C</div>
+                        </div>
+                        <div class="dep-currency-badge"><span class="dep-currency-letter">C</span></div>
+                    </div>
+                    <div class="dep-method dep-promo" onclick="showWdComingSoon()">
+                        <div class="dep-method-label">Promo Code</div>
+                        <div class="dep-icon-wrap">
+                            <div class="dep-icon-promo dep-method-mono" aria-hidden="true">P</div>
+                        </div>
+                        <div class="dep-currency-badge"><span class="dep-currency-letter">P</span></div>
+                    </div>
+                </div>
+                <p class="dep-diff-link">What's the difference?</p>
+            </div>
+
+            <!-- Page 2: Amount (spacing/typography aligned with deposit flow) -->
+            <div class="wd-page" id="wd-page-2" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goWdPage(1)">Withdraw</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Robux</div>
+                    <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Withdraw ZR$ for Robux</h2>
+                <p class="wd-lead">Enter how much ZR$ to convert. Minimum <strong>7 R$</strong> received after Roblox tax.</p>
+
+                <div class="wd-amount-grid" role="group" aria-label="Withdraw amount conversion">
+                    <label for="wd-amount-input" class="wd-amt-label wd-amt-label--left">Amount (ZR$)</label>
+                    <label for="wd-before-tax" class="wd-amt-label wd-amt-label--right">Robux (before tax)</label>
+                    <div class="dep-amount-wrapper wd-input-wrap wd-amt-input-left">
+                        <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                        <input type="number" id="wd-amount-input" value="15" min="11" class="wd-amount-input">
+                        <div class="wd-quick-amt">
+                            <button type="button" onclick="addWdAmt(5)">+5</button>
+                            <button type="button" onclick="addWdAmt(10)">+10</button>
+                        </div>
+                    </div>
+                    <span class="wd-amt-equals" aria-hidden="true">=</span>
+                    <div class="wd-input-wrap wd-input-readonly wd-amt-input-right">
+                        <input type="text" id="wd-before-tax" value="10" readonly class="wd-before-tax-input">
+                    </div>
+                    <p class="wd-after-tax-line">After Roblox 30% tax you receive <span id="wd-after-tax">7</span> R$</p>
+                </div>
+
+                <div class="wd-avail-row">
+                    <span>Available: <span id="wd-avail-bal">0.00</span> ZR$</span>
+                    <span class="wd-avail-sep" aria-hidden="true">|</span>
+                    <span>Min payout: 7 R$</span>
+                </div>
+
+                <div class="wd-queue-notice">
+                    <div class="wd-queue-notice-title">
+                        <span class="wd-queue-clock" aria-hidden="true">T</span> Estimated wait: ~22 min
+                    </div>
+                    <p>Due to high demand, withdrawals are queued. ZephR$ aims to offer competitive rates — your R$ will be delivered to your pending balance as players deposit.</p>
+                </div>
+
+                <button type="button" class="btn-primary btn-deposit-full" id="wd-continue-btn" onclick="confirmWithdraw()">Continue</button>
+            </div>
+
+            <!-- Page 3: Processing -->
+            <div class="wd-page wd-page-centered" id="wd-page-3" style="display:none;">
+                <div class="modal-header wd-page-centered-close">
+                    <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="wd-success-icon wd-success-icon--spin" aria-hidden="true">...</div>
+                <h3 class="wd-centered-title">Finding an available game pass…</h3>
+                <p class="wd-centered-text">Please wait while we locate a game pass for your withdrawal.</p>
+            </div>
+
+            <!-- Page 4: Success -->
+            <div class="wd-page wd-page-centered" id="wd-page-4" style="display:none;">
+                <div class="modal-header wd-page-centered-close">
+                    <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="wd-success-icon wd-success-icon--ok" aria-hidden="true">OK</div>
+                <h2 class="wd-success-heading">Withdrawal queued</h2>
+                <p id="wd-success-msg" class="wd-centered-text">Your withdrawal has been successfully queued and will arrive soon.</p>
+                <button type="button" class="btn-primary btn-deposit-full" onclick="closeWithdrawModal(null)">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== WELCOME MODAL ===== -->
+    <div class="modal-backdrop" id="welcome-backdrop">
+        <div class="modal-box" style="max-width:500px; padding:35px; position:relative;">
+            <div style="display:flex; align-items:center; margin-bottom:20px;">
+                <span class="welcome-brand-glyph" aria-hidden="true">Z</span>
+                <span style="font-size:18px; font-weight:800; margin-left:10px;">Zeph<span style="color:#7dd3fc;">R$</span></span>
+            </div>
+            <h2 style="font-size:22px; font-weight:700; margin-bottom:10px;">Welcome</h2>
+            <p style="color:var(--text-secondary); font-size:14px; margin-bottom:6px; line-height:1.6;">Welcome to ZephR$ - play games, manage balances, and connect your Roblox account.</p>
+            <p style="color:var(--accent); font-size:14px; margin-bottom:25px;">Enter your Roblox username to get started.</p>
+
+            <div class="input-group">
+                <label>Roblox Username</label>
+                <div class="input-wrapper" style="height:50px;">
+                    <i class="fa-solid fa-user input-icon"></i>
+                    <input type="text" id="welcome-username-input" placeholder="Enter your Roblox username" style="font-size:14px;">
+                </div>
+            </div>
+
+            <p id="welcome-username-error" class="welcome-error" role="alert" style="display:none;"></p>
+            <button type="button" class="btn-primary" id="welcome-continue-btn" style="width:100%; padding:15px; font-size:15px; font-weight:700; margin-top:8px;">Continue</button>
+            <p style="text-align:center; margin-top:12px; font-size:12px; color:var(--text-secondary);">We'll never ask for your Roblox password.</p>
+
+            <div style="margin-top:25px; padding-top:20px; border-top:1px solid var(--border-color);">
+                <div style="display:flex; align-items:flex-start; gap:12px;">
+                    <div style="min-width:32px; height:32px; background:#c0392b; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:10px; color:white; flex-shrink:0;">18+</div>
+                    <p style="font-size:11px; color:var(--text-secondary); line-height:1.6;">By logging in you acknowledge that you are at least +18 years of age, that any items you wager are not stolen, and that you agree with our <span style="color:var(--accent);">Terms of conditions</span> and our <span style="color:var(--accent);">Privacy policy</span>. ZephR$ is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Roblox.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Roblox account confirmation (after username lookup) -->
+    <div class="modal-backdrop" id="roblox-confirm-backdrop" aria-hidden="true">
+        <div class="modal-box roblox-confirm-box">
+            <div class="roblox-confirm-top">
+                <div>
+                    <h2 class="roblox-confirm-title" id="roblox-confirm-title">Is this your account?</h2>
+                    <p class="roblox-confirm-sub" id="roblox-confirm-sub">Please confirm this is the correct Roblox account.</p>
+                </div>
+                <button type="button" class="modal-close" id="roblox-confirm-close" title="Close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="roblox-confirm-step-account">
+                <div class="roblox-confirm-body">
+                    <img class="roblox-confirm-avatar" id="roblox-confirm-avatar" src="" width="120" height="120" alt="">
+                    <div class="roblox-confirm-name" id="roblox-confirm-name"></div>
+                    <div class="roblox-confirm-id" id="roblox-confirm-id"></div>
+                </div>
+                <div class="roblox-confirm-actions">
+                    <button type="button" class="roblox-confirm-wrong" id="roblox-confirm-wrong">Wrong Account</button>
+                    <button type="button" class="btn-primary roblox-confirm-yes" id="roblox-confirm-yes">Yes, Continue</button>
+                </div>
+            </div>
+            <div id="roblox-confirm-step-verify" class="roblox-confirm-step-verify" hidden>
+                <p class="roblox-verify-lead">Copy the code below and paste it into your Roblox profile <strong>About</strong> (save). Then press Verify.</p>
+                <div class="roblox-verify-code-row">
+                    <code class="roblox-verify-code" id="roblox-verify-code" aria-live="polite"></code>
+                    <button type="button" class="roblox-verify-copy" id="roblox-verify-copy">Copy</button>
+                </div>
+                <p class="roblox-verify-path">On Roblox: open <strong>Profile</strong>, then the menu (<span class="menu-dots" aria-hidden="true">...</span>) or <strong>Edit</strong>, then <strong>About</strong>.</p>
+                <p id="roblox-verify-error" class="welcome-error" role="alert" style="display:none;"></p>
+                <div class="roblox-confirm-actions roblox-verify-actions">
+                    <button type="button" class="roblox-confirm-wrong" id="roblox-verify-back">Back</button>
+                    <button type="button" class="btn-primary roblox-confirm-yes" id="roblox-verify-btn">Verify</button>
+                </div>
+                <button type="button" class="roblox-verify-newcode" id="roblox-verify-newcode">New code</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    <script src="script.js"></script>
+    <script src="chat.js"></script>
+</body>
+</html>
