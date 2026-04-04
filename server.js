@@ -1649,25 +1649,38 @@ io.on('connection', (socket) => {
         
         try {
             const senderSave = await readAccountJson(fromUserId);
-            if (!senderSave || senderSave.balance < amount) {
-                return socket.emit('notification', { type: 'error', text: 'Not enough balance for tip!' });
+            if (!senderSave || senderSave.balanceZh < amount) {
+                return socket.emit('notification', { type: 'error', text: 'Not enough ZH$ balance for tip!' });
             }
 
-            // Find recipient
-            let recipientId = parseInt(toTarget);
-            if (isNaN(recipientId)) {
-                // Try to find by name in DB
-                const res = await supabaseFetch(`transactions?type=eq.account_profile&game_name=ilike.*"${toTarget}"*`, { method: 'GET' });
-                if (res && res.length > 0) {
-                    for (const row of res) {
-                        try {
-                            const p = JSON.parse(row.game_name);
-                            if (p && p.username && p.username.toLowerCase() === toTarget.toLowerCase()) {
-                                recipientId = row.user_id;
-                                break;
+            // Find recipient — by numeric ID or username lookup in Supabase
+            let recipientId = null;
+            const parsedId = parseInt(toTarget);
+            if (!isNaN(parsedId) && parsedId > 0) {
+                recipientId = parsedId;
+            } else {
+                // Look up by username stored inside the account_profile game_name JSON
+                try {
+                    const searchRes = await supabaseFetch(
+                        `transactions?type=eq.account_profile&select=user_id,game_name&limit=200`,
+                        { method: 'GET' }
+                    );
+                    if (searchRes.ok) {
+                        const rows = await searchRes.json();
+                        if (Array.isArray(rows)) {
+                            for (const row of rows) {
+                                try {
+                                    const p = JSON.parse(row.game_name || '{}');
+                                    if (p && p.username && p.username.toLowerCase() === toTarget.toLowerCase()) {
+                                        recipientId = parseInt(row.user_id);
+                                        break;
+                                    }
+                                } catch (e) {}
                             }
-                        } catch(e) {}
+                        }
                     }
+                } catch (e) {
+                    console.error('[Tip] Username lookup error:', e);
                 }
             }
 
@@ -1678,24 +1691,25 @@ io.on('connection', (socket) => {
             const recSave = await readAccountJson(recipientId);
             if (!recSave) return socket.emit('notification', { type: 'error', text: 'Recipient wallet not initialized.' });
 
-            // Atomic-ish transfer
-            senderSave.balance -= amount;
-            recSave.balance += amount;
+            // Transfer ZH$ balance
+            senderSave.balanceZh = (senderSave.balanceZh || 0) - amount;
+            recSave.balanceZh = (recSave.balanceZh || 0) + amount;
 
             await persistAccountSave(fromUserId, senderSave);
             await persistAccountSave(recipientId, recSave);
 
-            socket.emit('notification', { type: 'success', text: `Tipped ${amount} ZH$ to ${recSave.username}!` });
-            socket.emit('balance:update', { balance: senderSave.balance });
+            socket.emit('notification', { type: 'success', text: `Tipped ${amount} ZH$ to ${recSave.username || recipientId}!` });
+            socket.emit('balance:update', { balance: senderSave.balance, balanceZh: senderSave.balanceZh });
             
             io.emit('chat:message', {
                 username: 'System',
-                text: `${senderSave.username} tipped ${amount} ZH$ to ${recSave.username}!`,
+                text: `${senderSave.username} tipped ${amount} ZH$ to ${recSave.username || recipientId}!`,
                 createdAt: Date.now()
             });
 
         } catch (e) {
             console.error('[Tip Error]', e);
+            socket.emit('notification', { type: 'error', text: 'An error occurred sending the tip.' });
         }
     });
 
@@ -1705,11 +1719,13 @@ io.on('connection', (socket) => {
         
         try {
             const save = await readAccountJson(userId);
-            if (!save || save.balance < amount) return;
+            if (!save || (save.balanceZh || 0) < amount) {
+                return socket.emit('notification', { type: 'error', text: 'Not enough ZH$ balance for rain!' });
+            }
 
-            save.balance -= amount;
+            save.balanceZh = (save.balanceZh || 0) - amount;
             await persistAccountSave(userId, save);
-            socket.emit('balance:update', { balance: save.balance });
+            socket.emit('balance:update', { balance: save.balance, balanceZh: save.balanceZh });
 
             const rain = {
                 id: Math.random().toString(36).substr(2, 9),
@@ -1736,15 +1752,19 @@ io.on('connection', (socket) => {
                 activeRains.splice(idx, 1);
 
                 if (r.joiners.length === 0) {
-                    save.balance += amount;
-                    await persistAccountSave(userId, save);
+                    // Refund ZH$ to creator
+                    const refundSave = await readAccountJson(userId);
+                    if (refundSave) {
+                        refundSave.balanceZh = (refundSave.balanceZh || 0) + amount;
+                        await persistAccountSave(userId, refundSave);
+                    }
                     io.emit('chat:message', { username: 'System', text: 'Rain ended with no joiners. Refunded.', createdAt: Date.now() });
                 } else {
                     const share = Math.floor((r.amount / r.joiners.length) * 100) / 100;
                     for (const uid of r.joiners) {
                         const js = await readAccountJson(uid);
                         if (js) {
-                            js.balance += share;
+                            js.balanceZh = (js.balanceZh || 0) + share;
                             await persistAccountSave(uid, js);
                         }
                     }

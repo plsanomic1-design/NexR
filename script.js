@@ -1327,9 +1327,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ===== GLOBAL BALANCE SYSTEM =====
-let roBalance = 0.00;
+let roBalance = 0.00;    // ZR$ (main currency)
+let roBalanceZh = 0.00;  // ZH$ (social/hex currency)
 let referralEarned = 0;
 let referredCount = 0;
+
+// ===== CLIENT-SIDE ACTIVE RAINS (synced from server via socket) =====
+let activeRains = [];
 
 // ====== SOCIAL MODALS (GLOBAL) ======
 function openRainModal() {
@@ -1367,6 +1371,10 @@ function updateBalanceDisplay() {
     const formatted = roBalance.toFixed(2);
     if(tbEl) tbEl.textContent = formatted;
     if(homeEl) homeEl.textContent = formatted;
+
+    // Update ZH$ display if element exists
+    const zhEl = document.getElementById('tb-balance-zh');
+    if(zhEl) zhEl.textContent = roBalanceZh.toFixed(2);
 
     // Animate the topbar value briefly
     const chip = document.querySelector('.balance-chip');
@@ -2473,6 +2481,7 @@ function buildSaveObject() {
         robloxUserId: robloxUserId,
         robloxAvatarUrl: robloxAvatarUrl,
         balance: roBalance,
+        balanceZh: roBalanceZh,
         referralEarned: referralEarned,
         referredCount: referredCount,
         stats: { ...userStats },
@@ -2490,6 +2499,7 @@ function applySavePayload(data) {
         robloxAvatarUrl = data.robloxAvatarUrl;
     } else if(data.robloxAvatarUrl === null || data.robloxAvatarUrl === '') robloxAvatarUrl = null;
     if(typeof data.balance === 'number' && data.balance >= 0) roBalance = data.balance;
+    if(typeof data.balanceZh === 'number' && data.balanceZh >= 0) roBalanceZh = data.balanceZh;
     if(typeof data.flipBalance === 'number' && data.flipBalance > 0) roBalance += data.flipBalance;
     if(typeof data.referralEarned === 'number' && data.referralEarned >= 0) referralEarned = data.referralEarned;
     if(typeof data.referredCount === 'number' && data.referredCount >= 0) referredCount = data.referredCount;
@@ -3279,7 +3289,8 @@ if (socket) {
     });
 
     socket.on('rain:active', (rains) => {
-        updateRainBanner(rains[0] || null);
+        activeRains = Array.isArray(rains) ? rains : [];
+        updateRainBanner(activeRains[0] || null);
     });
 
     socket.on('online:count', (count) => {
@@ -3287,8 +3298,9 @@ if (socket) {
         if (el) el.textContent = count;
     });
 
-    socket.on('balance:update', ({ balance }) => {
-        roBalance = balance;
+    socket.on('balance:update', ({ balance, balanceZh }) => {
+        if (typeof balance === 'number' && balance >= 0) roBalance = balance;
+        if (typeof balanceZh === 'number' && balanceZh >= 0) roBalanceZh = balanceZh;
         updateBalanceDisplay();
         updateProfViews();
         // Don't saveToStorage right away to avoid loop if sync was from server
@@ -3478,7 +3490,7 @@ function confirmStartRain() {
     const minWager = parseFloat(document.getElementById('rain-min-wager').value) || 0;
 
     if (amount < 10) return alert('Minimum rain amount is 10 ZH$');
-    if (amount > roBalance) return alert('Not enough balance!');
+    if (amount > roBalanceZh) return alert('Not enough ZH$ balance!');
 
     socket?.emit('rain:create', {
         userId: robloxUserId,
@@ -3553,7 +3565,7 @@ function confirmSendTip() {
 
     if (!target) return alert('Enter a recipient!');
     if (amount < 1) return alert('Minimum tip is 1 ZH$');
-    if (amount > roBalance) return alert('Not enough balance!');
+    if (amount > roBalanceZh) return alert('Not enough ZH$ balance!');
 
     socket?.emit('tip:send', {
         fromUserId: robloxUserId,
