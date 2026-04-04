@@ -3363,6 +3363,22 @@ if (socket) {
         // For now use alert, or we could add a toast system
         alert(text);
     });
+
+    socket.on('tip:received', (data) => {
+        if (robloxUserId && data.recipientId === robloxUserId) {
+            roBalanceZh += data.amount;
+            updateBalanceDisplay();
+            
+            // Pop up a toast or alert so they know immediately
+            const toast = document.createElement('div');
+            toast.textContent = `🎉 You were tipped ${data.amount} ZH$ from ${data.sender}!`;
+            toast.style.cssText = 'position:fixed;top:80px;right:20px;background:#4CAF50;color:#fff;padding:15px;border-radius:8px;z-index:999999;box-shadow:0 4px 15px rgba(0,0,0,0.5);font-weight:bold;animation:slideIn 0.3s forwards;';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+            
+            if (typeof saveToStorage === 'function') saveToStorage();
+        }
+    });
 }
 
 function renderCFLobby(flips) {
