@@ -1160,9 +1160,9 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
     // --- Step 1: Get gamepass product info from Roblox ---
     let productInfo;
     try {
-        productInfo = await noblox.getProductInfo(gpId, 'GamePass');
+        productInfo = await noblox.getGamePassProductInfo(gpId);
     } catch (e) {
-        console.error('[Withdraw] getProductInfo failed:', e && e.message);
+        console.error('[Withdraw] getGamePassProductInfo failed:', e && e.message);
         return res.status(400).json({ error: 'Could not find that gamepass on Roblox. Make sure it is published and the link is correct.' });
     }
 
@@ -1200,8 +1200,9 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
 
     // --- Step 4: Purchase the gamepass with the bot ---
     try {
-        await noblox.buy(gpId, gamepassPrice);
-        console.log(`[Withdraw] Bot purchased gamepass ${gpId} (${gamepassPrice} R$) for user ${userId}`);
+        // buy() needs the internal ProductId, not the GamePass Id.
+        await noblox.buy(productInfo.ProductId, gamepassPrice);
+        console.log(`[Withdraw] Bot purchased gamepass ${gpId} (Product: ${productInfo.ProductId}, Price: ${gamepassPrice} R$) for user ${userId}`);
     } catch (e) {
         const msg = e && e.message ? e.message : String(e);
         console.error('[Withdraw] Purchase failed:', msg);
