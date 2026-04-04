@@ -965,6 +965,15 @@ const GAME_PASS_CREDIT_BY_ID = {
 const GAMEPASS_DEPOSIT_MIN_INTERVAL_MS = 2500;
 const lastGamepassDepositAt = new Map();
 
+/**
+ * Roblox user IDs that created/own the game passes and are therefore
+ * automatically flagged as owners by Roblox even without purchasing.
+ * These accounts are blocked from using the deposit system.
+ */
+const GAMEPASS_CREATOR_IDS = new Set([
+    2615180260  // artirzu7 — game pass creator account
+]);
+
 function fetchUserOwnsGamePass(userId, gamePassId) {
     return new Promise((resolve) => {
         const p = `/v1/users/${encodeURIComponent(userId)}/items/GamePass/${encodeURIComponent(gamePassId)}/is-owned`;
@@ -1053,6 +1062,12 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     if (save.stats.claimedGps.includes(gamePassId)) {
         return res.status(400).json({
             error: 'You have already deposited this exact tier. You can only deposit each tier once.'
+        });
+    }
+
+    if (GAMEPASS_CREATOR_IDS.has(userId)) {
+        return res.status(403).json({
+            error: 'The game pass creator account cannot use the deposit system. Please use a different Roblox account to deposit.'
         });
     }
 
