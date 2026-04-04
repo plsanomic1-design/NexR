@@ -137,6 +137,14 @@ async function supabaseFetch(pathAndQuery, options = {}) {
     return fetch(url, init);
 }
 
+/** Thousands separators for chat/notifications (e.g. 10,000). */
+function formatAmountDisplay(n) {
+    const x = typeof n === 'number' ? n : Number(n);
+    if (!Number.isFinite(x)) return String(n);
+    if (Math.abs(x - Math.round(x)) < 1e-9) return Math.round(x).toLocaleString('en-US');
+    return x.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
 /** Roblox user id from presence payloads (number or numeric string). Guest socket ids return null. */
 function parseRobloxNumericId(val) {
     if (typeof val === 'number' && Number.isFinite(val) && val > 0) return Math.floor(val);
@@ -1662,7 +1670,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
     if (!save.stats) save.stats = {};
 
     const lastWd = save.stats.lastWithdrawAt || 0;
-    const cooldownMs = 30 * 60 * 1000;
+    const cooldownMs = getWithdrawCooldownMsFromStats(save.stats);
     if (Date.now() - lastWd < cooldownMs) {
         const leftMin = Math.ceil((cooldownMs - (Date.now() - lastWd)) / 60000);
         return res.status(429).json({ error: `Withdraw on cooldown. Please wait ${leftMin} more minute(s).` });
@@ -1908,9 +1916,17 @@ function userIdsMatch(a, b) {
     return na != null && nb != null && na === nb;
 }
 
+function getWithdrawCooldownMsFromStats(stats) {
+    const d =
+        stats && typeof stats.withdrawCooldownMs === 'number' && stats.withdrawCooldownMs > 0
+            ? stats.withdrawCooldownMs
+            : 30 * 60 * 1000;
+    return Math.min(d, 365 * 24 * 60 * 60 * 1000);
+}
+
 function makeWdCooldownEndsAt(save) {
     const last = save && save.stats && save.stats.lastWithdrawAt ? save.stats.lastWithdrawAt : 0;
-    return last ? last + 30 * 60 * 1000 : 0;
+    return last ? last + getWithdrawCooldownMsFromStats(save.stats) : 0;
 }
 
 /** Push balance + stats to matching socket(s); broadcast only if nobody matched (e.g. not yet identified). */
@@ -2045,12 +2061,15 @@ io.on('connection', (socket) => {
             await persistAccountSave(fromUserId, senderSave);
             await persistAccountSave(recipientId, recSave);
 
-            socket.emit('notification', { type: 'success', text: `Tipped ${amount} ZH$ to ${recSave.username || recipientId}!` });
+            socket.emit('notification', {
+                type: 'success',
+                text: `Tipped ${formatAmountDisplay(amount)} ZH$ to ${recSave.username || recipientId}!`
+            });
             socket.emit('balance:update', { balance: senderSave.balance, balanceZh: senderSave.balanceZh });
             
             io.emit('chat:message', {
                 username: 'System',
-                text: `${senderSave.username} tipped ${amount} ZH$ to ${recSave.username || recipientId}!`,
+                text: `${senderSave.username} tipped ${formatAmountDisplay(amount)} ZH$ to ${recSave.username || recipientId}!`,
                 createdAt: Date.now()
             });
             
@@ -2107,7 +2126,7 @@ io.on('connection', (socket) => {
             io.emit('rain:active', activeRains);
             io.emit('chat:message', {
                 username: 'System',
-                text: `${save.username} started a Rain for ${amount} ZH$!`,
+                text: `${save.username} started a Rain for ${formatAmountDisplay(amount)} ZH$!`,
                 createdAt: Date.now()
             });
 
@@ -2178,11 +2197,11 @@ io.on('connection', (socket) => {
                         }
                         const shareLabel =
                             shares.length > 0
-                                ? `${shares[0].toFixed(2)} ZH$ each`
-                                : `${(r.amount / payees.length).toFixed(2)} ZH$ each`;
+                                ? `${formatAmountDisplay(shares[0])} ZH$ each`
+                                : `${formatAmountDisplay(r.amount / payees.length)} ZH$ each`;
                         io.emit('chat:message', {
                             username: 'System',
-                            text: `🌧️ Rain ended! ${payees.length} player(s) split ${r.amount} ZH$ (${shareLabel}).`,
+                            text: `🌧️ Rain ended! ${payees.length} player(s) split ${formatAmountDisplay(r.amount)} ZH$ (${shareLabel}).`,
                             createdAt: Date.now()
                         });
                     }
@@ -2388,10 +2407,9 @@ io.on('connection', (socket) => {
 
         const rigKey = save.isLocalOnly ? String(save.robloxUserId) : String(numericForDb);
         const rigState = adminRigOverrides.get(rigKey) || 'default';
-        const wdCooldownEndsAt = save.stats?.lastWithdrawAt
-            ? save.stats.lastWithdrawAt + 30 * 60 * 1000
-            : 0;
+        const wdCooldownEndsAt = makeWdCooldownEndsAt(save);
         const hasWdCooldown = wdCooldownEndsAt > Date.now();
+        const withdrawCooldownMinutes = Math.max(1, Math.round(getWithdrawCooldownMsFromStats(save.stats) / 60000));
 
         const emitUserId = save.isLocalOnly ? save.robloxUserId : numericForDb;
 
@@ -2402,6 +2420,7 @@ io.on('connection', (socket) => {
             balanceZh: save.balanceZh || 0,
             rigState,
             wdCooldownEndsAt: hasWdCooldown ? wdCooldownEndsAt : 0,
+            withdrawCooldownMinutes,
             isLocalOnly: Boolean(save.isLocalOnly)
         });
     });
@@ -2468,8 +2487,8 @@ io.on('connection', (socket) => {
         console.log(`[Admin] ${adminUserId} set rig of ${tid} to ${rigMode}`);
     });
 
-    socket.on('admin:set_wd_cooldown', async ({ adminUserId, targetUserId, action }) => {
-        // action: 'set' = apply 30min cooldown, 'clear' = remove cooldown
+    socket.on('admin:set_wd_cooldown', async ({ adminUserId, targetUserId, action, durationMinutes }) => {
+        // action: 'set' = apply cooldown now for durationMinutes (default 30), 'clear' = remove active cooldown
         if (!ADMIN_IDS.includes(String(adminUserId))) return;
 
         try {
@@ -2478,15 +2497,21 @@ io.on('connection', (socket) => {
             if (!save.stats) save.stats = {};
 
             if (action === 'set') {
-                // Force a cooldown starting now
+                let mins =
+                    typeof durationMinutes === 'number' && Number.isFinite(durationMinutes)
+                        ? durationMinutes
+                        : 30;
+                mins = Math.min(Math.max(1, mins), 60 * 24 * 7);
+                save.stats.withdrawCooldownMs = Math.round(mins * 60 * 1000);
                 save.stats.lastWithdrawAt = Date.now();
                 await persistAccountSave(targetUserId, save);
                 emitBalanceRemoteSync(io, targetUserId, save);
                 const endsAt = makeWdCooldownEndsAt(save);
                 socket.emit('admin:action_result', {
                     ok: true,
-                    msg: `Withdrawal cooldown (30 min) applied to user ${targetUserId}.`,
+                    msg: `Withdrawal cooldown (${mins} min) applied to user ${targetUserId}.`,
                     wdCooldownEndsAt: endsAt > Date.now() ? endsAt : 0,
+                    withdrawCooldownMinutes: mins,
                     targetUserId: String(targetUserId),
                     skipAdminLookup: true
                 });

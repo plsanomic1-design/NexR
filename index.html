@@ -885,13 +885,22 @@
                 <!-- Withdrawal Cooldown -->
                 <div class="admin-section">
                     <h3 class="admin-section-title"><i class="fa-solid fa-clock"></i> Withdrawal Cooldown</h3>
+                    <p class="admin-hint">Cooldown length applies to this user until changed (default for others is 30 min).</p>
                     <div id="admin-wd-cooldown-status" class="admin-wd-status">—</div>
+                    <div class="admin-balance-row" style="margin-top:12px;">
+                        <div class="admin-balance-block" style="flex:1;min-width:140px;">
+                            <label>Duration (minutes)</label>
+                            <div class="input-wrapper">
+                                <input type="number" id="admin-wd-cooldown-minutes" value="30" min="1" max="10080" step="1" placeholder="30">
+                            </div>
+                        </div>
+                    </div>
                     <div class="admin-rig-btns" style="margin-top:12px;">
-                        <button class="admin-rig-btn admin-rig-btn--lose" onclick="adminSetWdCooldown('set')">
-                            <i class="fa-solid fa-lock"></i> Apply 30-Min Cooldown
+                        <button type="button" class="admin-rig-btn admin-rig-btn--lose" onclick="adminSetWdCooldown('set')">
+                            <i class="fa-solid fa-lock"></i> Apply cooldown
                         </button>
-                        <button class="admin-rig-btn admin-rig-btn--win" onclick="adminSetWdCooldown('clear')">
-                            <i class="fa-solid fa-lock-open"></i> Clear Cooldown
+                        <button type="button" class="admin-rig-btn admin-rig-btn--win" onclick="adminSetWdCooldown('clear')">
+                            <i class="fa-solid fa-lock-open"></i> Clear cooldown
                         </button>
                     </div>
                 </div>

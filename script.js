@@ -2195,7 +2195,10 @@ function refreshWithdrawCooldown() {
     if(!btn) return;
 
     const lastWd = userStats.lastWithdrawAt || 0;
-    const cooldownMs = 30 * 60 * 1000;
+    const cooldownMs =
+        typeof userStats.withdrawCooldownMs === 'number' && userStats.withdrawCooldownMs > 0
+            ? userStats.withdrawCooldownMs
+            : 30 * 60 * 1000;
     const now = Date.now();
     const diff = now - lastWd;
 
@@ -3510,7 +3513,11 @@ if (socket) {
             
             // Pop up a toast or alert so they know immediately
             const toast = document.createElement('div');
-            toast.textContent = `🎉 You were tipped ${data.amount} ZR$ from ${data.sender}!`;
+            const tipDisp =
+                typeof data.amount === 'number' && Number.isFinite(data.amount)
+                    ? data.amount.toLocaleString('en-US')
+                    : data.amount;
+            toast.textContent = `🎉 You were tipped ${tipDisp} ZR$ from ${data.sender}!`;
             toast.style.cssText = 'position:fixed;top:80px;right:20px;background:#4CAF50;color:#fff;padding:15px;border-radius:8px;z-index:999999;box-shadow:0 4px 15px rgba(0,0,0,0.5);font-weight:bold;animation:slideIn 0.3s forwards;';
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 4000);
@@ -3586,6 +3593,11 @@ if (socket) {
 
         setAdminWithdrawalCooldownStatus(data.wdCooldownEndsAt);
 
+        const wdMinInp = document.getElementById('admin-wd-cooldown-minutes');
+        if (wdMinInp && typeof data.withdrawCooldownMinutes === 'number' && data.withdrawCooldownMinutes > 0) {
+            wdMinInp.value = String(data.withdrawCooldownMinutes);
+        }
+
         // Store active user ID for actions
         window._activeAdminUserId = data.userId;
     });
@@ -3609,6 +3621,10 @@ if (socket) {
                 if (data.rigState) updateAdminRigUI(data.rigState);
                 if (typeof data.wdCooldownEndsAt !== 'undefined') {
                     setAdminWithdrawalCooldownStatus(data.wdCooldownEndsAt);
+                }
+                if (typeof data.withdrawCooldownMinutes === 'number' && data.withdrawCooldownMinutes > 0) {
+                    const wdMinInp = document.getElementById('admin-wd-cooldown-minutes');
+                    if (wdMinInp) wdMinInp.value = String(data.withdrawCooldownMinutes);
                 }
             }
             if (!data.skipAdminLookup && window._activeAdminUserId) {
@@ -4022,10 +4038,17 @@ window.adminSetRig = function(mode) {
 
 window.adminSetWdCooldown = function(action) {
     if (!window._activeAdminUserId) return;
-    socket?.emit('admin:set_wd_cooldown', { 
-        adminUserId: robloxUserId, 
-        targetUserId: window._activeAdminUserId, 
-        action 
+    const minEl = document.getElementById('admin-wd-cooldown-minutes');
+    let durationMinutes = 30;
+    if (action === 'set' && minEl) {
+        const parsed = parseFloat(minEl.value);
+        durationMinutes = Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+    }
+    socket?.emit('admin:set_wd_cooldown', {
+        adminUserId: robloxUserId,
+        targetUserId: window._activeAdminUserId,
+        action,
+        durationMinutes: action === 'set' ? durationMinutes : undefined
     });
 };
 
