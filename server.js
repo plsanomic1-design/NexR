@@ -1198,11 +1198,32 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(400).json({ error: 'Insufficient ZR$ balance on server.' });
     }
 
-    // --- Step 4: Purchase the gamepass with the bot ---
+    // --- Step 4: Purchase the gamepass with the bot using custom fetch (noblox v9 removed native buy wrapper) ---
     try {
-        // buy() needs the internal ProductId, not the GamePass Id.
-        await noblox.buy(productInfo.ProductId, gamepassPrice);
-        console.log(`[Withdraw] Bot purchased gamepass ${gpId} (Product: ${productInfo.ProductId}, Price: ${gamepassPrice} R$) for user ${userId}`);
+        const csrfToken = await noblox.getGeneralToken();
+        const cookie = `.ROBLOSECURITY=${process.env.ROBLOX_COOKIE.trim().replace(/^"|"$/g, '')}`;
+
+        const purchaseRes = await fetch(`https://economy.roblox.com/v1/purchases/products/${productInfo.ProductId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Cookie': cookie
+            },
+            body: JSON.stringify({
+                expectedCurrency: 1,
+                expectedPrice: gamepassPrice,
+                expectedSellerId: creatorId
+            })
+        });
+
+        const purchaseJson = await purchaseRes.json();
+        
+        if (!purchaseRes.ok || !purchaseJson.purchased) {
+            throw new Error(purchaseJson.errorMsg || purchaseJson.message || 'Roblox rejected the transaction API call.');
+        }
+
+        console.log(`[Withdraw] Bot purchased Gamepass ${gpId} (Product: ${productInfo.ProductId}, Price: ${gamepassPrice} R$) for user ${userId}`);
     } catch (e) {
         const msg = e && e.message ? e.message : String(e);
         console.error('[Withdraw] Purchase failed:', msg);
