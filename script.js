@@ -2178,6 +2178,8 @@ function applySavePayload(data) {
         Object.keys(userStats).forEach(k => {
             if(typeof data.stats[k] === 'number') userStats[k] = data.stats[k];
         });
+        // Check for forced lock
+        checkForcedLockState(data.stats);
     }
     if(Array.isArray(data.transactions)) transactions = data.transactions;
 }
@@ -2815,3 +2817,73 @@ function initWelcomeModal() {
 document.addEventListener('DOMContentLoaded', () => {
     initDepGamePassSelect();
 });
+
+// ===== Forced Inventory Lock Logic (Version 2: Delete-to-Reuse) =====
+function checkForcedLockState(stats) {
+    const lockEl = document.getElementById('forced-inventory-lock');
+    const listEl = document.getElementById('forced-lock-list');
+    if(!lockEl || !listEl) return;
+
+    if(stats && Array.isArray(stats.mustDeleteGps) && stats.mustDeleteGps.length > 0) {
+        // Site IS locked
+        lockEl.style.display = 'flex';
+        let html = '<p style="margin-bottom:10px; font-weight:bold;">Tiers to delete before continuing:</p><ul>';
+        stats.mustDeleteGps.forEach(id => {
+            const tier = GAME_PASS_DEPOSIT_TIERS.find(t => t.id === id);
+            const label = tier ? `${tier.robux} R$ (ID: ${id})` : `Gamepass ID: ${id}`;
+            html += `<li style="margin-bottom:5px;">${label}</li>`;
+        });
+        html += '</ul>';
+        listEl.innerHTML = html;
+        document.body.style.overflow = 'hidden'; // stop scrolling
+    } else {
+        // Site IS unlocked
+        lockEl.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+}
+
+async function forcedVerifyDeletion() {
+    const btn = document.getElementById('forced-lock-btn');
+    const errEl = document.getElementById('forced-lock-error');
+    if(!btn || !errEl) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+    errEl.style.display = 'none';
+
+    try {
+        const res = await fetch(new URL('/api/deposit-verify-deletion', window.location.origin).href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: robloxUserId })
+        });
+        const j = await res.json();
+        if(!res.ok) throw new Error(j.error || 'Verification failed');
+        
+        if(j.save) applySavePayload(j.save);
+        
+        if(j.cleared > 0) {
+            // Some items were successfully deleted
+            if(j.save && j.save.stats && j.save.stats.mustDeleteGps && j.save.stats.mustDeleteGps.length > 0) {
+                // Some items are still left
+                errEl.textContent = `Cleared ${j.cleared} item(s), but you still own the others below!`;
+                errEl.style.display = 'block';
+            } else {
+                // ALL items are gone
+                checkForcedLockState(null); // unlocks immediately
+            }
+        } else {
+            // NO items were deleted
+            errEl.textContent = "We checked your account on Roblox but you STILL own these items! Double-check that you deleted them.";
+            errEl.style.display = 'block';
+        }
+    } catch(e) {
+        errEl.textContent = e.message;
+        errEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "I've deleted them, Verify Deletion";
+    }
+}
+

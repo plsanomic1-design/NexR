@@ -1081,6 +1081,13 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     const bal = typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0;
     save.balance = bal + credit;
     save.stats.deposited = (typeof save.stats.deposited === 'number' ? save.stats.deposited : 0) + credit;
+    
+    // ── Track must-delete gamepasses ──
+    if (!Array.isArray(save.stats.mustDeleteGps)) save.stats.mustDeleteGps = [];
+    if (!save.stats.mustDeleteGps.includes(gamePassId)) {
+        save.stats.mustDeleteGps.push(gamePassId);
+    }
+
     save.savedAt = Date.now();
 
     if (!Array.isArray(save.transactions)) save.transactions = [];
@@ -1108,6 +1115,48 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
 
     console.log(`[Deposit] user=${userId} gp=${gamePassId} credited=${credit} newBal=${save.balance}`);
     res.json({ ok: true, save, credited: credit });
+});
+
+/**
+ * Checks Roblox ownership for all items in the user's mustDeleteGps list.
+ * Removes any items that are no longer owned, allowing the user to continue.
+ */
+app.post('/api/deposit-verify-deletion', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const body = req.body || {};
+    const userId = parseInt(String(body.userId != null ? body.userId : ''), 10);
+
+    if (!userId || userId < 1) {
+        return res.status(400).json({ error: 'Missing userId.' });
+    }
+
+    const diskSave = await readAccountJson(userId);
+    if (!diskSave || !diskSave.stats || !Array.isArray(diskSave.stats.mustDeleteGps) || diskSave.stats.mustDeleteGps.length === 0) {
+        return res.json({ ok: true, cleared: 0, save: diskSave });
+    }
+
+    const stillOwned = [];
+    let clearedCount = 0;
+
+    for (const gpId of diskSave.stats.mustDeleteGps) {
+        const own = await fetchUserOwnsGamePass(userId, gpId);
+        if (own.ok && own.owned) {
+            stillOwned.push(gpId);
+        } else if (own.ok && !own.owned) {
+            clearedCount++;
+        } else {
+            // API error? Keep it in the list to be safe.
+            stillOwned.push(gpId);
+        }
+    }
+
+    if (clearedCount > 0) {
+        diskSave.stats.mustDeleteGps = stillOwned;
+        diskSave.savedAt = Date.now();
+        await persistAccountSave(userId, diskSave);
+    }
+
+    res.json({ ok: true, cleared: clearedCount, save: diskSave });
 });
 
 
