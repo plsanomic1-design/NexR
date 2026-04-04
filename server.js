@@ -8,9 +8,11 @@
  * Account data: Supabase (user_balances + transactions). Set SUPABASE_URL and SUPABASE_ANON_KEY.
  * Node 18+ recommended (global fetch).
  */
+require('dotenv').config();
 const https = require('https');
 const crypto = require('crypto');
 const express = require('express');
+const noblox = require('noblox.js');
 
 const PORT = process.env.PORT || 8080;
 const ROOT = __dirname;
@@ -1095,6 +1097,133 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     }
 
     res.json({ ok: true, save, credited: credit });
+});
+
+// =====================================================================
+// ROBLOX BOT — Automated Gamepass Withdrawal
+// =====================================================================
+/** The bot's .ROBLOSECURITY cookie from .env */
+const ROBLOX_COOKIE = (process.env.ROBLOX_COOKIE || '').trim();
+
+/** Set to true once noblox has authenticated successfully. */
+let botReady = false;
+let botUsername = 'NOT LOGGED IN';
+
+async function initRobloxBot() {
+    if (!ROBLOX_COOKIE) {
+        console.warn('[Withdrawal Bot] ROBLOX_COOKIE not set in .env — withdrawal endpoint will be disabled.');
+        return;
+    }
+    try {
+        const user = await noblox.setCookie(ROBLOX_COOKIE);
+        // noblox.js v4+ returns { name, id } — older versions used UserName/UserID
+        botUsername = user.name || user.UserName || JSON.stringify(user);
+        const botId   = user.id   || user.UserID;
+        botReady = true;
+        console.log(`[Withdrawal Bot] Logged in as ${botUsername} (ID: ${botId})`);
+    } catch (e) {
+        console.error('[Withdrawal Bot] Login failed:', e && e.message);
+    }
+}
+initRobloxBot();
+
+/**
+ * POST /api/withdraw
+ * Body: { userId: number, gamepassId: string, zrCoins: number, expectedRobux: number }
+ *
+ * Flow:
+ *   1. Validate inputs & bot readiness.
+ *   2. Fetch product info for the gamepass (verifies it exists & gets price).
+ *   3. Verify the gamepass is owned by the requesting Roblox user.
+ *   4. Purchase the gamepass with the bot account.
+ *   5. Deduct ZR$ from the user's Supabase balance.
+ */
+app.post('/api/withdraw', express.json(), async (req, res) => {
+    if (!botReady) {
+        return res.status(503).json({ error: 'Withdrawal bot is offline. Make sure ROBLOX_COOKIE is set in .env and restart the server.' });
+    }
+
+    const { userId, gamepassId, zrCoins, expectedRobux } = req.body || {};
+
+    if (!userId || !gamepassId || !zrCoins || zrCoins <= 0) {
+        return res.status(400).json({ error: 'Missing or invalid fields: userId, gamepassId, zrCoins are required.' });
+    }
+    if (!supabaseEnabled()) {
+        return res.status(503).json({ error: 'Server database is not configured. Contact admin.' });
+    }
+
+    const gpId = parseInt(String(gamepassId).replace(/\D/g, ''), 10);
+    if (!gpId || isNaN(gpId)) {
+        return res.status(400).json({ error: 'Invalid gamepass ID extracted from the link.' });
+    }
+
+    // --- Step 1: Get gamepass product info from Roblox ---
+    let productInfo;
+    try {
+        productInfo = await noblox.getProductInfo(gpId, 'GamePass');
+    } catch (e) {
+        console.error('[Withdraw] getProductInfo failed:', e && e.message);
+        return res.status(400).json({ error: 'Could not find that gamepass on Roblox. Make sure it is published and the link is correct.' });
+    }
+
+    const gamepassPrice = productInfo && productInfo.PriceInRobux;
+    if (typeof gamepassPrice !== 'number' || gamepassPrice <= 0) {
+        return res.status(400).json({ error: 'This gamepass has no price set. Please set its price on Roblox first.' });
+    }
+
+    // Validate price is within 5% tolerance of what the client expected
+    const priceOk = Math.abs(gamepassPrice - expectedRobux) <= Math.ceil(expectedRobux * 0.05) + 1;
+    if (!priceOk) {
+        return res.status(400).json({
+            error: `Gamepass price mismatch. Expected ~${expectedRobux} R$ but found ${gamepassPrice} R$. Update the gamepass price to ${expectedRobux} R$ on Roblox and try again.`
+        });
+    }
+
+    // --- Step 2: Verify the gamepass belongs to the requesting user ---
+    let creatorId;
+    try {
+        creatorId = productInfo.Creator && productInfo.Creator.Id;
+    } catch (_) {}
+
+    if (!creatorId || String(creatorId) !== String(userId)) {
+        return res.status(403).json({ error: 'This gamepass does not belong to your Roblox account. Please create the gamepass from YOUR account.' });
+    }
+
+    // --- Step 3: Check our balance in Supabase before touching Roblox ---
+    const currentBal = await getUserBalance(userId);
+    if (!currentBal) {
+        return res.status(503).json({ error: 'Could not read your account balance. Try again.' });
+    }
+    if (currentBal.balance_zr < zrCoins) {
+        return res.status(400).json({ error: 'Insufficient ZR$ balance on server.' });
+    }
+
+    // --- Step 4: Purchase the gamepass with the bot ---
+    try {
+        await noblox.buy(gpId, gamepassPrice);
+        console.log(`[Withdraw] Bot purchased gamepass ${gpId} (${gamepassPrice} R$) for user ${userId}`);
+    } catch (e) {
+        const msg = e && e.message ? e.message : String(e);
+        console.error('[Withdraw] Purchase failed:', msg);
+        // Common noblox errors have useful messages — surface them to the user
+        return res.status(400).json({ error: 'Bot could not purchase the gamepass: ' + msg });
+    }
+
+    // --- Step 5: Deduct the ZR$ balance in Supabase ---
+    const newZr = Math.max(0, currentBal.balance_zr - zrCoins);
+    const updateResult = await updateUserBalance(userId, newZr, currentBal.balance_zh);
+    if (!updateResult.ok) {
+        // Gamepass is already bought, but balance didn't save. Log prominently.
+        console.error('[Withdraw] CRITICAL: Gamepass bought but balance update failed!', updateResult);
+        // Still return success to user — the Robux went out, which is the irreversible part.
+    }
+
+    return res.json({
+        ok: true,
+        message: `Gamepass purchased successfully. You will receive ${Math.floor(gamepassPrice * 0.7)} R$ in your pending balance after Roblox tax.`,
+        robuxPaid: gamepassPrice,
+        robuxAfterTax: Math.floor(gamepassPrice * 0.7)
+    });
 });
 
 app.use(express.static(ROOT));

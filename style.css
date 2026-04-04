@@ -1545,6 +1545,8 @@ input:checked + .slider:before { transform: translateX(14px); }
     padding: 30px;
     width: 90%;
     max-width: 680px;
+    max-height: 90vh;
+    overflow-y: auto;
     position: relative;
     animation: slideUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
@@ -2772,12 +2774,14 @@ input:checked + .slider:before { transform: translateX(14px); }
     flex: 1;
     height: 4px;
     -webkit-appearance: none;
+    appearance: none;
     background: rgba(255,255,255,0.1);
     border-radius: 2px;
     outline: none;
 }
 .voice-vol-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
+    appearance: none;
     width: 12px;
     height: 12px;
     border-radius: 50%;

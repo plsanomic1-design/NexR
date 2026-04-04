@@ -881,47 +881,65 @@
                 <p class="dep-diff-link">What's the difference?</p>
             </div>
 
-            <!-- Page 2: Amount (spacing/typography aligned with deposit flow) -->
+            <!-- Page 2: Amount + Gamepass Link -->
             <div class="wd-page" id="wd-page-2" style="display:none;">
                 <div class="modal-header">
                     <div class="dep-breadcrumb"><span onclick="goWdPage(1)">Withdraw</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Robux</div>
                     <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <h2>Withdraw ZR$ for Robux</h2>
-                <p class="wd-lead">Enter how much ZR$ to convert. Minimum <strong>7 R$</strong> received after Roblox tax.</p>
 
-                <div class="wd-amount-grid" role="group" aria-label="Withdraw amount conversion">
-                    <label for="wd-amount-input" class="wd-amt-label wd-amt-label--left">Amount (ZR$)</label>
-                    <label for="wd-before-tax" class="wd-amt-label wd-amt-label--right">Robux (before tax)</label>
-                    <div class="dep-amount-wrapper wd-input-wrap wd-amt-input-left">
-                        <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
-                        <input type="number" id="wd-amount-input" value="15" min="11" class="wd-amount-input">
-                        <div class="wd-quick-amt">
-                            <button type="button" onclick="addWdAmt(5)">+5</button>
-                            <button type="button" onclick="addWdAmt(10)">+10</button>
+                <!-- Step 1: Amount -->
+                <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:18px; margin-top:18px;">
+                    <div style="font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:14px;">
+                        <i class="fa-solid fa-circle-1"></i> &nbsp;Step 1 — Choose Amount
+                    </div>
+                    <div class="wd-amount-grid" role="group" aria-label="Withdraw amount conversion">
+                        <label for="wd-amount-input" class="wd-amt-label wd-amt-label--left">Amount (ZR$)</label>
+                        <label for="wd-before-tax" class="wd-amt-label wd-amt-label--right">Robux you price it at</label>
+                        <div class="dep-amount-wrapper wd-input-wrap wd-amt-input-left">
+                            <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                            <input type="number" id="wd-amount-input" value="15" min="11" class="wd-amount-input">
+                            <div class="wd-quick-amt">
+                                <button type="button" onclick="addWdAmt(5)">+5</button>
+                                <button type="button" onclick="addWdAmt(10)">+10</button>
+                            </div>
                         </div>
+                        <span class="wd-amt-equals" aria-hidden="true">=</span>
+                        <div class="wd-input-wrap wd-input-readonly wd-amt-input-right">
+                            <input type="text" id="wd-before-tax" value="10" readonly class="wd-before-tax-input">
+                        </div>
+                        <p class="wd-after-tax-line">After Roblox 30% tax you receive <strong><span id="wd-after-tax">7</span> R$</strong></p>
                     </div>
-                    <span class="wd-amt-equals" aria-hidden="true">=</span>
-                    <div class="wd-input-wrap wd-input-readonly wd-amt-input-right">
-                        <input type="text" id="wd-before-tax" value="10" readonly class="wd-before-tax-input">
+                    <div class="wd-avail-row" style="margin-top:12px;">
+                        <span>Available: <span id="wd-avail-bal">0.00</span> ZR$</span>
+                        <span class="wd-avail-sep" aria-hidden="true">|</span>
+                        <span>Min payout: 7 R$</span>
                     </div>
-                    <p class="wd-after-tax-line">After Roblox 30% tax you receive <span id="wd-after-tax">7</span> R$</p>
                 </div>
 
-                <div class="wd-avail-row">
-                    <span>Available: <span id="wd-avail-bal">0.00</span> ZR$</span>
-                    <span class="wd-avail-sep" aria-hidden="true">|</span>
-                    <span>Min payout: 7 R$</span>
-                </div>
-
-                <div class="wd-queue-notice">
-                    <div class="wd-queue-notice-title">
-                        <span class="wd-queue-clock" aria-hidden="true">⏱️</span> Estimated wait: ~22 min
+                <!-- Step 2: Gamepass Link -->
+                <div style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.2); border-radius:10px; padding:18px; margin-top:14px;">
+                    <div style="font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">
+                        <i class="fa-solid fa-circle-2"></i> &nbsp;Step 2 — Create &amp; Paste Gamepass Link
                     </div>
-                    <p>Due to high demand, withdrawals are queued. ZephR$ aims to offer competitive rates — your R$ will be delivered to your pending balance as players deposit.</p>
+                    <p style="font-size:13px; color:var(--text-secondary); margin-bottom:14px; line-height:1.6;">
+                        Go to <strong style="color:white;">Roblox → Create → Passes</strong>, create a new gamepass priced at exactly 
+                        <strong style="color:var(--accent);" id="wd-req-gamepass-price">10 R$</strong>, 
+                        then paste its link below. Our bot will instantly buy it from you.
+                    </p>
+                    <div class="input-wrapper" style="background:var(--bg-body); border-radius:8px; border:1px solid rgba(59,130,246,0.3); height:50px; display:flex; align-items:center;">
+                        <i class="fa-solid fa-link" style="color:var(--accent); margin-left:15px; flex-shrink:0;"></i>
+                        <input type="text" id="wd-gamepass-link" placeholder="https://www.roblox.com/game-pass/12345678/..." 
+                               style="flex:1; padding:0 15px; background:transparent; border:none; color:white; font-size:13px; font-family:inherit; outline:none;">
+                    </div>
                 </div>
 
-                <button type="button" class="btn-primary btn-deposit-full" id="wd-continue-btn" onclick="confirmWithdraw()">Continue</button>
+                <p id="wd-error-msg" class="welcome-error" role="alert" style="display:none; margin-top: 12px;"></p>
+
+                <button type="button" class="btn-primary btn-deposit-full" id="wd-continue-btn" onclick="confirmWithdraw()" style="margin-top:18px; width:100%; padding:15px;">
+                    <i class="fa-solid fa-bolt"></i> &nbsp;Withdraw — Bot Buys Instantly
+                </button>
             </div>
 
             <!-- Page 3: Processing -->

@@ -1852,51 +1852,110 @@ if(wdAmtInput) {
         const aEl = document.getElementById('wd-after-tax');
         if(bEl) bEl.value = beforeTax;
         if(aEl) aEl.textContent = afterTax;
+
+        // Update the required gamepass price label
+        const priceLabel = document.getElementById('wd-req-gamepass-price');
+        if(priceLabel) priceLabel.textContent = beforeTax + ' R$';
     });
 }
 
-function confirmWithdraw() {
+function extractGamepassId(link) {
+    // Matches: roblox.com/game-pass/12345678/... or roblox.com/catalog/12345678/...
+    const m = String(link).match(/\/(?:game-pass|catalog)\/(\d+)/i);
+    return m ? m[1] : null;
+}
+
+async function confirmWithdraw() {
     const inp = document.getElementById('wd-amount-input');
     const coins = parseFloat(inp ? inp.value : 0) || 0;
     const beforeTax = Math.floor(coins / 1.5);
     const afterTax = Math.floor(beforeTax * 0.7);
+    const errEl = document.getElementById('wd-error-msg');
 
     const btn = document.getElementById('wd-continue-btn');
-    const oldTxt = btn.textContent;
+    const oldTxt = btn ? btn.textContent : '';
+
+    function showErr(msg) {
+        if(errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    }
+    if(errEl) errEl.style.display = 'none';
 
     const wdWrap = inp && inp.closest('.wd-input-wrap');
     if(afterTax < 7) {
         if(wdWrap) wdWrap.style.borderColor = 'var(--red)';
         setTimeout(() => { if(wdWrap) wdWrap.style.borderColor = ''; }, 2000);
-        btn.textContent = 'Min is 7 R$ after tax!';
-        btn.style.background = 'var(--red)';
-        setTimeout(() => { btn.textContent = oldTxt; btn.style.background = ''; }, 2000);
+        showErr('Minimum withdrawal is 7 R$ after tax.');
         return;
     }
 
     if(coins > roBalance) {
-        if(wdWrap) wdWrap.style.borderColor = 'var(--red)';
-        setTimeout(() => { if(wdWrap) wdWrap.style.borderColor = ''; }, 2000);
-        btn.textContent = 'Not enough balance!';
-        btn.style.background = 'var(--red)';
-        setTimeout(() => { btn.textContent = oldTxt; btn.style.background = ''; }, 2000);
+        showErr('Not enough ZR$ balance to withdraw this amount.');
         return;
     }
 
-    roBalance -= coins;
-    userStats.withdrawn += coins;
-    addTransaction('Withdrawal', -coins, 'withdraw');
-    updateBalanceDisplay();
-    updateProfViews();
-    saveToStorage();
+    // Validate gamepass link
+    const linkInput = document.getElementById('wd-gamepass-link');
+    const gpLink = linkInput ? linkInput.value.trim() : '';
+    const gpId = extractGamepassId(gpLink);
+    if(!gpId) {
+        showErr('Please paste a valid Roblox Gamepass link (e.g. https://www.roblox.com/game-pass/12345678/...).');
+        return;
+    }
 
-    // Show processing
+    if(typeof robloxUserId !== 'number' || robloxUserId <= 0) {
+        showErr('You must be signed in with your Roblox account before withdrawing.');
+        return;
+    }
+
+    if(window.location.protocol === 'file:') {
+        showErr('Withdrawals require the local server. Run npm start and open http://localhost:8080.');
+        return;
+    }
+
+    // Show processing spinner
     goWdPage(3);
+    if(btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
 
-    // Simulate finding gamepass
-    setTimeout(() => {
+    try {
+        const res = await fetch('/api/withdraw', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: robloxUserId,
+                gamepassId: gpId,
+                zrCoins: coins,
+                expectedRobux: beforeTax
+            })
+        });
+
+        const j = await res.json().catch(() => ({}));
+
+        if(!res.ok) {
+            // Go back to page 2 and show error
+            goWdPage(2);
+            showErr(j.error || 'Withdrawal failed. Please try again.');
+            return;
+        }
+
+        // SUCCESS - now deduct balance locally and persist
+        roBalance -= coins;
+        userStats.withdrawn += coins;
+        addTransaction('Withdrawal (' + afterTax + ' R$ received)', -coins, 'withdraw');
+        updateBalanceDisplay();
+        updateProfViews();
+        saveToStorage();
+        syncBalanceToServer();
+
+        const msg = document.getElementById('wd-success-msg');
+        if(msg) msg.textContent = `Success! The bot purchased your ${beforeTax} R$ gamepass. You will receive ${afterTax} R$ (after Roblox 30% tax) in your pending balance shortly.`;
         goWdPage(4);
-    }, 2500);
+
+    } catch(e) {
+        goWdPage(2);
+        showErr('Network error: ' + (e && e.message ? e.message : 'Could not reach server.'));
+    } finally {
+        if(btn) { btn.disabled = false; btn.textContent = oldTxt || 'Withdraw Robux'; }
+    }
 }
 
 // ===== PROFILE SYSTEM =====
