@@ -1,3 +1,9 @@
+let robloxUserId = null;
+let robloxUsername = null;
+let currentUsername = 'Player';
+let roBalance = 0.00;
+let roBalanceZh = 0.00;
+
 document.addEventListener('DOMContentLoaded', () => {
     const navItems = document.querySelectorAll('.nav-item');
     const views = document.querySelectorAll('.view');
@@ -1537,13 +1543,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ===== GLOBAL BALANCE SYSTEM =====
-let roBalance = 0.00;    // ZR$ (main currency)
-let roBalanceZh = 0.00;  // ZH$ (social/hex currency)
-let referralEarned = 0;
-let referredCount = 0;
+roBalance = 0.00;    // ZR$ (main currency)
+roBalanceZh = 0.00;  // ZH$ (social/hex currency)
+referralEarned = 0;
+referredCount = 0;
 
 // ===== CLIENT-SIDE ACTIVE RAINS (synced from server via socket) =====
-let activeRains = [];
+activeRains = [];
 
 // ====== SOCIAL MODALS (GLOBAL) ======
 function openRainModal() {
@@ -1933,6 +1939,19 @@ document.addEventListener('DOMContentLoaded', () => {
     patchMinesBalance();
     patchTowersBalance();
     patchDiceBalance();
+    
+    document.querySelectorAll('.cb-format-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.cb-format-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            window.cbFormat = parseInt(btn.dataset.format);
+        });
+    });
+
+    renderCBLobby();
+    loadCBCases();
+    // Refresh lobby every 10s
+    setInterval(renderCBLobby, 10000);
 });
 
 function patchBlackjackBalance() {
@@ -2644,22 +2663,9 @@ async function confirmWithdraw() {
 }
 
 // ===== PROFILE SYSTEM =====
-let userStats = {
-    rainWinnings: 0,
-    deposited: 0,
-    withdrawn: 0,
-    wagered: 0,
-    xp: 0,
-    lastWithdrawAt: 0,
-    depositedPassIds: [],
-    withdrawAccessRevoked: false
-};
-let transactions = [];
-let currentUsername = 'artirzu';
-/** Set after Roblox username API confirms account; used with avatar URL. */
-let robloxUserId = null;
-/** CDN headshot URL from server (thumbnails.roblox.com) — survives reloads; www.roblox.com image URLs often break in <img>. */
-let robloxAvatarUrl = null;
+    // Initialize global state (no local 'let' declarations)
+    robloxUserId = null;
+    currentUsername = 'Player';
 
 function accountsMatchServerLocal(a, b) {
     if (a == null || b == null) return false;
@@ -2767,7 +2773,7 @@ function saveProfUsername() {
     if(inp && inp.value.trim().length > 0) {
         currentUsername = inp.value.trim();
         robloxUserId = null;
-        robloxAvatarUrl = null;
+        robloxUsername = null;
         applyUsername(currentUsername);
         saveToStorage();
         updateProfViews();
@@ -4505,30 +4511,44 @@ document.getElementById('admin-search-input')?.addEventListener('keypress', (e) 
 // =====================================================================
 // CASE BATTLES LOGIC
 // =====================================================================
-let cbCases = [];
-let cbActiveArena = null;
-let cbFormat = 2;
-let cbCaseId = null;
+// Case Battle Globals
+window.cbCases = [];
+window.cbFormat = 2;
+window.cbCaseId = null;
+window.cbActiveArena = null;
 
 async function loadCBCases() {
     try {
         const res = await fetch('/api/casebattle/cases');
-        if(res.ok) cbCases = await res.json();
-    } catch(e) {}
+        if(res.ok) {
+            window.cbCases = await res.json();
+            console.log('CB Cases Loaded:', window.cbCases.length);
+        }
+    } catch(e) {
+        console.error('Failed to load CB cases:', e);
+    }
 }
 
 async function renderCBLobby() {
-    const list = document.getElementById('cb-lobby-list');
-    if(!list) return;
     try {
         const res = await fetch('/api/casebattle/list');
         const battles = await res.json();
-        list.innerHTML = battles.map(b => {
-             const caseData = cbCases.find(c => c.id === b.caseId);
+        const container = document.getElementById('cb-active-battles');
+        if(!container) return;
+        
+        if(battles.length === 0) {
+            container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 40px;">No active battles right now. Create one!</div>';
+            return;
+        }
+
+        container.innerHTML = battles.map(b => {
              const dots = Array.from({length: b.maxPlayers}).map((_, i) => {
-                 return `<div class="cb-player-dot ${i < b.players.length ? 'filled' : ''}"><i class="fa-solid fa-user"></i></div>`;
+                 const p = b.players[i];
+                 return `<div class="cb-player-dot ${p ? 'filled' : ''}"><i class="fa-solid fa-user"></i></div>`;
              }).join('');
-             const joinDisabled = (b.players.length >= b.maxPlayers || b.players.some(p => p.userId === String(robloxUserId))) ? 'disabled' : '';
+             
+             const canJoin = b.players.length < b.maxPlayers && !b.players.some(p => p.userId === String(robloxUserId));
+             
              return `
                 <div class="cb-lobby-card">
                     <div class="cb-card-top">
@@ -4537,32 +4557,34 @@ async function renderCBLobby() {
                     </div>
                     <div class="cb-card-players">${dots}</div>
                     <div class="cb-card-action">
-                        <button class="btn-primary" style="width:100%; padding:8px; font-size:12px;" onclick="joinCaseBattle('${b.id}')" ${joinDisabled}>
-                            ${b.players.length}/${b.maxPlayers} - ${joinDisabled ? 'WATCH' : 'JOIN'}
+                        <button class="btn-primary" style="width:100%; padding:8px; font-size:12px;" onclick="joinCaseBattle('${b.id}')">
+                            ${b.players.length}/${b.maxPlayers} - ${canJoin ? 'JOIN' : 'VIEW'}
                         </button>
                     </div>
                 </div>
              `;
-        }).join('') || '<p style="color:var(--text-secondary);">No active battles right now.</p>';
-    } catch(e) {}
+        }).join('');
+    } catch(e) {
+        console.error('CB Lobby Render Error:', e);
+    }
 }
 
 document.querySelectorAll('.cb-fmt-btn').forEach(b => {
     b.addEventListener('click', () => {
         document.querySelectorAll('.cb-fmt-btn').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
-        cbFormat = parseInt(b.dataset.fmt);
+        window.cbFormat = parseInt(b.dataset.fmt);
     });
 });
 
 window.openCBCreateModal = async function() {
-    if(cbCases.length === 0) {
+    if(window.cbCases.length === 0) {
         await loadCBCases();
-        if(cbCases.length === 0) return showGameToast('Failed to load cases. Try again.', 'var(--red)');
+        if(window.cbCases.length === 0) return showGameToast('Failed to load cases. Try again.', 'var(--red)');
     }
     const grid = document.getElementById('cb-create-cases-grid');
     if(!grid) return;
-    grid.innerHTML = cbCases.map(c => `
+    grid.innerHTML = window.cbCases.map(c => `
         <div class="cb-case-item" data-id="${c.id}" onclick="selectCBCase('${c.id}')" style="background: linear-gradient(180deg, rgba(0,0,0,0.8), rgba(0,0,0,0.9)), linear-gradient(135deg, ${c.gradient}); border-color: ${c.tier==='legendary'?'var(--gold)':(c.tier==='elite'?'#e8316a':'transparent')};">
             <div class="cb-case-icon">📦</div>
             <div class="cb-case-name">${c.name}</div>
@@ -4573,23 +4595,30 @@ window.openCBCreateModal = async function() {
 };
 
 window.selectCBCase = function(id) {
-    cbCaseId = id;
+    window.cbCaseId = id;
     document.querySelectorAll('.cb-case-item').forEach(el => el.classList.remove('selected'));
-    document.querySelector(`.cb-case-item[data-id="${id}"]`)?.classList.add('selected');
+    const itemEl = document.querySelector(`.cb-case-item[data-id="${id}"]`);
+    if(itemEl) itemEl.classList.add('selected');
+    
     const btn = document.getElementById('cb-create-confirm-btn');
     if(btn) {
         btn.disabled = false;
-        const caseData = cbCases.find(c => c.id === id);
-        btn.textContent = `Create Battle - ${caseData.price} ZH$`;
+        const caseData = window.cbCases.find(c => c.id === id);
+        if(caseData) {
+            btn.textContent = `Create Battle - ${caseData.price} ZH$`;
+        }
     }
 };
 
 window.createBattleConfirm = async function() {
+    // Access global variables robloxUserId and currentUsername
     if(!robloxUserId) return showGameToast('Error: No Roblox ID found. Try refreshing.', 'var(--red)');
-    if(!cbCaseId) return showGameToast('Please select a case first.', 'var(--red)');
+    if(!window.cbCaseId) return showGameToast('Please select a case first.', 'var(--red)');
     
-    const caseData = cbCases.find(c => c.id === cbCaseId);
-    if(!caseData) return showGameToast('Error: Case not found.', 'var(--red)');
+    // Fallback if robloxUsername was not set (currentUsername is always there)
+    const activeUsername = typeof robloxUsername !== 'undefined' && robloxUsername ? robloxUsername : currentUsername;
+    const caseData = window.cbCases.find(c => c.id === window.cbCaseId);
+    if(!caseData) return showGameToast('Error: Selected case data not found.', 'var(--red)');
     if(roBalance < caseData.price) return showGameToast('Not enough ZH$', 'var(--red)');
     
     try {
@@ -4599,12 +4628,17 @@ window.createBattleConfirm = async function() {
         const res = await fetch('/api/casebattle/create', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({ userId: robloxUserId, username: robloxUsername, caseId: cbCaseId, maxPlayers: cbFormat })
+            body:JSON.stringify({ 
+                userId: String(robloxUserId), 
+                username: activeUsername, 
+                caseId: window.cbCaseId, 
+                maxPlayers: window.cbFormat 
+            })
         });
         const data = await res.json();
         if(data.ok) {
             document.getElementById('cb-create-modal').style.display = 'none';
-            enterCBArena(data.battleId, cbCaseId, cbFormat, [{userId: String(robloxUserId), name: robloxUsername, isBot: false, item: null}]);
+            enterCBArena(data.battleId, window.cbCaseId, window.cbFormat, [{userId: String(robloxUserId), name: activeUsername, isBot: false, item: null}]);
             renderCBLobby();
         } else {
             showGameToast(data.error || 'Failed to create battle', 'var(--red)');
@@ -4612,7 +4646,7 @@ window.createBattleConfirm = async function() {
         }
     } catch(e){
         console.error('CB Create Error:', e);
-        showGameToast('Network error while creating battle', 'var(--red)');
+        showGameToast('Error: ' + (e.message || 'Network error while creating battle'), 'var(--red)');
         const btn = document.getElementById('cb-create-confirm-btn');
         if(btn) btn.disabled = false;
     }
