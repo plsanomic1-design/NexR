@@ -1,9 +1,3 @@
-let robloxUserId = null;
-let robloxUsername = null;
-let currentUsername = 'Player';
-let roBalance = 0.00;
-let roBalanceZh = 0.00;
-
 document.addEventListener('DOMContentLoaded', () => {
     const navItems = document.querySelectorAll('.nav-item');
     const views = document.querySelectorAll('.view');
@@ -181,12 +175,14 @@ document.addEventListener('DOMContentLoaded', () => {
             newDeck.sort(() => Math.random() - 0.5);
 
             try {
+                const bjBetAmt = parseFloat(document.getElementById('bj-bet-input').value) || 0;
                 const res = await fetch('/api/game/blackjack/start', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, deck: newDeck })
+                    body: JSON.stringify({ userId: robloxUserId, deck: newDeck, bet: bjBetAmt })
                 });
                 const data = await res.json();
+                if (!res.ok) { endGame(data.error || 'Error starting', 'var(--red)'); return; }
                 cDeck = data.deck;
                 pHand = data.pHand;
                 dHand = data.dHand;
@@ -197,10 +193,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 bjPlayBtn.classList.add('custom-cashout-btn');
                 
                 renderHands();
-                // Persist dealt hands so player can resume on refresh
                 GSM.update('blackjack', { pHand: pHand, dHand: dHand, deck: cDeck });
                 if(getScore(pHand) === 21) {
                     endGame('Blackjack! You Win', 'var(--gold)');
+                    fetch('/api/game/blackjack/result', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: robloxUserId, outcome: 'blackjack' }) }).catch(()=>{});
                 }
             } catch(e) {
                 endGame('Error starting', 'var(--red)');
@@ -211,7 +207,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if(!isPlaying) return;
             pHand.push(cDeck.pop());
             renderHands();
-            if(getScore(pHand) > 21) endGame('Bust! You Lose', 'var(--red)');
+            if(getScore(pHand) > 21) {
+                endGame('Bust! You Lose', 'var(--red)');
+                fetch('/api/game/blackjack/result', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: robloxUserId, outcome: 'bust' }) }).catch(()=>{});
+            }
         });
 
         bjStandBtn.addEventListener('click', () => {
@@ -222,18 +221,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const pScore = getScore(pHand);
             const dScore = getScore(dHand);
             
-            let win = false;
-            let bigWin = false;
-            if(dScore > 21) { win=true; endGame('Dealer Busts! You Win', 'var(--green)'); }
-            else if(pScore > dScore) { win=true; endGame('You Win!', 'var(--green)'); }
+            let outcome = 'lose';
+            if(dScore > 21) { outcome='win'; endGame('Dealer Busts! You Win', 'var(--green)'); }
+            else if(pScore > dScore) { outcome='win'; endGame('You Win!', 'var(--green)'); }
             else if(dScore > pScore) { endGame('Dealer Wins', 'var(--red)'); }
-            else endGame('Push', 'var(--text-secondary)');
+            else { outcome='push'; endGame('Push', 'var(--text-secondary)'); }
             
-            // Re-sync with server cus state
-            fetch('/api/game/record-result', {
+            // Server credits win and syncs balance to all tabs via balance:remote_sync
+            fetch('/api/game/blackjack/result', {
                 method:'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: robloxUserId, win: win, bigWin: false })
+                body: JSON.stringify({ userId: robloxUserId, outcome })
             }).catch(()=>{});
         });
     }
@@ -321,10 +319,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const res = await fetch('/api/game/mines/cashout', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ userId: robloxUserId })
+                        body: JSON.stringify({ userId: robloxUserId, revealed: mRevealed })
                     });
                     const data = await res.json();
                     if(data.logic) mGrid = data.logic;
+                    // Balance credited server-side; balance:remote_sync will update all tabs
                 } catch(e) { console.error(e); }
                 endMines(true);
             } else {
@@ -341,17 +340,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     const res = await fetch('/api/game/mines/start', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ userId: robloxUserId, bombs })
+                        body: JSON.stringify({ userId: robloxUserId, bombs, bet: currentBet })
                     });
-                    if (!res.ok) throw new Error();
+                    const startData = await res.json();
+                    if (!res.ok) {
+                        minesMsg.textContent = startData.error || 'Insufficient balance';
+                        minesMsg.style.color = 'var(--red)';
+                        minesMsg.style.display = 'block';
+                        minesPlayBtn.disabled = false;
+                        minesPlayBtn.textContent = 'Start new game';
+                        return;
+                    }
                     
                     mIsPlaying = true;
-                    mGrid = Array(25).fill(false); // local dummy array for endMines logic
+                    mGrid = Array(25).fill(false);
                     mRevealed = 0;
                     mRevealedTiles = [];
                     mMultiplier = 1.0;
                     earningsInp.value = currentBet.toFixed(2);
-                    minesPlayBtn.disabled = true; // must reveal at least one gem first
+                    minesPlayBtn.disabled = true;
                     syncMinesCashoutButton();
                     
                     const tiles = minesGrid.querySelectorAll('.mines-tile');
@@ -555,7 +562,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tPlayBtn.addEventListener('click', async () => {
             if(tIsPlaying) {
-                // Cashout
+                // Cashout — server computes payout and credits via balance:remote_sync
+                tPlayBtn.disabled = true;
+                tPlayBtn.textContent = 'Cashing out...';
+                try {
+                    await fetch('/api/game/towers/cashout', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ userId: robloxUserId, curRow })
+                    });
+                } catch(e) { console.error('[Towers cashout]', e); }
                 endTowers(true);
             } else {
                 curRow = 0;
@@ -571,18 +587,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     const res = await fetch('/api/game/towers/start', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ userId: robloxUserId, rows: rows, width: cfg.w, bombs: cfg.b })
+                        body: JSON.stringify({ userId: robloxUserId, rows: rows, width: cfg.w, bombs: cfg.b, bet: curBet, diff })
                     });
-                    if(!res.ok) throw new Error();
+                    const startData = await res.json();
+                    if(!res.ok) {
+                        tMsg.textContent = startData.error || 'Insufficient balance';
+                        tMsg.style.color = 'var(--red)';
+                        tMsg.style.display = 'block';
+                        tPlayBtn.disabled = false;
+                        tPlayBtn.textContent = 'Start new game';
+                        return;
+                    }
                     
                     tIsPlaying = true;
                     tMulti = 1.0;
-                    tLogic = []; // only used locally for tracking rendering layout
+                    tLogic = [];
                     
                     syncTowersCashoutButton();
-                    tPlayBtn.disabled = true; // must pick at least one tile first
+                    tPlayBtn.disabled = true;
                     
-                    // Reset UI classes
                     Array.from(tGrid.children).forEach((row, i) => {
                         row.className = 'tower-row ' + (i===0 ? 'active-row' : '');
                         Array.from(row.children).forEach(t => {
@@ -796,7 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/game/dice', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, target, isOver, multi })
+                    body: JSON.stringify({ userId: robloxUserId, target, isOver, multi, bet: parseFloat(betInp.value) || 0 })
                 });
                 const data = await res.json();
                 
@@ -1543,13 +1566,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ===== GLOBAL BALANCE SYSTEM =====
-roBalance = 0.00;    // ZR$ (main currency)
-roBalanceZh = 0.00;  // ZH$ (social/hex currency)
-referralEarned = 0;
-referredCount = 0;
+let roBalance = 0.00;    // ZR$ (main currency)
+let roBalanceZh = 0.00;  // ZH$ (social/hex currency)
+let referralEarned = 0;
+let referredCount = 0;
 
 // ===== CLIENT-SIDE ACTIVE RAINS (synced from server via socket) =====
-activeRains = [];
+let activeRains = [];
 
 // ====== SOCIAL MODALS (GLOBAL) ======
 function openRainModal() {
@@ -1939,19 +1962,6 @@ document.addEventListener('DOMContentLoaded', () => {
     patchMinesBalance();
     patchTowersBalance();
     patchDiceBalance();
-    
-    document.querySelectorAll('.cb-format-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.cb-format-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            window.cbFormat = parseInt(btn.dataset.format);
-        });
-    });
-
-    renderCBLobby();
-    loadCBCases();
-    // Refresh lobby every 10s
-    setInterval(renderCBLobby, 10000);
 });
 
 function patchBlackjackBalance() {
@@ -1962,8 +1972,7 @@ function patchBlackjackBalance() {
 
     let bjLiveFeedLast = '';
 
-    // Intercept "Place bet" to deduct balance
-    const origClick = playBtn.onclick;
+    // Check balance before BJ start (server does the real deduction)
     playBtn.addEventListener('click', function(e) {
         const bjMsg = document.getElementById('bj-message');
         if(playBtn.textContent.trim() === 'Place bet') {
@@ -1974,8 +1983,7 @@ function patchBlackjackBalance() {
                 if(bjMsg) { bjMsg.textContent = 'Not enough ZR$!'; bjMsg.style.color='var(--red)'; bjMsg.style.display='block'; }
                 return;
             }
-            deductBet(bet);
-            // Save initial BJ session (hands will be added by the play button's own handler)
+            // Do NOT deductBet — server handles it atomically
             GSM.save('blackjack', { active: true, userId: robloxUserId, bet, pHand: null, dHand: null, deck: null });
             bjLiveFeedLast = '';
             soundClick();
@@ -1992,7 +2000,7 @@ function patchBlackjackBalance() {
             if(txtRaw === bjLiveFeedLast) return;
             const bet = parseFloat(document.getElementById('bj-bet-input').value) || 0;
             
-            // IMPORTANT: check 'dealer wins' FIRST — it contains the word 'win' so must be caught before general win check
+            // IMPORTANT: check 'dealer wins' FIRST — it contains the word 'win'
             if(txt === 'dealer wins') {
                 bjLiveFeedLast = txtRaw;
                 postLiveFeedRound('blackjack', bet, 0, -bet);
@@ -2000,18 +2008,18 @@ function patchBlackjackBalance() {
             } else if(txt.includes('blackjack')) {
                 bjLiveFeedLast = txtRaw;
                 const gross = bet * 2.5;
-                awardWin(gross);
+                // awardWin removed — server credits via balance:remote_sync
                 postLiveFeedRound('blackjack', bet, 2.5, gross);
                 soundWin();
             } else if(txt.includes('win')) {
                 bjLiveFeedLast = txtRaw;
                 const gross = bet * 2;
-                awardWin(gross);
+                // awardWin removed — server credits via balance:remote_sync
                 postLiveFeedRound('blackjack', bet, 2, gross);
                 soundWin();
             } else if(txt.includes('push')) {
                 bjLiveFeedLast = txtRaw;
-                awardWin(bet); // return bet only
+                // awardWin removed — server credits via balance:remote_sync
                 postLiveFeedRound('blackjack', bet, 1, bet);
                 soundClick();
             } else if(txt.includes('lose') || txt.includes('bust')) {
@@ -2029,7 +2037,7 @@ function patchMinesBalance() {
     const minesMsg = document.getElementById('mines-message');
     if(!playBtn) return;
 
-    // Intercept "Start new game"
+    // Check balance before mines start (server does real atomic deduction)
     playBtn.addEventListener('click', function(e) {
         if(playBtn.textContent.trim() === 'Start new game') {
             const bet = parseFloat(document.getElementById('mines-bet-input').value) || 0;
@@ -2038,8 +2046,7 @@ function patchMinesBalance() {
                 if(minesMsg) { minesMsg.textContent= bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough ZR$!'; minesMsg.style.color='var(--red)'; minesMsg.style.display='block'; }
                 return;
             }
-            deductBet(bet);
-            // Save initial mines session so refresh protection can kick in
+            // Do NOT deductBet — server handles it atomically
             const _bombs = parseInt(document.getElementById('mines-count-input').value) || 3;
             GSM.save('mines', { active: true, userId: robloxUserId, bet, bombs: _bombs, revealedTiles: [], revealed: 0, multiplier: 1.0 });
             minesFeedLast = '';
@@ -2061,7 +2068,7 @@ function patchMinesBalance() {
                 const val = parseFloat(minesMsg.textContent.replace(/Won/gi, '')) || 0;
                 const mult = bet > 0 ? val / bet : 0;
                 postLiveFeedRound('mines', bet, mult, val);
-                awardWin(val);
+                // awardWin removed — server credits via balance:remote_sync
                 soundWin();
             } else if(txt.includes('busted')) {
                 if(txtRaw === minesFeedLast) return;
@@ -2089,8 +2096,7 @@ function patchTowersBalance() {
                 if(tMsg) { tMsg.textContent= bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough ZR$!'; tMsg.style.color='var(--red)'; tMsg.style.display='block'; }
                 return;
             }
-            deductBet(bet);
-            // Save initial towers session for refresh protection
+            // Do NOT deductBet — server handles it atomically
             const _diff = document.querySelector('.towers-diff-tabs .diff-btn.active')?.dataset.diff || 'easy';
             GSM.save('towers', { active: true, userId: robloxUserId, bet, diff: _diff, curRow: 0, multiplier: 1.0, revealedRows: [] });
             towersFeedLast = '';
@@ -2111,7 +2117,7 @@ function patchTowersBalance() {
                 const val = parseFloat(tMsg.textContent.replace(/Won/gi, '')) || 0;
                 const mult = bet > 0 ? val / bet : 0;
                 postLiveFeedRound('towers', bet, mult, val);
-                awardWin(val);
+                // awardWin removed — server credits via balance:remote_sync
                 soundWin();
             } else if(txt === 'busted!') {
                 if(txtRaw === towersFeedLast) return;
@@ -2153,7 +2159,6 @@ function patchDiceBalance() {
         const bet = parseFloat(document.getElementById('dice-bet-input').value) || 0;
         if(bet <= 0 || bet > roBalance) {
             e.stopImmediatePropagation();
-            // Show floating warning
             const warn = document.createElement('div');
             warn.textContent = bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough ZR$!';
             warn.style.cssText='position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2a1515;border:1px solid var(--red);color:var(--red);padding:12px 24px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;';
@@ -2161,7 +2166,7 @@ function patchDiceBalance() {
             setTimeout(()=>warn.remove(), 2000);
             return;
         }
-        deductBet(bet);
+        // Do NOT deductBet — server handles it atomically in /api/game/dice
     }, true);
 
     let diceFeedAt = 0;
@@ -2176,15 +2181,12 @@ function patchDiceBalance() {
             const multi = parseFloat(document.getElementById('dice-multi-input').value) || 1;
             if(resultMarker.classList.contains('win')) {
                 const gross = bet * multi;
-                awardWin(gross);
+                // awardWin removed — server credits via balance:remote_sync
                 postLiveFeedRound('dice', bet, multi, gross);
                 soundWin();
             } else {
-                // On loss: randomly return 0x, 0.25x, or 0.5x as partial consolation
-                const options = [0, 0, 0.25, 0.25, 0.50];
-                const consolation = options[Math.floor(Math.random() * options.length)];
-                if (consolation > 0) awardWin(bet * consolation);
-                postLiveFeedRound('dice', bet, consolation, bet * consolation - bet);
+                // awardWin removed — server is authoritative for balance
+                postLiveFeedRound('dice', bet, 0, -bet);
                 soundLose();
             }
         });
@@ -2663,9 +2665,22 @@ async function confirmWithdraw() {
 }
 
 // ===== PROFILE SYSTEM =====
-    // Initialize global state (no local 'let' declarations)
-    robloxUserId = null;
-    currentUsername = 'Player';
+let userStats = {
+    rainWinnings: 0,
+    deposited: 0,
+    withdrawn: 0,
+    wagered: 0,
+    xp: 0,
+    lastWithdrawAt: 0,
+    depositedPassIds: [],
+    withdrawAccessRevoked: false
+};
+let transactions = [];
+let currentUsername = 'artirzu';
+/** Set after Roblox username API confirms account; used with avatar URL. */
+let robloxUserId = null;
+/** CDN headshot URL from server (thumbnails.roblox.com) — survives reloads; www.roblox.com image URLs often break in <img>. */
+let robloxAvatarUrl = null;
 
 function accountsMatchServerLocal(a, b) {
     if (a == null || b == null) return false;
@@ -2773,7 +2788,7 @@ function saveProfUsername() {
     if(inp && inp.value.trim().length > 0) {
         currentUsername = inp.value.trim();
         robloxUserId = null;
-        robloxUsername = null;
+        robloxAvatarUrl = null;
         applyUsername(currentUsername);
         saveToStorage();
         updateProfViews();
@@ -4507,343 +4522,4 @@ window.adminPreviewTournamentLeaderboard = async function (tournamentId) {
 document.getElementById('admin-search-input')?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') adminLookupUser();
 });
-
-// =====================================================================
-// CASE BATTLES LOGIC
-// =====================================================================
-// Case Battle Globals
-window.cbCases = [];
-window.cbFormat = 2;
-window.cbCaseId = null;
-window.cbActiveArena = null;
-
-async function loadCBCases() {
-    try {
-        const res = await fetch('/api/casebattle/cases');
-        if(res.ok) {
-            window.cbCases = await res.json();
-            console.log('CB Cases Loaded:', window.cbCases.length);
-        }
-    } catch(e) {
-        console.error('Failed to load CB cases:', e);
-    }
-}
-
-async function renderCBLobby() {
-    try {
-        const res = await fetch('/api/casebattle/list');
-        const battles = await res.json();
-        const container = document.getElementById('cb-active-battles');
-        if(!container) return;
-        
-        if(battles.length === 0) {
-            container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 40px;">No active battles right now. Create one!</div>';
-            return;
-        }
-
-        container.innerHTML = battles.map(b => {
-             const dots = Array.from({length: b.maxPlayers}).map((_, i) => {
-                 const p = b.players[i];
-                 return `<div class="cb-player-dot ${p ? 'filled' : ''}"><i class="fa-solid fa-user"></i></div>`;
-             }).join('');
-             
-             const canJoin = b.players.length < b.maxPlayers && !b.players.some(p => p.userId === String(robloxUserId));
-             
-             return `
-                <div class="cb-lobby-card">
-                    <div class="cb-card-top">
-                        <div class="cb-card-case">${b.caseName}</div>
-                        <div class="cb-card-price">${b.casePrice} ZH$</div>
-                    </div>
-                    <div class="cb-card-players">${dots}</div>
-                    <div class="cb-card-action">
-                        <button class="btn-primary" style="width:100%; padding:8px; font-size:12px;" onclick="joinCaseBattle('${b.id}')">
-                            ${b.players.length}/${b.maxPlayers} - ${canJoin ? 'JOIN' : 'VIEW'}
-                        </button>
-                    </div>
-                </div>
-             `;
-        }).join('');
-    } catch(e) {
-        console.error('CB Lobby Render Error:', e);
-    }
-}
-
-document.querySelectorAll('.cb-fmt-btn').forEach(b => {
-    b.addEventListener('click', () => {
-        document.querySelectorAll('.cb-fmt-btn').forEach(x => x.classList.remove('active'));
-        b.classList.add('active');
-        window.cbFormat = parseInt(b.dataset.fmt);
-    });
-});
-
-window.openCBCreateModal = async function() {
-    if(window.cbCases.length === 0) {
-        await loadCBCases();
-        if(window.cbCases.length === 0) return showGameToast('Failed to load cases. Try again.', 'var(--red)');
-    }
-    const grid = document.getElementById('cb-create-cases-grid');
-    if(!grid) return;
-    grid.innerHTML = window.cbCases.map(c => `
-        <div class="cb-case-item" data-id="${c.id}" onclick="selectCBCase('${c.id}')" style="background: linear-gradient(180deg, rgba(0,0,0,0.8), rgba(0,0,0,0.9)), linear-gradient(135deg, ${c.gradient}); border-color: ${c.tier==='legendary'?'var(--gold)':(c.tier==='elite'?'#e8316a':'transparent')};">
-            <div class="cb-case-icon">📦</div>
-            <div class="cb-case-name">${c.name}</div>
-            <div class="cb-case-price">${c.price} ZH$</div>
-        </div>
-    `).join('');
-    document.getElementById('cb-create-modal').style.display = 'flex';
-};
-
-window.selectCBCase = function(id) {
-    window.cbCaseId = id;
-    document.querySelectorAll('.cb-case-item').forEach(el => el.classList.remove('selected'));
-    const itemEl = document.querySelector(`.cb-case-item[data-id="${id}"]`);
-    if(itemEl) itemEl.classList.add('selected');
-    
-    const btn = document.getElementById('cb-create-confirm-btn');
-    if(btn) {
-        btn.disabled = false;
-        const caseData = window.cbCases.find(c => c.id === id);
-        if(caseData) {
-            btn.textContent = `Create Battle - ${caseData.price} ZH$`;
-        }
-    }
-};
-
-window.createBattleConfirm = async function() {
-    // Access global variables robloxUserId and currentUsername
-    if(!robloxUserId) return showGameToast('Error: No Roblox ID found. Try refreshing.', 'var(--red)');
-    if(!window.cbCaseId) return showGameToast('Please select a case first.', 'var(--red)');
-    
-    // Fallback if robloxUsername was not set (currentUsername is always there)
-    const activeUsername = typeof robloxUsername !== 'undefined' && robloxUsername ? robloxUsername : currentUsername;
-    const caseData = window.cbCases.find(c => c.id === window.cbCaseId);
-    if(!caseData) return showGameToast('Error: Selected case data not found.', 'var(--red)');
-    if(roBalance < caseData.price) return showGameToast('Not enough ZH$', 'var(--red)');
-    
-    try {
-        const btn = document.getElementById('cb-create-confirm-btn');
-        if(btn) btn.disabled = true;
-
-        const res = await fetch('/api/casebattle/create', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({ 
-                userId: String(robloxUserId), 
-                username: activeUsername, 
-                caseId: window.cbCaseId, 
-                maxPlayers: window.cbFormat 
-            })
-        });
-        const data = await res.json();
-        if(data.ok) {
-            document.getElementById('cb-create-modal').style.display = 'none';
-            enterCBArena(data.battleId, window.cbCaseId, window.cbFormat, [{userId: String(robloxUserId), name: activeUsername, isBot: false, item: null}]);
-            renderCBLobby();
-        } else {
-            showGameToast(data.error || 'Failed to create battle', 'var(--red)');
-            if(btn) btn.disabled = false;
-        }
-    } catch(e){
-        console.error('CB Create Error:', e);
-        showGameToast('Error: ' + (e.message || 'Network error while creating battle'), 'var(--red)');
-        const btn = document.getElementById('cb-create-confirm-btn');
-        if(btn) btn.disabled = false;
-    }
-};
-
-window.joinCaseBattle = async function(battleId) {
-    if(!robloxUserId) return showGameToast('You must be logged in', 'var(--red)');
-    try {
-        // Find battle info to fetch case
-        let listRes = await fetch('/api/casebattle/list');
-        let battles = await listRes.json();
-        let b = battles.find(x => x.id === battleId);
-        if(!b) return;
-
-        // If not already in it, join it
-        if (!b.players.some(p => p.userId === String(robloxUserId))) {
-            if(roBalance < b.casePrice) return showGameToast('Not enough ZH$', 'var(--red)');
-            const res = await fetch('/api/casebattle/join', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({ userId: robloxUserId, username: robloxUsername, battleId })
-            });
-            const data = await res.json();
-            if(data.ok) {
-                // deductBet is handled server-side now, so we just update client state
-                enterCBArena(battleId, b.caseId, b.maxPlayers, data.players);
-            } else { showGameToast(data.error, 'var(--red)'); return; }
-        } else {
-            // we are already in it, just view
-            enterCBArena(battleId, b.caseId, b.maxPlayers, b.players);
-        }
-    } catch(e){}
-};
-
-function enterCBArena(battleId, caseId, maxPlayers, currentPlayers) {
-    cbActiveArena = battleId;
-    document.getElementById('cb-lobby').style.display = 'none';
-    document.getElementById('cb-arena').style.display = 'block';
-    const caseData = cbCases.find(c => c.id === caseId);
-    document.getElementById('cb-arena-case-info').textContent = `${caseData.name} (${maxPlayers} Players) - ${caseData.price} ZH$ each`;
-    document.getElementById('cb-result-banner').style.display = 'none';
-    
-    renderCBArenaSlots(maxPlayers, currentPlayers, caseData);
-}
-
-function renderCBArenaSlots(maxPlayers, players, caseData) {
-    const list = document.getElementById('cb-arena-slots');
-    list.innerHTML = '';
-    const pot = caseData.price * maxPlayers;
-    document.querySelector('.cb-arena-pot-val').textContent = pot.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-
-    for(let i=0; i<maxPlayers; i++) {
-        const p = players[i];
-        let infoHtml = `<div style="color:var(--text-secondary);">Waiting for player...</div>`;
-        if(p) infoHtml = `<div style="color:${p.isBot?'var(--accent)':'white'}; font-size:16px;"><i class="fa-solid fa-${p.isBot?'robot':'user'}"></i> ${p.name}</div><div class="cb-track-winner" id="cb-win-${i}" style="font-size:16px; text-transform:uppercase; letter-spacing:1px;"></div>`;
-        
-        // vertical items
-        let spinnerItems = Array.from({length: 40}).map(() => {
-            const ri = caseData.items[Math.floor(Math.random() * caseData.items.length)];
-            return `<div class="cb-item-box" style="border-bottom-color:${ri.color};"><img src="/api/roblox-thumb?id=${ri.assetId}" onerror="this.src='/favicon.ico'"><div class="cb-item-name">${ri.name}</div></div>`;
-        }).join('');
-
-        list.innerHTML += `
-            <div class="cb-player-track">
-                <div class="cb-track-info" style="align-items:center;">${infoHtml}</div>
-                <div class="cb-track-window" id="cb-window-${i}">
-                    <div class="cb-spinner" id="cb-spinner-${i}" style="transform: translateY(0);">
-                        ${spinnerItems}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-    
-    const owner = players[0];
-    const amIOwner = owner && owner.userId === String(robloxUserId);
-    document.getElementById('cb-arena-controls').style.display = (amIOwner && players.length < maxPlayers) ? 'block' : 'none';
-}
-
-window.leaveCBArena = function() {
-    cbActiveArena = null;
-    document.getElementById('cb-lobby').style.display = 'block';
-    document.getElementById('cb-arena').style.display = 'none';
-    renderCBLobby();
-};
-
-document.getElementById('cb-add-bot-btn')?.addEventListener('click', async () => {
-    if(!cbActiveArena) return;
-    try {
-        await fetch('/api/casebattle/addbot', {
-            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ battleId: cbActiveArena })
-        });
-    } catch(e){}
-});
-
-if(typeof socket !== 'undefined') {
-    socket.on('cb:new', () => { if(document.querySelector('[data-view=casebattle]').classList.contains('active')) renderCBLobby(); });
-    socket.on('cb:join', async (data) => {
-        if(cbActiveArena === data.battleId) {
-            const listRes = await fetch('/api/casebattle/list');
-            const battles = await listRes.json();
-            const b = battles.find(x => x.id === data.battleId);
-            if(b) {
-                const caseData = cbCases.find(c => c.id === b.caseId);
-                renderCBArenaSlots(b.maxPlayers, b.players, caseData);
-                if(b.players.length === b.maxPlayers && b.players[0].userId === String(robloxUserId)) {
-                    document.getElementById('cb-arena-controls').style.display = 'none';
-                    fetch('/api/casebattle/spin', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ battleId: cbActiveArena }) });
-                }
-            }
-        } else {
-            if(document.querySelector('[data-view=casebattle]').classList.contains('active')) renderCBLobby();
-        }
-    });
-    
-    socket.on('cb:result', setTimeout.bind(null, async (data) => {
-        if(cbActiveArena === data.battleId) {
-            document.getElementById('cb-arena-controls').style.display = 'none';
-            const pCount = data.players.length;
-            let caseObj = null;
-            
-            for(let i=0; i<pCount; i++) {
-                const player = data.players[i];
-                const finalItem = player.item;
-                const spinner = document.getElementById(`cb-spinner-${i}`);
-                if(!spinner) continue;
-                
-                if(!caseObj) caseObj = cbCases.find(c => c.items.some(x => x.assetId === finalItem.assetId));
-                if(!caseObj) continue;
-                
-                const boxes = Array.from(spinner.children);
-                for(let j=0; j<40; j++) {
-                    let itemToShow = caseObj.items[Math.floor(Math.random() * caseObj.items.length)];
-                    if(j === 35) itemToShow = finalItem; // Item #35 is the winner (4 items left to roll past smoothly if we want, but center is an offset)
-                    
-                    boxes[j].style.borderBottomColor = itemToShow.color;
-                    boxes[j].innerHTML = `<img src="/api/roblox-thumb?id=${itemToShow.assetId}" onerror="this.src='/favicon.ico'">
-                                          <div class="cb-item-name">${itemToShow.name}</div>
-                                          <div class="cb-item-price" style="font-size:12px; bottom:2px; padding:2px;">${itemToShow.value}</div>`;
-                    if(j === 35) {
-                        // Mark winner slightly bigger
-                        boxes[j].innerHTML = `<img src="/api/roblox-thumb?id=${itemToShow.assetId}" onerror="this.src='/favicon.ico'" style="transform:scale(1.1); margin-bottom:5px;">
-                                          <div class="cb-item-name" style="font-size:11px; top:2px; font-weight:800;">${itemToShow.name}</div>
-                                          <div class="cb-item-price" style="font-size:13px; color:var(--gold);">${itemToShow.value} ZH$</div>`;
-                    }
-                }
-                
-                const itemHeight = 120;
-                const windowHeight = 360; 
-                // Center item 35 vertically
-                const offset = -(35 * itemHeight) + (windowHeight/2) - (itemHeight/2);
-                const randOffset = (Math.random() - 0.5) * 40;
-                
-                requestAnimationFrame(() => {
-                    spinner.style.transform = `translateY(${offset + randOffset}px)`;
-                });
-            }
-            
-            setTimeout(() => {
-                let amIWinner = (String(data.winnerId) === String(robloxUserId));
-                for(let i=0; i<pCount; i++) {
-                    if(data.players[i].userId === data.winnerId) {
-                        const winEl = document.getElementById(`cb-win-${i}`);
-                        if(winEl) {
-                           winEl.style.display = 'block';
-                           winEl.textContent = '🏆 WINNER';
-                        }
-                        const winWin = document.getElementById(`cb-window-${i}`);
-                        if(winWin) winWin.style.boxShadow = 'inset 0 0 20px rgba(0,0,0,0.8), 0 0 15px rgba(234,179,8,0.7)';
-                    } else {
-                        const winWin = document.getElementById(`cb-window-${i}`);
-                        if(winWin) winWin.style.opacity = '0.5';
-                    }
-                }
-                
-                if(amIWinner) awardWin(data.payout);
-                setTimeout(() => fetchAccountFromServer(robloxUserId), 1000);
-                
-                document.getElementById('cb-result-banner').style.display = 'block';
-                document.getElementById('cb-result-text').textContent = amIWinner ? '🏆 YOU WON!' : `${data.winnerName} WON!`;
-                document.getElementById('cb-result-text').style.color = amIWinner ? 'var(--gold)' : 'white';
-                document.getElementById('cb-result-payout').textContent = `${data.payout.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} ZH$`;
-            }, 6100);
-        }
-    }, 100)); // slight debounce
-}
-
-document.addEventListener('click', (e) => {
-    const el = e.target.closest('[data-view="casebattle"]');
-    if(el) {
-        if(cbCases.length === 0) loadCBCases();
-        renderCBLobby();
-        // Return from arena to lobby if they click the nav
-        document.getElementById('cb-lobby').style.display = 'block';
-        document.getElementById('cb-arena').style.display = 'none';
-        cbActiveArena = null;
-    }
-});
-loadCBCases();
 
