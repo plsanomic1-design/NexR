@@ -4584,12 +4584,18 @@ window.selectCBCase = function(id) {
     }
 };
 
-document.getElementById('cb-create-confirm-btn')?.addEventListener('click', async () => {
-    if(!robloxUserId || !cbCaseId) return;
+window.createBattleConfirm = async function() {
+    if(!robloxUserId) return showGameToast('Error: No Roblox ID found. Try refreshing.', 'var(--red)');
+    if(!cbCaseId) return showGameToast('Please select a case first.', 'var(--red)');
+    
     const caseData = cbCases.find(c => c.id === cbCaseId);
+    if(!caseData) return showGameToast('Error: Case not found.', 'var(--red)');
     if(roBalance < caseData.price) return showGameToast('Not enough ZH$', 'var(--red)');
     
     try {
+        const btn = document.getElementById('cb-create-confirm-btn');
+        if(btn) btn.disabled = true;
+
         const res = await fetch('/api/casebattle/create', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
@@ -4598,12 +4604,19 @@ document.getElementById('cb-create-confirm-btn')?.addEventListener('click', asyn
         const data = await res.json();
         if(data.ok) {
             document.getElementById('cb-create-modal').style.display = 'none';
-            // Payouts and deductions are handled server-side now
             enterCBArena(data.battleId, cbCaseId, cbFormat, [{userId: String(robloxUserId), name: robloxUsername, isBot: false, item: null}]);
             renderCBLobby();
+        } else {
+            showGameToast(data.error || 'Failed to create battle', 'var(--red)');
+            if(btn) btn.disabled = false;
         }
-    } catch(e){}
-});
+    } catch(e){
+        console.error('CB Create Error:', e);
+        showGameToast('Network error while creating battle', 'var(--red)');
+        const btn = document.getElementById('cb-create-confirm-btn');
+        if(btn) btn.disabled = false;
+    }
+};
 
 window.joinCaseBattle = async function(battleId) {
     if(!robloxUserId) return showGameToast('You must be logged in', 'var(--red)');
