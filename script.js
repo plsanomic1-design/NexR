@@ -4530,3 +4530,63 @@ document.getElementById('admin-search-input')?.addEventListener('keypress', (e) 
     if (e.key === 'Enter') adminLookupUser();
 });
 
+// ==============================================
+// NOWPayments Crypto Deposit logic
+// ==============================================
+async function generateCryptoInvoice() {
+    if (!robloxUserId) {
+        showGameToast('Please link your Roblox account first.', 'var(--red)');
+        return;
+    }
+    
+    const coin = document.getElementById('dep-crypto-coin').value;
+    const amount = parseInt(document.getElementById('dep-crypto-amount').value, 10);
+    const errEl = document.getElementById('dep-crypto-error');
+    const btn = document.getElementById('dep-crypto-generate-btn');
+    
+    if (!amount || amount < 100) {
+        errEl.innerText = 'Minimum deposit is 100 ZH$.';
+        errEl.style.display = 'block';
+        return;
+    }
+    
+    errEl.style.display = 'none';
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
+    
+    try {
+        const res = await fetch('/api/deposit/crypto/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: robloxUserId,
+                currency: coin,
+                amountZh: amount
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to generate crypto address');
+        }
+        
+        // Show successful data
+        document.getElementById('dep-crypto-pay-amount').innerText = data.pay_amount;
+        document.getElementById('dep-crypto-pay-coin').innerText = data.pay_currency.toUpperCase();
+        document.getElementById('dep-crypto-pay-address').value = data.pay_address;
+        
+        // Generate QR code using external API
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${data.pay_address}`;
+        document.getElementById('dep-crypto-qr').src = qrUrl;
+        
+        goDepPage('crypto2');
+    } catch (e) {
+        console.error(e);
+        errEl.innerText = e.message;
+        errEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'Generate Address';
+    }
+}

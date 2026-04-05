@@ -1011,7 +1011,7 @@
                         </div>
                         <div class="dep-currency-badge dep-currency-badge--emoji" aria-hidden="true">💳</div>
                     </div>
-                    <div class="dep-method dep-crypto" onclick="showComingSoon()">
+                    <div class="dep-method dep-crypto" onclick="goDepPage('crypto1')">
                         <div class="dep-method-label">Crypto</div>
                         <div class="dep-icon-wrap">
                             <div class="dep-icon-crypto dep-method-emoji" aria-hidden="true">🪙</div>
@@ -1084,8 +1084,79 @@
                 <div style="text-align:center; padding: 30px 20px;">
                     <div class="modal-success-glyph" aria-hidden="true">OK</div>
                     <h2 style="color:var(--green); margin-bottom:12px;">Deposit Successful!</h2>
-                    <p id="dep-success-msg" style="color:var(--text-secondary); font-size:14px;">Your ZR$ balance has been updated.</p>
+                    <p id="dep-success-msg" style="color:var(--text-secondary); font-size:14px;">Your balance has been updated.</p>
                     <button class="btn-primary" style="margin-top:25px; width:100%;" onclick="closeDepositModal(null)">Close</button>
+                </div>
+            </div>
+
+            <!-- Page Crypto 1: Setup USD/ZH$ Amount and Coin -->
+            <div class="dep-page" id="dep-page-crypto1" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Crypto</div>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Crypto Deposit</h2>
+                <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Select the cryptocurrency you want to pay with and the amount of ZH$ you want to receive. (Minimum 100 ZH$)</p>
+                
+                <div style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
+                    <div class="input-group">
+                        <label>Select Cryptocurrency</label>
+                        <div class="input-wrapper">
+                            <select id="dep-crypto-coin" style="width:100%; background:var(--bg-input); border:none; color:#fff; padding:12px 14px; border-radius:8px; font-size:14px; outline:none;">
+                                <option value="eth">Ethereum (ETH)</option>
+                                <option value="btc">Bitcoin (BTC)</option>
+                                <option value="ltc">Litecoin (LTC)</option>
+                                <option value="sol">Solana (SOL)</option>
+                                <option value="doge">Dogecoin (DOGE)</option>
+                                <option value="usdttrc20">USDT (TRC20)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Amount (ZH$)</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
+                            <input type="number" id="dep-crypto-amount" min="100" value="500" placeholder="e.g. 500">
+                        </div>
+                    </div>
+                </div>
+
+                <p id="dep-crypto-error" class="welcome-error" role="alert" style="display:none; margin-top:12px;"></p>
+                <div class="dep-actions" style="margin-top:22px;">
+                    <button class="dep-back-btn" onclick="goDepPage(1)">Back</button>
+                    <button type="button" class="btn-primary dep-confirm-btn" id="dep-crypto-generate-btn" onclick="generateCryptoInvoice()">Generate Address</button>
+                </div>
+            </div>
+
+            <!-- Page Crypto 2: Payment Details -->
+            <div class="dep-page" id="dep-page-crypto2" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> <span onclick="goDepPage('crypto1')">Crypto</span></div>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Awaiting Payment</h2>
+                <div style="text-align:center; padding: 20px 0;">
+                    <img id="dep-crypto-qr" src="" style="width:150px; height:150px; border-radius:8px; margin:0 auto; background:white; padding:5px; display:block;">
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <label style="font-size: 11px; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Send Exactly</label>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; margin-bottom:15px;">
+                        <span id="dep-crypto-pay-amount" style="font-size: 20px; font-weight:800; color:var(--accent);">0.0000</span>
+                        <span id="dep-crypto-pay-coin" style="font-size: 14px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">BTC</span>
+                    </div>
+
+                    <label style="font-size: 11px; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">To Address</label>
+                    <div style="display:flex; align-items:center; gap:10px; margin-top:5px;">
+                        <input type="text" id="dep-crypto-pay-address" value="" readonly style="flex:1; background:var(--bg-input); border:none; color:var(--text-primary); padding:10px; border-radius:6px; font-family:monospace; font-size:12px;">
+                        <button class="btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('dep-crypto-pay-address').value); alert('Copied address!')" style="padding:10px 15px;"><i class="fa-solid fa-copy"></i></button>
+                    </div>
+                </div>
+
+                <p style="text-align:center; font-size:13px; color:var(--text-secondary);">Your ZH$ will automatically be credited to your account once the network confirms your transaction. You can close this window at any time.</p>
+                <div class="dep-actions" style="margin-top:22px;">
+                    <button class="btn-primary" style="width:100%;" onclick="closeDepositModal()">Done</button>
                 </div>
             </div>
         </div>

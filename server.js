@@ -1641,6 +1641,125 @@ app.post('/api/roblox-verify', async (req, res) => {
     res.json({ ok: true });
 });
 
+// --- NOWPayments Crypto Deposit ---
+const crypto = require('crypto');
+const processedCryptoPayments = new Set();
+
+app.options('/api/deposit/crypto/create', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.sendStatus(204);
+});
+
+app.post('/api/deposit/crypto/create', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const body = req.body || {};
+    const userId = parseInt(String(body.userId || ''), 10);
+    const currency = String(body.currency || '').toLowerCase();
+    const amountZh = parseInt(body.amountZh || 0, 10);
+    
+    if (!userId || !currency || amountZh < 100) {
+        return res.status(400).json({ error: 'Invalid request. Minimum deposit is 100 ZH$.' });
+    }
+    
+    // Exchange rate: 500 ZH$ = 3.50 EUR -> 1 ZH$ = 0.007 EUR
+    const eurAmount = parseFloat((amountZh * 0.007).toFixed(2));
+    if (eurAmount < 0.5) return res.status(400).json({ error: 'Deposit amount too small for crypto networks.' });
+    
+    const orderId = `deps_${userId}_${Date.now()}`;
+    
+    try {
+        const response = await fetch('https://api.nowpayments.io/v1/payment', {
+            method: 'POST',
+            headers: {
+                'x-api-key': process.env.NOWPAYMENTS_API_KEY,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                price_amount: eurAmount,
+                price_currency: 'eur',
+                pay_currency: currency,
+                order_id: orderId,
+                order_description: `ZephR$ Deposit: ${amountZh} ZH$`
+            })
+        });
+        
+        const data = await response.json();
+        if (!response.ok) {
+            console.error('NOWPayments Error:', data);
+            return res.status(500).json({ error: data.message || 'Payment provider error' });
+        }
+        
+        res.json({
+            payment_id: data.payment_id,
+            pay_address: data.pay_address,
+            pay_amount: data.pay_amount,
+            pay_currency: data.pay_currency,
+            order_id: data.order_id
+        });
+    } catch (e) {
+        console.error('NOWPayments Request Error:', e);
+        res.status(500).json({ error: 'Internal server error while contacting payment provider' });
+    }
+});
+
+app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
+    const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
+    if (!ipnSecret) return res.status(500).send('IPN secret not configured');
+    
+    const sig = req.headers['x-nowpayments-sig'];
+    if (!sig) return res.status(400).send('No signature');
+    
+    // Sort keys before hashing
+    const sortedKeys = Object.keys(req.body).sort();
+    const sortedObj = {};
+    for (const key of sortedKeys) {
+        sortedObj[key] = req.body[key];
+    }
+    const hmac = crypto.createHmac('sha512', ipnSecret);
+    hmac.update(JSON.stringify(sortedObj));
+    if (sig !== hmac.digest('hex')) {
+        return res.status(403).send('Invalid signature');
+    }
+    
+    const { payment_status, order_id, price_amount } = req.body;
+    
+    // We only credit when payment is completely finished
+    if (payment_status === 'finished') {
+        const parts = String(order_id).split('_');
+        if (parts.length >= 2 && parts[0] === 'deps') {
+            const userId = parseInt(parts[1], 10);
+            
+            if (!processedCryptoPayments.has(order_id)) {
+                processedCryptoPayments.add(order_id);
+                if (processedCryptoPayments.size > 50000) processedCryptoPayments.clear();
+                
+                // Reverse calculation: ZH$ = EUR / 0.007
+                const zhAmount = Math.round(parseFloat(price_amount) / 0.007);
+                
+                if (userId && zhAmount > 0 && supabaseEnabled()) {
+                    try {
+                        const uid = parseRobloxNumericId(userId);
+                        const bal = await getUserBalance(uid);
+                        if (bal) {
+                            const newZh = bal.balance_zh + zhAmount;
+                            const result = await updateUserBalance(uid, bal.balance_zr, newZh);
+                            if (result.ok) {
+                                emitBalanceRemoteSync(io, uid, { balance: bal.balance_zr, balanceZh: newZh, stats: {} });
+                                console.log(`Credited ${zhAmount} ZH$ (crypto) to user ${uid}`);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Crypto Webhook DB Error:', e);
+                    }
+                }
+            }
+        }
+    }
+    res.status(200).send('OK');
+});
+
 /** Game pass deposit: Robux paid = ZR$ credited. Keys must match client GAME_PASS_DEPOSIT_TIERS. */
 const GAME_PASS_CREDIT_BY_ID = {
     1784194501: 7,
