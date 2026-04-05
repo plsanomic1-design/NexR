@@ -1642,7 +1642,6 @@ app.post('/api/roblox-verify', async (req, res) => {
 });
 
 // --- NOWPayments Crypto Deposit ---
-const crypto = require('crypto');
 const processedCryptoPayments = new Set();
 
 app.options('/api/deposit/crypto/create', (req, res) => {
