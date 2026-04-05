@@ -251,6 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let mRevealedTiles = []; // indices of safely-revealed tiles (for session restore)
         let mMultiplier = 1.0;
         let currentBet = 0;
+        let mGameId = 0;
 
         // Init grid ui
         function initGridUI() {
@@ -308,6 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const mult = Number(mMultiplier);
             minesPlayBtn.textContent = `Cashout (${mult.toFixed(2)} x)`;
             minesPlayBtn.classList.add('custom-cashout-btn');
+            minesPlayBtn.disabled = (mRevealed === 0) || (minesGrid.querySelectorAll('.mines-tile.loading').length > 0);
         }
 
         minesPlayBtn.addEventListener('click', async () => {
@@ -352,6 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     
+                    mGameId++;
                     mIsPlaying = true;
                     mGrid = Array(25).fill(false);
                     mRevealed = 0;
@@ -381,7 +384,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             tileEl.classList.add('loading');
             tileEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-            minesPlayBtn.disabled = true;
+            syncMinesCashoutButton();
+            
+            const currentGameId = mGameId;
             
             try {
                 const res = await fetch('/api/game/mines/click', {
@@ -390,6 +395,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ userId: robloxUserId, tileIdx: i })
                 });
                 const data = await res.json();
+                
+                if (mGameId !== currentGameId) return; // ignore if user already restared game
                 
                 tileEl.classList.remove('loading');
                 tileEl.classList.add('revealed');
@@ -406,7 +413,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     soundGem();
                     mRevealed++;
                     mRevealedTiles.push(i);
-                    minesPlayBtn.disabled = false; // can now cashout
                     let bombs = parseInt(countInp.value) || 3;
                     mMultiplier = getMulti(bombs, mRevealed);
                     earningsInp.value = (currentBet * parseFloat(mMultiplier)).toFixed(2);
@@ -419,12 +425,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             } catch(e) {
+                if (mGameId !== currentGameId) return;
                 minesMsg.textContent = 'Network Error';
                 minesMsg.style.color = 'var(--red)';
                 minesMsg.style.display = 'block';
                 tileEl.classList.remove('loading');
                 tileEl.innerHTML = '<span class="tile-mark">G</span>';
-                minesPlayBtn.disabled = false;
+                syncMinesCashoutButton();
             }
         }
 
