@@ -904,6 +904,353 @@ async function liveFeedListSupabase(limit) {
     }
 }
 
+// ==== CASE BATTLE SYSTEM ====
+const activeCaseBattles = new Map();
+let _cbIdCounter = 1000;
+
+// ---- 50 cases in 5 tiers ----
+const CB_CASES = (() => {
+  const R = {
+    common:    { label: 'Common',    color: '#9e9e9e', weight: 40 },
+    uncommon:  { label: 'Uncommon',  color: '#4caf50', weight: 25 },
+    rare:      { label: 'Rare',      color: '#2196f3', weight: 15 },
+    epic:      { label: 'Epic',      color: '#9c27b0', weight: 12 },
+    legendary: { label: 'Legendary', color: '#ff9800', weight: 6 },
+    mythic:    { label: 'Mythic',    color: '#f44336', weight: 2 },
+  };
+  function item(name, assetId, value, rarity) {
+    return { name, assetId, value, rarity, color: R[rarity].color, weight: R[rarity].weight };
+  }
+  const tiers = [
+    // ── TIER 1: Budget ($5 – $25) ──────────────────────────────────────
+    { id:'b1', name:'Cardboard Box',       price:5,    tier:'budget',    gradient:'#6b5a45,#8b7355',
+      items:[item('Party Hat',          1472304,   2,  'common'),    item('Propeller Hat',     16394849,  4,  'uncommon'),
+             item('Top Hat',            30012642,  8,  'rare'),       item('Red Cap',           191310508, 15, 'epic'),
+             item('Clockwork Shades',   11748356,  35, 'legendary'),  item('Winged Hat',        19380289,  90, 'mythic')]},
+    { id:'b2', name:'Lucky Bag',           price:8,    tier:'budget',    gradient:'#c8a415,#e8c040',
+      items:[item('Toque Hat',          41798810,  3,  'common'),    item('Blue Top Hat',      30350083,  7,  'uncommon'),
+             item('Biz Hat',            176929,    12, 'rare'),       item('Visor de Astro',    163345392, 25, 'epic'),
+             item('Valkyrie Helm',      19027209,  55, 'legendary'),  item('Domino Crown',      74897044,  160,'mythic')]},
+    { id:'b3', name:'School Backpack',     price:10,   tier:'budget',    gradient:'#3a7bd5,#00d2ff',
+      items:[item('Simple Shades',      18342830,  4,  'common'),    item('Classic Fedora',    1285307,   9,  'uncommon'),
+             item('Bowler Hat',         21070439,  16, 'rare'),       item('Knight Helm',       16313856,  30, 'epic'),
+             item('Brighteyes',         90706366,  70, 'legendary'),  item('Pearly Domino',     119013570, 200,'mythic')]},
+    { id:'b4', name:'Bronze Case',         price:15,   tier:'budget',    gradient:'#cd7f32,#a0522d',
+      items:[item('Rubber Ducky',       45027392,  5,  'common'),    item('Green Top Hat',     30350087,  12, 'uncommon'),
+             item('Ninja Headband',     119721845, 22, 'rare'),       item('Void Star',         4161023358,40, 'epic'),
+             item('Sparkle Fedora',     3490015,   90, 'legendary'),  item('Valkyrie Helm',     19027209,  300,'mythic')]},
+    { id:'b5', name:'Starter Pack',        price:20,   tier:'budget',    gradient:'#536976,#292e49',
+      items:[item('Polka Dot Hat',      122924939, 7,  'common'),    item('Retro Cap',         189907801, 15, 'uncommon'),
+             item('Silly Fun Hat',      48474105,  28, 'rare'),       item('Illumina',          48545806,  55, 'epic'),
+             item('Frost Guard',        72046696,  110,'legendary'),  item('Sparkle Fedora',    3490015,   450,'mythic')]},
+    { id:'b6', name:'Treasure Pouch',      price:25,   tier:'budget',    gradient:'#834d9b,#d04ed6',
+      items:[item('Flower Tiara',       86936917,  9,  'common'),    item('Wizard Hat',        18897643,  20, 'uncommon'),
+             item('Shark Hat',          124987,    35, 'rare'),       item('Frost Guard',       72046696,  65, 'epic'),
+             item('Clockwork Shades',   11748356,  130,'legendary'),  item('Domino Crown',      74897044,  600,'mythic')]},
+    // ── TIER 2: Standard ($30 – $100) ─────────────────────────────────
+    { id:'s1', name:'Silver Case',         price:30,   tier:'standard',  gradient:'#bdbdbd,#757575',
+      items:[item('Egg Hat',            47170726,  10, 'common'),    item('Blue Top Hat',      30350083,  25, 'uncommon'),
+             item('Winged Hat',         19380289,  50, 'rare'),       item('Valkyrie Helm',     19027209,  90, 'epic'),
+             item('Sparkle Fedora',     3490015,   200,'legendary'),  item('Domino Crown',      74897044,  750,'mythic')]},
+    { id:'s2', name:'Forest Chest',        price:40,   tier:'standard',  gradient:'#2d5016,#4a7a1e',
+      items:[item('Leaf Crown',         147038929, 13, 'common'),    item('Nature Hat',        77982456,  32, 'uncommon'),
+             item('Emerald Shades',     160699865, 65, 'rare'),       item('Illumina',          48545806,  120,'epic'),
+             item('Pearly Domino',      119013570, 275,'legendary'),  item('Winged Hat',        19380289,  1000,'mythic')]},
+    { id:'s3', name:'Ocean Box',           price:50,   tier:'standard',  gradient:'#1a78c2,#0d3b6b',
+      items:[item('Sailor Hat',         86743227,  15, 'common'),    item('Wave Crown',        189921066, 40, 'uncommon'),
+             item('Aqua Shades',        255658,    80, 'rare'),       item('Frost Guard',       72046696,  155,'epic'),
+             item('Valkyrie Helm',      19027209,  360,'legendary'),  item('Domino Crown',      74897044,  1300,'mythic')]},
+    { id:'s4', name:'Fire Case',           price:60,   tier:'standard',  gradient:'#c0392b,#e74c3c',
+      items:[item('Flame Hat',          81181545,  18, 'common'),    item('Lava Crown',        81182018,  50, 'uncommon'),
+             item('Blaze Shades',       81182226,  100,'rare'),       item('Clockwork Shades',  11748356,  185,'epic'),
+             item('Sparkle Fedora',     3490015,   430,'legendary'),  item('Winged Hat',        19380289,  1600,'mythic')]},
+    { id:'s5', name:'Storm Case',          price:75,   tier:'standard',  gradient:'#37474f,#263238',
+      items:[item('Thunder Hat',        156834010, 22, 'common'),    item('Static Crown',      86087484,  60, 'uncommon'),
+             item('Storm Shades',       67785219,  120,'rare'),       item('Illumina',          48545806,  230,'epic'),
+             item('Pearly Domino',      119013570, 540,'legendary'),  item('Domino Crown',      74897044,  2000,'mythic')]},
+    { id:'s6', name:'Gold Case',           price:100,  tier:'standard',  gradient:'#f4c430,#d4a017',
+      items:[item('Gold Tiara',         86743421,  30, 'common'),    item('Classic Fedora',    1285307,   80, 'uncommon'),
+             item('Radiant Crown',      97619824,  160,'rare'),       item('Valkyrie Helm',     19027209,  310,'epic'),
+             item('Sparkle Fedora',     3490015,   720,'legendary'),  item('Domino Crown',      74897044,  2500,'mythic')]},
+    // ── TIER 3: Premium ($125 – $400) ─────────────────────────────────
+    { id:'p1', name:'Mystic Chest',        price:125,  tier:'premium',   gradient:'#6a1b9a,#aa00ff',
+      items:[item('Mystic Hat',         4161023358,38, 'common'),    item('Crystal Crown',     97619826,  100,'uncommon'),
+             item('Enchanted Shades',   160699865, 200,'rare'),       item('Illumina',          48545806,  390,'epic'),
+             item('Pearly Domino',      119013570, 900,'legendary'),  item('Winged Hat',        19380289,  3100,'mythic')]},
+    { id:'p2', name:'Dragon Box',          price:150,  tier:'premium',   gradient:'#6d1a1a,#b22222',
+      items:[item('Drake Hat',          81181545,  45, 'common'),    item('Flame Crown',       81182018,  120,'uncommon'),
+             item('Dragon Shades',      81182226,  240,'rare'),       item('Clockwork Shades',  11748356,  470,'epic'),
+             item('Valkyrie Helm',      19027209,  1100,'legendary'), item('Domino Crown',      74897044,  3750,'mythic')]},
+    { id:'p3', name:'Galaxy Case',         price:200,  tier:'premium',   gradient:'#0d0d2b,#1a237e',
+      items:[item('Star Hat',           156834010, 60, 'common'),    item('Nebula Crown',      86087484,  160,'uncommon'),
+             item('Galaxy Shades',      67785219,  320,'rare'),       item('Illumina',          48545806,  625,'epic'),
+             item('Sparkle Fedora',     3490015,   1450,'legendary'), item('Winged Hat',        19380289,  5000,'mythic')]},
+    { id:'p4', name:'Phoenix Case',        price:250,  tier:'premium',   gradient:'#e65c00,#f9d423',
+      items:[item('Ash Crown',          97619826,  75, 'common'),    item('Ember Hat',         86743421,  200,'uncommon'),
+             item('Blaze Crown',        81182018,  400,'rare'),       item('Valkyrie Helm',     19027209,  780,'epic'),
+             item('Pearly Domino',      119013570, 1800,'legendary'), item('Domino Crown',      74897044,  6250,'mythic')]},
+    { id:'p5', name:'Solar Chest',         price:300,  tier:'premium',   gradient:'#ff8c00,#ffd700',
+      items:[item('Sun Hat',            86743227,  90, 'common'),    item('Solar Crown',       190028482, 240,'uncommon'),
+             item('Radiant Shades',     97619824,  480,'rare'),       item('Clockwork Shades',  11748356,  935,'epic'),
+             item('Sparkle Fedora',     3490015,   2200,'legendary'), item('Winged Hat',        19380289,  7500,'mythic')]},
+    { id:'p6', name:'Aurora Chest',        price:350,  tier:'premium',   gradient:'#12c2e9,#c471ed',
+      items:[item('Aurora Hat',         122924939, 105,'common'),    item('Prism Crown',       86736879,  285,'uncommon'),
+             item('Spectral Shades',    160699865, 570,'rare'),       item('Illumina',          48545806,  1100,'epic'),
+             item('Pearly Domino',      119013570, 2550,'legendary'), item('Domino Crown',      74897044,  8750,'mythic')]},
+    { id:'p7', name:'Stellar Chest',       price:400,  tier:'premium',   gradient:'#000428,#004e92',
+      items:[item('Comet Hat',          156834010, 120,'common'),    item('Star Crown',        86087484,  325,'uncommon'),
+             item('Stellar Shades',     67785219,  650,'rare'),       item('Valkyrie Helm',     19027209,  1260,'epic'),
+             item('Sparkle Fedora',     3490015,   2900,'legendary'), item('Winged Hat',        19380289,  10000,'mythic')]},
+    // ── TIER 4: Elite ($500 – $1500) ──────────────────────────────────
+    { id:'e1', name:'Diamond Case',        price:500,  tier:'elite',     gradient:'#b9f2ff,#4dd0e1',
+      items:[item('Diamond Hat',        97619826,  150,'common'),    item('Gem Crown',         190028482, 410,'uncommon'),
+             item('Crystal Shades',     160699865, 820,'rare'),       item('Clockwork Shades',  11748356,  1600,'epic'),
+             item('Pearly Domino',      119013570, 3700,'legendary'), item('Domino Crown',      74897044,  12500,'mythic')]},
+    { id:'e2', name:'Crystal Chest',       price:600,  tier:'elite',     gradient:'#a8edea,#fed6e3',
+      items:[item('Prism Hat',          122924939, 180,'common'),    item('Crystal Crown',     97619826,  490,'uncommon'),
+             item('Hologram Shades',    67785219,  980,'rare'),       item('Illumina',          48545806,  1900,'epic'),
+             item('Sparkle Fedora',     3490015,   4400,'legendary'), item('Winged Hat',        19380289,  15000,'mythic')]},
+    { id:'e3', name:'Sapphire Case',       price:750,  tier:'elite',     gradient:'#0f3460,#533483',
+      items:[item('Sapphire Hat',       86736879,  225,'common'),    item('Ocean Crown',       86743421,  615,'uncommon'),
+             item('Sapphire Shades',    160699865, 1225,'rare'),      item('Valkyrie Helm',     19027209,  2380,'epic'),
+             item('Pearly Domino',      119013570, 5500,'legendary'), item('Domino Crown',      74897044,  18750,'mythic')]},
+    { id:'e4', name:'Ruby Case',           price:900,  tier:'elite',     gradient:'#8b0000,#dc143c',
+      items:[item('Ruby Hat',           81182018,  270,'common'),    item('Blood Crown',       81181545,  735,'uncommon'),
+             item('Ruby Shades',        81182226,  1470,'rare'),      item('Clockwork Shades',  11748356,  2850,'epic'),
+             item('Sparkle Fedora',     3490015,   6600,'legendary'), item('Winged Hat',        19380289,  22500,'mythic')]},
+    { id:'e5', name:'Emerald Box',         price:1000, tier:'elite',     gradient:'#0a3d0a,#1a7a1a',
+      items:[item('Emerald Hat',        47170726,  300,'common'),    item('Forest Crown',      147038929, 820,'uncommon'),
+             item('Emerald Shades',     160699865, 1640,'rare'),      item('Illumina',          48545806,  3175,'epic'),
+             item('Pearly Domino',      119013570, 7350,'legendary'), item('Domino Crown',      74897044,  25000,'mythic')]},
+    { id:'e6', name:'Onyx Case',           price:1100, tier:'elite',     gradient:'#1a1a2e,#16213e',
+      items:[item('Onyx Hat',           4161023358,330,'common'),    item('Shadow Crown',      86087484,  900,'uncommon'),
+             item('Void Shades',        67785219,  1800,'rare'),      item('Valkyrie Helm',     19027209,  3500,'epic'),
+             item('Sparkle Fedora',     3490015,   8100,'legendary'), item('Winged Hat',        19380289,  27500,'mythic')]},
+    { id:'e7', name:'Obsidian Case',       price:1500, tier:'elite',     gradient:'#0d0d0d,#1a1a1a',
+      items:[item('Obsidian Hat',       156834010, 450,'common'),    item('Void Crown',        86736879,  1225,'uncommon'),
+             item('Obsidian Shades',    160699865, 2450,'rare'),      item('Clockwork Shades',  11748356,  4750,'epic'),
+             item('Pearly Domino',      119013570, 11000,'legendary'),item('Domino Crown',      74897044,  37500,'mythic')]},
+    // ── TIER 5: Legendary ($2000 – $5000) ─────────────────────────────
+    { id:'l1', name:'Dominus Fragment',    price:2000, tier:'legendary',  gradient:'#800000,#ff0000',
+      items:[item('Shard Hat',          81181545,  600,'common'),    item('Relic Crown',       97619826,  1640,'uncommon'),
+             item('Dominus Shard',      81182226,  3280,'rare'),      item('Illumina',          48545806,  6375,'epic'),
+             item('Pearly Domino',      119013570, 14750,'legendary'),item('Dominus Crown',     74897044,  50000,'mythic')]},
+    { id:'l2', name:'Ancient Relic',       price:2500, tier:'legendary',  gradient:'#4a3000,#8b6914',
+      items:[item('Ancient Hat',        86743227,  750,'common'),    item('Relic Wreath',      190028482, 2050,'uncommon'),
+             item('Ancient Shades',     67785219,  4100,'rare'),      item('Valkyrie Helm',     19027209,  7950,'epic'),
+             item('Sparkle Fedora',     3490015,   18400,'legendary'),item('Winged Hat',        19380289,  62500,'mythic')]},
+    { id:'l3', name:'Mythic Vessel',       price:3000, tier:'legendary',  gradient:'#1a0033,#5900b3',
+      items:[item('Vessel Hat',         122924939, 900,'common'),    item('Mythic Crown',      86087484,  2460,'uncommon'),
+             item('Mythic Shades',      160699865, 4920,'rare'),      item('Clockwork Shades',  11748356,  9550,'epic'),
+             item('Pearly Domino',      119013570, 22100,'legendary'),item('Domino Crown',      74897044,  75000,'mythic')]},
+    { id:'l4', name:'Eternal Chest',       price:3500, tier:'legendary',  gradient:'#002147,#0047ab',
+      items:[item('Eternal Hat',        156834010, 1050,'common'),   item('Time Crown',        86736879,  2870,'uncommon'),
+             item('Eternal Shades',     67785219,  5740,'rare'),      item('Illumina',          48545806,  11150,'epic'),
+             item('Sparkle Fedora',     3490015,   25800,'legendary'),item('Winged Hat',        19380289,  87500,'mythic')]},
+    { id:'l5', name:'Celestial Box',       price:4000, tier:'legendary',  gradient:'#000010,#0a0a3c',
+      items:[item('Celestial Hat',      34631083,  1200,'common'),   item('Star Wreath',       86087484,  3280,'uncommon'),
+             item('Celestial Shades',   160699865, 6560,'rare'),      item('Valkyrie Helm',     19027209,  12750,'epic'),
+             item('Pearly Domino',      119013570, 29500,'legendary'),item('Domino Crown',      74897044,  100000,'mythic')]},
+    { id:'l6', name:'Primordial Case',     price:4500, tier:'legendary',  gradient:'#1a0a00,#4d1a00',
+      items:[item('Primordial Hat',     81181545,  1350,'common'),   item('Origin Crown',      190028482, 3690,'uncommon'),
+             item('Chaos Shades',       81182226,  7380,'rare'),      item('Clockwork Shades',  11748356,  14350,'epic'),
+             item('Sparkle Fedora',     3490015,   33200,'legendary'),item('Winged Hat',        19380289,  112500,'mythic')]},
+    { id:'l7', name:"God's Chest",         price:5000, tier:'legendary',  gradient:'#2a0a00,#ff4500',
+      items:[item('Divine Hat',         97619826,  1500,'common'),   item('Heaven Crown',      86743421,  4100,'uncommon'),
+             item('God Shades',         160699865, 8200,'rare'),      item('Illumina',          48545806,  15950,'epic'),
+             item('Pearly Domino',      119013570, 36900,'legendary'),item('Domino Crown',      74897044,  125000,'mythic')]},
+    // --- ADDING MORE TO FILL TO 50 ---
+    { id:'b7', name:'Paper Bag',           price:6,    tier:'budget',    gradient:'#795548,#5d4037', items:[item('Bag', 1472304, 1, 'common'), item('Stick', 16394849, 3, 'uncommon'), item('Stone', 156834010, 10, 'rare')]},
+    { id:'b8', name:'Plastic Crate',       price:12,   tier:'budget',    gradient:'#607d8b,#455a64', items:[item('Toy', 11211180, 5, 'common'), item('Ball', 108149175, 15, 'uncommon')]},
+    { id:'b9', name:'Wooden Barrel',       price:18,   tier:'budget',    gradient:'#3e2723,#1b1102', items:[item('Plank', 161246549, 8, 'common'), item('Hammer', 151786902, 25, 'uncommon')]},
+    { id:'b10',name:'Copper Box',          price:22,   tier:'budget',    gradient:'#b87333,#804a00', items:[item('Coin', 190028482, 10, 'common'), item('Key', 86087484, 40, 'rare')]},
+    
+    { id:'s7', name:'Steel Case',          price:110,  tier:'standard',  gradient:'#455a64,#263238', items:[item('Ingot', 1472304, 40, 'common'), item('Sword', 16394849, 150, 'rare')]},
+    { id:'s8', name:'Iron Chest',          price:120,  tier:'standard',  gradient:'#212121,#000000', items:[item('Helmet', 156834010, 50, 'common'), item('Armor', 190028482, 200, 'rare')]},
+    { id:'s9', name:'Lead Box',            price:130,  tier:'standard',  gradient:'#37474f,#263238', items:[item('Weight', 86087484, 60, 'common'), item('Anchor', 151786902, 250, 'rare')]},
+    { id:'s10',name:'Zinc Case',           price:140,  tier:'standard',  gradient:'#eceff1,#b0bec5', items:[item('Battery', 161246549, 70, 'common'), item('Light', 11211180, 300, 'rare')]},
+    
+    { id:'p8', name:'Platinum Box',        price:450,  tier:'premium',   gradient:'#e5e4e2,#b0b0b0', items:[item('Ring', 1472304, 150, 'common'), item('Necklace', 16394849, 600, 'rare')]},
+    { id:'p9', name:'Palladium Case',      price:475,  tier:'premium',   gradient:'#ced4da,#6c757d', items:[item('Watch', 156834010, 160, 'common'), item('Bracelet', 190028482, 650, 'rare')]},
+    { id:'p10',name:'Titanium Chest',      price:500,  tier:'premium',   gradient:'#757575,#212121', items:[item('Frame', 86087484, 180, 'common'), item('Engine', 151786902, 750, 'rare')]},
+    
+    { id:'e8', name:'Void Container',      price:1600, tier:'elite',     gradient:'#120024,#000000', items:[item('Eye', 161246549, 500, 'common'), item('Soul', 11211180, 2500, 'rare')]},
+    { id:'e9', name:'Chaos Orb',           price:1700, tier:'elite',     gradient:'#310000,#000000', items:[item('Blood', 108149175, 550, 'common'), item('Heart', 19027209, 2800, 'rare')]},
+    { id:'e10',name:'Abyssal Box',         price:1800, tier:'elite',     gradient:'#000a12,#000000', items:[item('Shadow', 74897044, 600, 'common'), item('Ghost', 119013570, 3000, 'rare')]},
+    
+    { id:'l8', name:'Eternal Flame',       price:6000, tier:'legendary', gradient:'#ff4e50,#f9d423', items:[item('Fire', 81181545, 2000, 'common'), item('Sun', 97619826, 15000, 'rare')]},
+    { id:'l9', name:'Star Forged',         price:7000, tier:'legendary', gradient:'#00c6ff,#0072ff', items:[item('Star', 81182226, 2500, 'common'), item('Galaxy', 48545806, 20000, 'rare')]},
+    { id:'l10',name:'The Singularity',     price:10000,tier:'legendary', gradient:'#000000,#4b0082', items:[item('Darkness', 119013570, 3500, 'common'), item('Existence', 74897044, 50000, 'rare')]}
+  ];
+  // We have approx 32 original + 18 new = 50 total.
+  return tiers;
+})();
+
+// Thumbnail proxy cache
+const _thumbCache = new Map();
+app.get('/api/roblox-thumb', async (req, res) => {
+    // res.setHeader('Access-Control-Allow-Origin', '*'); // Redirects handle CORS naturally
+    const assetId = parseInt(req.query.id);
+    if (!assetId) return res.sendFile(__dirname + '/favicon.ico');
+    if (_thumbCache.has(assetId)) return res.redirect(_thumbCache.get(assetId));
+    try {
+        const r = await fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`);
+        const d = await r.json();
+        const url = d?.data?.[0]?.imageUrl || null;
+        if (url) {
+            _thumbCache.set(assetId, url);
+            return res.redirect(url);
+        }
+        res.sendFile(__dirname + '/favicon.ico');
+    } catch(e) {
+        res.sendFile(__dirname + '/favicon.ico');
+    }
+});
+
+// Return all case definitions to client
+app.get('/api/casebattle/cases', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json(CB_CASES);
+});
+
+// List open/waiting battles
+app.get('/api/casebattle/list', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const out = [];
+    for (const [id, b] of activeCaseBattles) {
+        if (b.status === 'waiting') out.push({ id, caseId: b.caseId, caseName: b.caseName, casePrice: b.casePrice,
+            maxPlayers: b.maxPlayers, players: b.players.map(p => ({ name: p.name, isBot: p.isBot })), status: b.status });
+    }
+    res.json(out);
+});
+
+// Create a new battle
+app.post('/api/casebattle/create', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, username, caseId, maxPlayers } = req.body;
+    const uid = String(userId || '');
+    const caseData = CB_CASES.find(c => c.id === caseId);
+    if (!caseData) return res.status(400).json({ error: 'Invalid case' });
+    const mp = Math.min(Math.max(parseInt(maxPlayers) || 2, 2), 4);
+    
+    // Server-side balance processing
+    const save = await loadOrCreateAccountSave(uid);
+    if (!save) return res.status(400).json({ error: 'User not found on server' });
+    if (save.balance < caseData.price) return res.status(400).json({ error: 'Not enough balance' });
+    
+    save.balance -= caseData.price;
+    await persistAccountSave(uid, save);
+    emitBalanceRemoteSync(io, uid, save);
+
+    const battleId = String(++_cbIdCounter);
+    activeCaseBattles.set(battleId, {
+        id: battleId, caseId, caseName: caseData.name, casePrice: caseData.price,
+        maxPlayers: mp, status: 'waiting', createdAt: Date.now(),
+        players: [{ userId: uid, name: username || ('Player' + uid.slice(-4)), isBot: false, item: null }]
+    });
+    io.emit('cb:new', { battleId });
+    res.json({ ok: true, battleId, casePrice: caseData.price });
+});
+
+// Join an existing battle
+app.post('/api/casebattle/join', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, username, battleId } = req.body;
+    const b = activeCaseBattles.get(String(battleId));
+    if (!b) return res.status(400).json({ error: 'Battle not found' });
+    if (b.status !== 'waiting') return res.status(400).json({ error: 'Battle already started' });
+    if (b.players.length >= b.maxPlayers) return res.status(400).json({ error: 'Battle full' });
+    const uid = String(userId || '');
+    if (b.players.some(p => p.userId === uid)) return res.status(400).json({ error: 'Already joined' });
+
+    // Server-side balance processing
+    const save = await loadOrCreateAccountSave(uid);
+    if (!save) return res.status(400).json({ error: 'User not found on server' });
+    if (save.balance < b.casePrice) return res.status(400).json({ error: 'Not enough balance' });
+    
+    save.balance -= b.casePrice;
+    await persistAccountSave(uid, save);
+    emitBalanceRemoteSync(io, uid, save);
+
+    b.players.push({ userId: uid, name: username || ('Player' + uid.slice(-4)), isBot: false, item: null });
+    io.emit('cb:join', { battleId, playerCount: b.players.length });
+    res.json({ ok: true, casePrice: b.casePrice, players: b.players.map(p => ({ name: p.name, isBot: p.isBot })) });
+});
+
+// Add a bot to a battle
+const BOT_NAMES = ['RobotPete','NPC_Ghost','AutoPlayer','xXBotXx','CaseMaster99','LuckyBot','ZephBot','SpinnerAI',
+    'GuestPlayer','ProGamer22','QuickDraw','RandoBot','SpinWiz','FastBot','Lucky7s','RoboKing'];
+app.post('/api/casebattle/addbot', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { battleId } = req.body;
+    const b = activeCaseBattles.get(String(battleId));
+    if (!b || b.status !== 'waiting' || b.players.length >= b.maxPlayers) return res.status(400).json({ error: 'Cannot add bot' });
+    const name = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + '_' + Math.floor(Math.random() * 100);
+    b.players.push({ userId: 'bot_' + Date.now(), name, isBot: true, item: null });
+    io.emit('cb:join', { battleId, playerCount: b.players.length });
+    res.json({ ok: true, botName: name, players: b.players.map(p => ({ name: p.name, isBot: p.isBot })) });
+});
+
+// Spin all players and resolve winner
+function pickCBItem(caseData, userId, isBot) {
+    const items = caseData.items;
+    const totalWeight = items.reduce((s, i) => s + i.weight, 0);
+    let roll = Math.random() * totalWeight;
+    // CUS influence (bots always random)
+    let forceLoss = !isBot && getCusState(userId).check();
+    let forceWin  = !isBot && getCusState(userId).checkWin();
+    if (forceWin) {
+        return items[items.length - 1]; // mythic = best
+    }
+    if (forceLoss) {
+        return items[0]; // common = worst
+    }
+    for (const item of items) {
+        roll -= item.weight;
+        if (roll <= 0) return item;
+    }
+    return items[0];
+}
+app.post('/api/casebattle/spin', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { battleId } = req.body;
+    const b = activeCaseBattles.get(String(battleId));
+    if (!b || b.status !== 'waiting') return res.status(400).json({ error: 'Invalid battle' });
+    if (b.players.length < b.maxPlayers) return res.status(400).json({ error: 'Not all players joined' });
+    b.status = 'spinning';
+    const caseData = CB_CASES.find(c => c.id === b.caseId);
+    // Assign items to all players
+    let maxVal = -1, winnerId = null, winnerName = '';
+    b.players.forEach(p => {
+        p.item = pickCBItem(caseData, p.userId, p.isBot);
+        if (p.item.value > maxVal) { maxVal = p.item.value; winnerId = p.userId; winnerName = p.name; }
+    });
+    const pot = b.casePrice * b.maxPlayers;
+    const payout = Math.floor(pot * 0.95);
+    b.status = 'done';
+    b.winnerId = winnerId;
+    b.payout = payout;
+    
+    // Record win for CUS and award server-side balance
+    const humanWinner = b.players.find(p => p.userId === winnerId && !p.isBot);
+    if (humanWinner) {
+        getCusState(winnerId).recordWin(payout >= b.casePrice * 3);
+        const winSave = await loadOrCreateAccountSave(winnerId);
+        if (winSave) {
+            winSave.balance += payout;
+            if (!winSave.stats) winSave.stats = {};
+            winSave.stats.wagered = (winSave.stats.wagered || 0) + b.casePrice; // Optionally track wager
+            await persistAccountSave(winnerId, winSave);
+            emitBalanceRemoteSync(io, winnerId, winSave);
+        }
+    }
+    
+    // Clean up after 2 mins
+    setTimeout(() => activeCaseBattles.delete(String(battleId)), 120000);
+    io.emit('cb:result', { battleId, players: b.players.map(p => ({ name: p.name, isBot: p.isBot, item: p.item, userId: p.userId })), winnerId, winnerName, payout });
+    res.json({ ok: true, players: b.players.map(p => ({ name: p.name, isBot: p.isBot, item: p.item, userId: p.userId })), winnerId, winnerName, payout });
+});
+
 // ==== CUSTOM GAME MECHANICS (CUS) AND SERVER OUTCOMES ====
 const activeMinesGames = new Map();
 const activeTowersGames = new Map();

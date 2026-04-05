@@ -4502,3 +4502,301 @@ document.getElementById('admin-search-input')?.addEventListener('keypress', (e) 
     if (e.key === 'Enter') adminLookupUser();
 });
 
+// =====================================================================
+// CASE BATTLES LOGIC
+// =====================================================================
+let cbCases = [];
+let cbActiveArena = null;
+let cbFormat = 2;
+let cbCaseId = null;
+
+async function loadCBCases() {
+    try {
+        const res = await fetch('/api/casebattle/cases');
+        if(res.ok) cbCases = await res.json();
+    } catch(e) {}
+}
+
+async function renderCBLobby() {
+    const list = document.getElementById('cb-lobby-list');
+    if(!list) return;
+    try {
+        const res = await fetch('/api/casebattle/list');
+        const battles = await res.json();
+        list.innerHTML = battles.map(b => {
+             const caseData = cbCases.find(c => c.id === b.caseId);
+             const dots = Array.from({length: b.maxPlayers}).map((_, i) => {
+                 return `<div class="cb-player-dot ${i < b.players.length ? 'filled' : ''}"><i class="fa-solid fa-user"></i></div>`;
+             }).join('');
+             const joinDisabled = (b.players.length >= b.maxPlayers || b.players.some(p => p.userId === String(robloxUserId))) ? 'disabled' : '';
+             return `
+                <div class="cb-lobby-card">
+                    <div class="cb-card-top">
+                        <div class="cb-card-case">${b.caseName}</div>
+                        <div class="cb-card-price">${b.casePrice} ZH$</div>
+                    </div>
+                    <div class="cb-card-players">${dots}</div>
+                    <div class="cb-card-action">
+                        <button class="btn-primary" style="width:100%; padding:8px; font-size:12px;" onclick="joinCaseBattle('${b.id}')" ${joinDisabled}>
+                            ${b.players.length}/${b.maxPlayers} - ${joinDisabled ? 'WATCH' : 'JOIN'}
+                        </button>
+                    </div>
+                </div>
+             `;
+        }).join('') || '<p style="color:var(--text-secondary);">No active battles right now.</p>';
+    } catch(e) {}
+}
+
+document.querySelectorAll('.cb-fmt-btn').forEach(b => {
+    b.addEventListener('click', () => {
+        document.querySelectorAll('.cb-fmt-btn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        cbFormat = parseInt(b.dataset.fmt);
+    });
+});
+
+window.openCBCreateModal = async function() {
+    if(cbCases.length === 0) {
+        await loadCBCases();
+        if(cbCases.length === 0) return showGameToast('Failed to load cases. Try again.', 'var(--red)');
+    }
+    const grid = document.getElementById('cb-create-cases-grid');
+    if(!grid) return;
+    grid.innerHTML = cbCases.map(c => `
+        <div class="cb-case-item" data-id="${c.id}" onclick="selectCBCase('${c.id}')" style="background: linear-gradient(180deg, rgba(0,0,0,0.8), rgba(0,0,0,0.9)), linear-gradient(135deg, ${c.gradient}); border-color: ${c.tier==='legendary'?'var(--gold)':(c.tier==='elite'?'#e8316a':'transparent')};">
+            <div class="cb-case-icon">📦</div>
+            <div class="cb-case-name">${c.name}</div>
+            <div class="cb-case-price">${c.price} ZH$</div>
+        </div>
+    `).join('');
+    document.getElementById('cb-create-modal').style.display = 'flex';
+};
+
+window.selectCBCase = function(id) {
+    cbCaseId = id;
+    document.querySelectorAll('.cb-case-item').forEach(el => el.classList.remove('selected'));
+    document.querySelector(`.cb-case-item[data-id="${id}"]`)?.classList.add('selected');
+    const btn = document.getElementById('cb-create-confirm-btn');
+    if(btn) {
+        btn.disabled = false;
+        const caseData = cbCases.find(c => c.id === id);
+        btn.textContent = `Create Battle - ${caseData.price} ZH$`;
+    }
+};
+
+document.getElementById('cb-create-confirm-btn')?.addEventListener('click', async () => {
+    if(!robloxUserId || !cbCaseId) return;
+    const caseData = cbCases.find(c => c.id === cbCaseId);
+    if(roBalance < caseData.price) return showGameToast('Not enough ZH$', 'var(--red)');
+    
+    try {
+        const res = await fetch('/api/casebattle/create', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ userId: robloxUserId, username: robloxUsername, caseId: cbCaseId, maxPlayers: cbFormat })
+        });
+        const data = await res.json();
+        if(data.ok) {
+            document.getElementById('cb-create-modal').style.display = 'none';
+            // Payouts and deductions are handled server-side now
+            enterCBArena(data.battleId, cbCaseId, cbFormat, [{userId: String(robloxUserId), name: robloxUsername, isBot: false, item: null}]);
+            renderCBLobby();
+        }
+    } catch(e){}
+});
+
+window.joinCaseBattle = async function(battleId) {
+    if(!robloxUserId) return showGameToast('You must be logged in', 'var(--red)');
+    try {
+        // Find battle info to fetch case
+        let listRes = await fetch('/api/casebattle/list');
+        let battles = await listRes.json();
+        let b = battles.find(x => x.id === battleId);
+        if(!b) return;
+
+        // If not already in it, join it
+        if (!b.players.some(p => p.userId === String(robloxUserId))) {
+            if(roBalance < b.casePrice) return showGameToast('Not enough ZH$', 'var(--red)');
+            const res = await fetch('/api/casebattle/join', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ userId: robloxUserId, username: robloxUsername, battleId })
+            });
+            const data = await res.json();
+            if(data.ok) {
+                // deductBet is handled server-side now, so we just update client state
+                enterCBArena(battleId, b.caseId, b.maxPlayers, data.players);
+            } else { showGameToast(data.error, 'var(--red)'); return; }
+        } else {
+            // we are already in it, just view
+            enterCBArena(battleId, b.caseId, b.maxPlayers, b.players);
+        }
+    } catch(e){}
+};
+
+function enterCBArena(battleId, caseId, maxPlayers, currentPlayers) {
+    cbActiveArena = battleId;
+    document.getElementById('cb-lobby').style.display = 'none';
+    document.getElementById('cb-arena').style.display = 'block';
+    const caseData = cbCases.find(c => c.id === caseId);
+    document.getElementById('cb-arena-case-info').textContent = `${caseData.name} (${maxPlayers} Players) - ${caseData.price} ZH$ each`;
+    document.getElementById('cb-result-banner').style.display = 'none';
+    
+    renderCBArenaSlots(maxPlayers, currentPlayers, caseData);
+}
+
+function renderCBArenaSlots(maxPlayers, players, caseData) {
+    const list = document.getElementById('cb-arena-slots');
+    list.innerHTML = '';
+    const pot = caseData.price * maxPlayers;
+    document.querySelector('.cb-arena-pot-val').textContent = pot.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+
+    for(let i=0; i<maxPlayers; i++) {
+        const p = players[i];
+        let infoHtml = `<div style="color:var(--text-secondary);">Waiting for player...</div>`;
+        if(p) infoHtml = `<div style="color:${p.isBot?'var(--accent)':'white'}; font-size:16px;"><i class="fa-solid fa-${p.isBot?'robot':'user'}"></i> ${p.name}</div><div class="cb-track-winner" id="cb-win-${i}" style="font-size:16px; text-transform:uppercase; letter-spacing:1px;"></div>`;
+        
+        // vertical items
+        let spinnerItems = Array.from({length: 40}).map(() => {
+            const ri = caseData.items[Math.floor(Math.random() * caseData.items.length)];
+            return `<div class="cb-item-box" style="border-bottom-color:${ri.color};"><img src="/api/roblox-thumb?id=${ri.assetId}" onerror="this.src='/favicon.ico'"><div class="cb-item-name">${ri.name}</div></div>`;
+        }).join('');
+
+        list.innerHTML += `
+            <div class="cb-player-track">
+                <div class="cb-track-info" style="align-items:center;">${infoHtml}</div>
+                <div class="cb-track-window" id="cb-window-${i}">
+                    <div class="cb-spinner" id="cb-spinner-${i}" style="transform: translateY(0);">
+                        ${spinnerItems}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    const owner = players[0];
+    const amIOwner = owner && owner.userId === String(robloxUserId);
+    document.getElementById('cb-arena-controls').style.display = (amIOwner && players.length < maxPlayers) ? 'block' : 'none';
+}
+
+window.leaveCBArena = function() {
+    cbActiveArena = null;
+    document.getElementById('cb-lobby').style.display = 'block';
+    document.getElementById('cb-arena').style.display = 'none';
+    renderCBLobby();
+};
+
+document.getElementById('cb-add-bot-btn')?.addEventListener('click', async () => {
+    if(!cbActiveArena) return;
+    try {
+        await fetch('/api/casebattle/addbot', {
+            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ battleId: cbActiveArena })
+        });
+    } catch(e){}
+});
+
+if(typeof socket !== 'undefined') {
+    socket.on('cb:new', () => { if(document.querySelector('[data-view=casebattle]').classList.contains('active')) renderCBLobby(); });
+    socket.on('cb:join', async (data) => {
+        if(cbActiveArena === data.battleId) {
+            const listRes = await fetch('/api/casebattle/list');
+            const battles = await listRes.json();
+            const b = battles.find(x => x.id === data.battleId);
+            if(b) {
+                const caseData = cbCases.find(c => c.id === b.caseId);
+                renderCBArenaSlots(b.maxPlayers, b.players, caseData);
+                if(b.players.length === b.maxPlayers && b.players[0].userId === String(robloxUserId)) {
+                    document.getElementById('cb-arena-controls').style.display = 'none';
+                    fetch('/api/casebattle/spin', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ battleId: cbActiveArena }) });
+                }
+            }
+        } else {
+            if(document.querySelector('[data-view=casebattle]').classList.contains('active')) renderCBLobby();
+        }
+    });
+    
+    socket.on('cb:result', setTimeout.bind(null, async (data) => {
+        if(cbActiveArena === data.battleId) {
+            document.getElementById('cb-arena-controls').style.display = 'none';
+            const pCount = data.players.length;
+            let caseObj = null;
+            
+            for(let i=0; i<pCount; i++) {
+                const player = data.players[i];
+                const finalItem = player.item;
+                const spinner = document.getElementById(`cb-spinner-${i}`);
+                if(!spinner) continue;
+                
+                if(!caseObj) caseObj = cbCases.find(c => c.items.some(x => x.assetId === finalItem.assetId));
+                if(!caseObj) continue;
+                
+                const boxes = Array.from(spinner.children);
+                for(let j=0; j<40; j++) {
+                    let itemToShow = caseObj.items[Math.floor(Math.random() * caseObj.items.length)];
+                    if(j === 35) itemToShow = finalItem; // Item #35 is the winner (4 items left to roll past smoothly if we want, but center is an offset)
+                    
+                    boxes[j].style.borderBottomColor = itemToShow.color;
+                    boxes[j].innerHTML = `<img src="/api/roblox-thumb?id=${itemToShow.assetId}" onerror="this.src='/favicon.ico'">
+                                          <div class="cb-item-name">${itemToShow.name}</div>
+                                          <div class="cb-item-price" style="font-size:12px; bottom:2px; padding:2px;">${itemToShow.value}</div>`;
+                    if(j === 35) {
+                        // Mark winner slightly bigger
+                        boxes[j].innerHTML = `<img src="/api/roblox-thumb?id=${itemToShow.assetId}" onerror="this.src='/favicon.ico'" style="transform:scale(1.1); margin-bottom:5px;">
+                                          <div class="cb-item-name" style="font-size:11px; top:2px; font-weight:800;">${itemToShow.name}</div>
+                                          <div class="cb-item-price" style="font-size:13px; color:var(--gold);">${itemToShow.value} ZH$</div>`;
+                    }
+                }
+                
+                const itemHeight = 120;
+                const windowHeight = 360; 
+                // Center item 35 vertically
+                const offset = -(35 * itemHeight) + (windowHeight/2) - (itemHeight/2);
+                const randOffset = (Math.random() - 0.5) * 40;
+                
+                requestAnimationFrame(() => {
+                    spinner.style.transform = `translateY(${offset + randOffset}px)`;
+                });
+            }
+            
+            setTimeout(() => {
+                let amIWinner = (String(data.winnerId) === String(robloxUserId));
+                for(let i=0; i<pCount; i++) {
+                    if(data.players[i].userId === data.winnerId) {
+                        const winEl = document.getElementById(`cb-win-${i}`);
+                        if(winEl) {
+                           winEl.style.display = 'block';
+                           winEl.textContent = '🏆 WINNER';
+                        }
+                        const winWin = document.getElementById(`cb-window-${i}`);
+                        if(winWin) winWin.style.boxShadow = 'inset 0 0 20px rgba(0,0,0,0.8), 0 0 15px rgba(234,179,8,0.7)';
+                    } else {
+                        const winWin = document.getElementById(`cb-window-${i}`);
+                        if(winWin) winWin.style.opacity = '0.5';
+                    }
+                }
+                
+                if(amIWinner) awardWin(data.payout);
+                setTimeout(() => fetchAccountFromServer(robloxUserId), 1000);
+                
+                document.getElementById('cb-result-banner').style.display = 'block';
+                document.getElementById('cb-result-text').textContent = amIWinner ? '🏆 YOU WON!' : `${data.winnerName} WON!`;
+                document.getElementById('cb-result-text').style.color = amIWinner ? 'var(--gold)' : 'white';
+                document.getElementById('cb-result-payout').textContent = `${data.payout.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} ZH$`;
+            }, 6100);
+        }
+    }, 100)); // slight debounce
+}
+
+document.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-view="casebattle"]');
+    if(el) {
+        if(cbCases.length === 0) loadCBCases();
+        renderCBLobby();
+        // Return from arena to lobby if they click the nav
+        document.getElementById('cb-lobby').style.display = 'block';
+        document.getElementById('cb-arena').style.display = 'none';
+        cbActiveArena = null;
+    }
+});
+loadCBCases();
+

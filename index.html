@@ -59,6 +59,10 @@
                 <i class="fa-solid fa-coins"></i>
                 <span>Coinflip</span>
             </a>
+            <a href="#" class="nav-item" data-view="casebattle" title="Case Battles">
+                <i class="fa-solid fa-box-open"></i>
+                <span>Case Battles</span>
+            </a>
             <a href="#" class="nav-item" data-view="rooms" title="Voice Chat">
                 <i class="fa-solid fa-microphone-lines"></i>
                 <span>Voice Chat</span>
@@ -214,6 +218,12 @@
                         <div class="badge badge-new">New Release</div>
                         <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">💎</span>
                         <h3 class="card-title">MINES</h3>
+                    </div>
+                    <div class="game-card casebattle" onclick="document.querySelector('[data-view=casebattle]').click()">
+                        <div class="game-card-visual casebattle-visual" aria-hidden="true" style="background: linear-gradient(135deg, #2a0a4a, #150030);"></div>
+                        <div class="badge badge-popular">Hot</div>
+                        <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">📦</span>
+                        <h3 class="card-title">CASE BATTLES</h3>
                     </div>
                 </div>
                 </section>
@@ -679,6 +689,86 @@
 
                         <!-- Canvas -->
                         <canvas id="crash-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:2;"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== CASE BATTLES VIEW ===== -->
+            <div id="view-casebattle" class="view">
+                <div class="cb-layout">
+                    <!-- CB Header -->
+                    <div class="room-header">
+                        <div style="flex:1;">
+                            <h2 style="margin:0; font-size:24px; color:white; display:flex; align-items:center; gap:10px;">
+                                <i class="fa-solid fa-box-open" style="color:var(--accent);"></i> Case Battles
+                            </h2>
+                            <p style="margin:5px 0 0 0; color:var(--text-secondary); font-size:14px;">Open cases against other players. Highest value item takes the entire pot!</p>
+                        </div>
+                        <div>
+                            <button class="btn-primary" onclick="openCBCreateModal()"><i class="fa-solid fa-plus"></i> Create Battle</button>
+                        </div>
+                    </div>
+
+                    <!-- CB Lobby (List of waiting battles) -->
+                    <div id="cb-lobby" class="cb-section">
+                        <h3 style="margin-bottom:15px; color:white;">Active Battles</h3>
+                        <div id="cb-lobby-list" class="cb-lobby-grid">
+                            <!-- populated by js -->
+                        </div>
+                    </div>
+
+                    <!-- CB Arena (The actual slots) -->
+                    <div id="cb-arena" class="cb-section" style="display:none;">
+                        <button class="btn-secondary" onclick="leaveCBArena()" style="margin-bottom:20px;"><i class="fa-solid fa-arrow-left"></i> Back to Lobby</button>
+                        <div class="cb-arena-header" style="text-align:center; margin-bottom:20px;">
+                            <h3 id="cb-arena-title" style="color:white; font-size:22px;">Battle Room</h3>
+                            <div id="cb-arena-case-info" style="color:var(--accent); font-weight:bold;"></div>
+                            <div id="cb-arena-pot" style="margin-top:10px; font-size:18px; color:var(--gold);">Pot: <span class="cb-arena-pot-val">0</span> ZH$</div>
+                        </div>
+
+                        <!-- Player Slots Container -->
+                        <div id="cb-arena-slots" class="cb-slots-container">
+                            <!-- slots populated by JS -->
+                        </div>
+
+                        <!-- Add Bot / Spin Controls -->
+                        <div id="cb-arena-controls" style="text-align:center; margin-top:30px; display:none;">
+                            <button class="btn-secondary" id="cb-add-bot-btn" style="margin-right:10px;"><i class="fa-solid fa-robot"></i> Call Bot</button>
+                        </div>
+                        
+                        <!-- Result banner -->
+                        <div id="cb-result-banner" style="display:none; text-align:center; margin-top:30px; padding:20px; border-radius:12px; background:rgba(0,0,0,0.4); border:1px solid var(--border-color);">
+                            <h2 id="cb-result-text" style="color:white; margin:0;"></h2>
+                            <div id="cb-result-payout" style="color:var(--gold); font-size:24px; font-weight:800; margin-top:10px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CB Create Modal -->
+                <div class="modal-backdrop" id="cb-create-modal" style="display:none; z-index:9999;">
+                    <div class="modal-box" style="max-width:800px; padding:30px; max-height:90vh; overflow-y:auto;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <h2 style="color:white; margin:0;">Create Case Battle</h2>
+                            <button class="modal-close" onclick="document.getElementById('cb-create-modal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        
+                        <div style="margin-bottom:20px;">
+                            <label style="color:var(--text-secondary); display:block; margin-bottom:10px;">Format</label>
+                            <div class="cb-format-selector" style="display:flex; gap:10px;">
+                                <button class="cb-fmt-btn active" data-fmt="2">1v1</button>
+                                <button class="cb-fmt-btn" data-fmt="3">1v1v1</button>
+                                <button class="cb-fmt-btn" data-fmt="4">1v1v1v1</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:20px;">
+                            <label style="color:var(--text-secondary); display:block; margin-bottom:10px;">Select Case</label>
+                            <div class="cb-cases-grid" id="cb-create-cases-grid">
+                                <!-- populated by js -->
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="cb-create-confirm-btn" style="width:100%; padding:15px; font-size:16px;" disabled>Select a case to create battle</button>
                     </div>
                 </div>
             </div>
