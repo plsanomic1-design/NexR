@@ -1680,6 +1680,7 @@ app.post('/api/deposit/crypto/create', async (req, res) => {
                 price_amount: eurAmount,
                 price_currency: 'eur',
                 pay_currency: currency,
+                ipn_callback_url: 'https://' + req.get('host') + '/api/deposit/crypto/webhook',
                 order_id: orderId,
                 order_description: `ZephR$ Deposit: ${amountZh} ZH$`
             })
@@ -1711,14 +1712,9 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
     const sig = req.headers['x-nowpayments-sig'];
     if (!sig) return res.status(400).send('No signature');
     
-    // Sort keys before hashing
-    const sortedKeys = Object.keys(req.body).sort();
-    const sortedObj = {};
-    for (const key of sortedKeys) {
-        sortedObj[key] = req.body[key];
-    }
+    // Sort keys before hashing according to NowPayments docs
     const hmac = crypto.createHmac('sha512', ipnSecret);
-    hmac.update(JSON.stringify(sortedObj));
+    hmac.update(JSON.stringify(req.body, Object.keys(req.body).sort()));
     if (sig !== hmac.digest('hex')) {
         return res.status(403).send('Invalid signature');
     }
