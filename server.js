@@ -1127,29 +1127,37 @@ app.get('/api/casebattle/list', (req, res) => {
 // Create a new battle
 app.post('/api/casebattle/create', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, username, caseId, maxPlayers } = req.body;
-    const uid = String(userId || '');
-    const caseData = CB_CASES.find(c => c.id === caseId);
-    if (!caseData) return res.status(400).json({ error: 'Invalid case' });
-    const mp = Math.min(Math.max(parseInt(maxPlayers) || 2, 2), 4);
-    
-    // Server-side balance processing
-    const save = await loadOrCreateAccountSave(uid);
-    if (!save) return res.status(400).json({ error: 'User not found on server' });
-    if (save.balance < caseData.price) return res.status(400).json({ error: 'Not enough balance' });
-    
-    save.balance -= caseData.price;
-    await persistAccountSave(uid, save);
-    emitBalanceRemoteSync(io, uid, save);
+    try {
+        const { userId, username, caseId, maxPlayers } = req.body;
+        const uid = String(userId || '');
+        if(!uid || uid === 'null') return res.status(400).json({ error: 'You are not logged in correctly. Please verify your Bio.' });
 
-    const battleId = String(++_cbIdCounter);
-    activeCaseBattles.set(battleId, {
-        id: battleId, caseId, caseName: caseData.name, casePrice: caseData.price,
-        maxPlayers: mp, status: 'waiting', createdAt: Date.now(),
-        players: [{ userId: uid, name: username || ('Player' + uid.slice(-4)), isBot: false, item: null }]
-    });
-    io.emit('cb:new', { battleId });
-    res.json({ ok: true, battleId, casePrice: caseData.price });
+        const caseData = CB_CASES.find(c => c.id === caseId);
+        if (!caseData) return res.status(400).json({ error: 'Invalid case selection' });
+
+        const mp = Math.min(Math.max(parseInt(maxPlayers) || 2, 2), 4);
+        
+        // Server-side balance processing
+        const save = await loadOrCreateAccountSave(uid);
+        if (!save) return res.status(400).json({ error: 'Account not found on server' });
+        if (save.balance < caseData.price) return res.status(400).json({ error: 'Insufficient balance (ZH$)' });
+        
+        save.balance -= caseData.price;
+        await persistAccountSave(uid, save);
+        emitBalanceRemoteSync(io, uid, save);
+
+        const battleId = String(++_cbIdCounter);
+        activeCaseBattles.set(battleId, {
+            id: battleId, caseId, caseName: caseData.name, casePrice: caseData.price,
+            maxPlayers: mp, status: 'waiting', createdAt: Date.now(),
+            players: [{ userId: uid, name: username || ('Player' + uid.slice(-4)), isBot: false, item: null }]
+        });
+        io.emit('cb:new', { battleId });
+        res.json({ ok: true, battleId, casePrice: caseData.price });
+    } catch (err) {
+        console.error('CB Create Error:', err);
+        res.status(500).json({ error: 'Server error: ' + err.message });
+    }
 });
 
 // Join an existing battle
