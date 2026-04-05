@@ -117,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function endGame(msg, color) {
+            GSM.clear('blackjack');
             isPlaying = false;
             renderHands(false);
             bjHitBtn.disabled = true;
@@ -130,6 +131,29 @@ document.addEventListener('DOMContentLoaded', () => {
             bjMsg.style.color = color;
             bjMsg.style.display = 'block';
         }
+
+        // Expose Blackjack restore hook (called by resumeGameSessions on page load)
+        window._bjRestore = function(session) {
+            if (!session || !session.pHand || !session.dHand) {
+                if (session && session.bet > 0) { awardWin(session.bet); }
+                GSM.clear('blackjack');
+                showGameToast('\uD83C\uDCCF Your Blackjack bet was refunded', 'var(--accent)');
+                return;
+            }
+            document.getElementById('bj-bet-input').value = session.bet;
+            pHand = session.pHand;
+            dHand = session.dHand;
+            cDeck = session.deck || [];
+            isPlaying = true;
+            bjHitBtn.disabled = false;
+            bjStandBtn.disabled = false;
+            bjPlayBtn.disabled = false;
+            bjPlayBtn.textContent = 'Playing...';
+            bjPlayBtn.classList.add('custom-cashout-btn');
+            bjPlayBtn.style.background = '';
+            bjMsg.style.display = 'none';
+            renderHands(true);
+        };
 
         bjPlayBtn.addEventListener('click', async () => {
             if(isPlaying) return;
@@ -167,6 +191,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 bjPlayBtn.classList.add('custom-cashout-btn');
                 
                 renderHands();
+                // Persist dealt hands so player can resume on refresh
+                GSM.update('blackjack', { pHand: pHand, dHand: dHand, deck: cDeck });
                 if(getScore(pHand) === 21) {
                     endGame('Blackjack! You Win', 'var(--gold)');
                 }
@@ -218,6 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let mIsPlaying = false;
         let mGrid = []; // true if bomb
         let mRevealed = 0;
+        let mRevealedTiles = []; // indices of safely-revealed tiles (for session restore)
         let mMultiplier = 1.0;
         let currentBet = 0;
 
@@ -234,6 +261,34 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         initGridUI();
+
+        // Expose Mines restore hook (called by resumeGameSessions on page load)
+        window._minesRestore = function(session) {
+            if (!session) return;
+            currentBet       = session.bet || 0;
+            mRevealed        = session.revealed || 0;
+            mRevealedTiles   = session.revealedTiles ? [...session.revealedTiles] : [];
+            mMultiplier      = session.multiplier || 1.0;
+            mGrid            = Array(25).fill(false);
+            mIsPlaying       = true;
+            betInp.value     = session.bet;
+            countInp.value   = session.bombs;
+            earningsInp.value = (currentBet * parseFloat(mMultiplier)).toFixed(2);
+            const revSet = new Set(mRevealedTiles);
+            const tiles  = minesGrid.querySelectorAll('.mines-tile');
+            tiles.forEach((t, i) => {
+                t.className = 'mines-tile';
+                if (revSet.has(i)) {
+                    t.classList.add('revealed', 'gem');
+                    t.innerHTML = '<span class="tile-mark">G</span>';
+                } else {
+                    t.innerHTML = '<span class="tile-mark">G</span>';
+                }
+            });
+            minesMsg.style.display = 'none';
+            minesPlayBtn.disabled  = mRevealed === 0;
+            syncMinesCashoutButton();
+        };
 
         function getMulti(mines, clicks) {
             // Simplified multiplier math
@@ -287,6 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     mIsPlaying = true;
                     mGrid = Array(25).fill(false); // local dummy array for endMines logic
                     mRevealed = 0;
+                    mRevealedTiles = [];
                     mMultiplier = 1.0;
                     earningsInp.value = currentBet.toFixed(2);
                     minesPlayBtn.disabled = true; // must reveal at least one gem first
@@ -336,11 +392,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     tileEl.innerHTML = '<span class="tile-mark">G</span>';
                     soundGem();
                     mRevealed++;
+                    mRevealedTiles.push(i);
                     minesPlayBtn.disabled = false; // can now cashout
                     let bombs = parseInt(countInp.value) || 3;
                     mMultiplier = getMulti(bombs, mRevealed);
                     earningsInp.value = (currentBet * parseFloat(mMultiplier)).toFixed(2);
                     syncMinesCashoutButton();
+                    // Save progress so game can be resumed after a refresh
+                    GSM.update('mines', { revealed: mRevealed, revealedTiles: mRevealedTiles, multiplier: mMultiplier });
                     
                     if(mRevealed + bombs === 25) {
                         endMines(true); // auto cashout if all found
@@ -357,6 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function endMines(win) {
+            GSM.clear('mines');
             mIsPlaying = false;
             minesPlayBtn.textContent = 'Start new game';
             minesPlayBtn.classList.remove('custom-cashout-btn');
@@ -410,6 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let curBet = 0;
         let tMulti = 1.0;
         let tLogic = [];
+        let tRevealedRows = []; // rows climbed for session restore
 
         diffBtns.forEach(b => {
             b.addEventListener('click', (e) => {
@@ -450,6 +511,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         initTowersUI();
 
+        // Expose Towers restore hook (called by resumeGameSessions on page load)
+        window._towersRestore = function(session) {
+            if (!session) return;
+            curRow   = session.curRow || 0;
+            curBet   = session.bet || 0;
+            tMulti   = session.multiplier || 1.0;
+            diff     = session.diff || 'easy';
+            tRevealedRows = session.revealedRows ? [...session.revealedRows] : [];
+            tIsPlaying = true;
+            tBetInp.value = session.bet;
+            diffBtns.forEach(b => b.classList.toggle('active', b.dataset.diff === diff));
+            initTowersUI();
+            const cfg = getDiffConfig();
+            const rElements = Array.from(tGrid.children);
+            for (let r = 0; r < curRow; r++) {
+                rElements[r].classList.add('passed');
+                rElements[r].classList.remove('active-row');
+                Array.from(rElements[r].children).forEach(t => {
+                    const origVal = Math.pow(cfg.base, r + 1).toFixed(2);
+                    t.className = 'tower-tile gem';
+                    t.innerHTML = `${origVal}x <span class="tower-zr-suffix">ZH$</span>`;
+                    t.style.pointerEvents = 'none';
+                });
+            }
+            if (curRow < rElements.length) {
+                rElements[curRow].classList.add('active-row');
+                Array.from(rElements[curRow].children).forEach(t => t.style.pointerEvents = 'auto');
+            }
+            tMsg.style.display = 'none';
+            tPlayBtn.disabled = curRow === 0;
+            if (curRow > 0) {
+                tPlayBtn.textContent = `Cashout (${tMulti.toFixed(2)} x)`;
+                tPlayBtn.classList.add('custom-cashout-btn');
+            }
+        };
+
         tPlayBtn.addEventListener('click', async () => {
             if(tIsPlaying) {
                 // Cashout
@@ -457,6 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 curRow = 0;
                 curBet = parseFloat(tBetInp.value) || 0;
+                tRevealedRows = [];
                 const cfg = getDiffConfig();
                 
                 tMsg.style.display = 'none';
@@ -526,8 +624,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     tileEl.innerHTML = '<span class="tile-mark">S</span>';
                     tMulti = Math.pow(cfg.base, curRow+1);
                     curRow++;
+                    tRevealedRows.push(curRow - 1);
                     tPlayBtn.disabled = false; // can now cashout
                     syncTowersCashoutButton();
+                    // Persist progress for session restore on refresh
+                    GSM.update('towers', { curRow, multiplier: tMulti, revealedRows: tRevealedRows });
                     
                     const rElements = Array.from(tGrid.children);
                     rElements[curRow-1].classList.remove('active-row');
@@ -557,6 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function endTowers(win) {
+            GSM.clear('towers');
             tIsPlaying = false;
             tPlayBtn.textContent = 'Start new game';
             tPlayBtn.classList.remove('custom-cashout-btn');
@@ -1567,6 +1669,122 @@ function awardWin(amount) {
     saveToStorage();
 }
 
+// ===== GAME SESSION MANAGER (refresh / disconnect protection) =====
+// Saves active game state to localStorage so the player can continue after a page refresh.
+const GSM = (() => {
+    const KEYS = {
+        mines:     'zephrs_sess_mines',
+        towers:    'zephrs_sess_towers',
+        blackjack: 'zephrs_sess_blackjack'
+    };
+    return {
+        save(game, data)   { try { localStorage.setItem(KEYS[game], JSON.stringify(data)); } catch(e) {} },
+        load(game)         { try { return JSON.parse(localStorage.getItem(KEYS[game])); } catch(e) { return null; } },
+        update(game, patch){ const cur = this.load(game) || {}; this.save(game, { ...cur, ...patch }); },
+        clear(game)        { try { localStorage.removeItem(KEYS[game]); } catch(e) {} }
+    };
+})();
+
+/** Show a small floating toast – used to inform the player when session was restored or refunded. */
+function showGameToast(msg, color) {
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = `position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;
+        background:#1c2333;border:1px solid ${color};color:${color};padding:14px 26px;
+        border-radius:10px;font-size:13px;font-weight:600;z-index:99999;pointer-events:none;
+        transition:opacity 0.35s,transform 0.35s;`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+        el.style.opacity = '1';
+        el.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(-50%) translateY(10px)';
+        setTimeout(() => el.remove(), 400);
+    }, 3800);
+}
+
+/**
+ * Called on page load (after robloxUserId is available).
+ * Checks localStorage for an interrupted game session and tries to restore it.
+ * If the server still has the game in memory → UI is fully re-built so the player continues.
+ * If the server restarted (cold-start) → we restore the server state from the saved tiles/rows.
+ */
+async function resumeGameSessions() {
+    if (!robloxUserId) return;
+
+    // ---- MINES ----
+    const ms = GSM.load('mines');
+    if (ms && ms.active && String(ms.userId) === String(robloxUserId)) {
+        try {
+            const r = await fetch(`/api/game/mines/status?userId=${encodeURIComponent(robloxUserId)}`);
+            const d = await r.json();
+            if (!d.active) {
+                if (ms.revealed > 0) {
+                    // Server lost game – rebuild it from the known safe tiles
+                    await fetch('/api/game/mines/restore', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: robloxUserId, bombs: ms.bombs, revealedTiles: ms.revealedTiles })
+                    });
+                    if (typeof window._minesRestore === 'function') window._minesRestore(ms);
+                    showGameToast('\uD83C\uDFAE Mines game restored!', 'var(--accent)');
+                } else {
+                    // No tiles revealed – refund bet and clear
+                    if (ms.bet > 0) awardWin(ms.bet);
+                    GSM.clear('mines');
+                    showGameToast('\uD83D\uDD04 Your Mines bet was refunded (server restarted)', 'var(--accent)');
+                }
+            } else {
+                // Server still has game – just restore the client UI
+                if (typeof window._minesRestore === 'function') window._minesRestore(ms);
+                showGameToast('\uD83C\uDFAE Mines game restored – continue where you left off!', 'var(--accent)');
+            }
+        } catch(e) {
+            console.warn('[GSM] Mines restore error:', e);
+        }
+    }
+
+    // ---- TOWERS ----
+    const ts = GSM.load('towers');
+    if (ts && ts.active && String(ts.userId) === String(robloxUserId)) {
+        try {
+            const r = await fetch(`/api/game/towers/status?userId=${encodeURIComponent(robloxUserId)}`);
+            const d = await r.json();
+            if (!d.active) {
+                // Server lost game – rebuild towers logic
+                const cfg = ts.diff === 'easy' ? { w: 4, b: 1 } : ts.diff === 'normal' ? { w: 3, b: 1 } : { w: 3, b: 2 };
+                await fetch('/api/game/towers/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: robloxUserId, rows: 8, width: cfg.w, bombs: cfg.b })
+                });
+            }
+            if (ts.curRow > 0) {
+                if (typeof window._towersRestore === 'function') window._towersRestore(ts);
+                showGameToast('\uD83C\uDFAE Towers game restored – continue where you left off!', 'var(--accent)');
+            } else {
+                // No rows climbed – refund
+                if (ts.bet > 0) awardWin(ts.bet);
+                GSM.clear('towers');
+                showGameToast('\uD83D\uDD04 Your Towers bet was refunded (server restarted)', 'var(--accent)');
+            }
+        } catch(e) {
+            console.warn('[GSM] Towers restore error:', e);
+        }
+    }
+
+    // ---- BLACKJACK ----
+    const bjs = GSM.load('blackjack');
+    if (bjs && bjs.active && String(bjs.userId) === String(robloxUserId)) {
+        if (typeof window._bjRestore === 'function') {
+            window._bjRestore(bjs);
+            if (bjs.pHand && bjs.dHand) showGameToast('\uD83C\uDCCF Blackjack hand restored – keep playing!', 'var(--accent)');
+        }
+    }
+}
+
 function getLiveFeedDisplayName() {
     try {
         if (typeof currentUsername === 'string' && currentUsername.trim().length > 0) {
@@ -1738,6 +1956,8 @@ function patchBlackjackBalance() {
                 return;
             }
             deductBet(bet);
+            // Save initial BJ session (hands will be added by the play button's own handler)
+            GSM.save('blackjack', { active: true, userId: robloxUserId, bet, pHand: null, dHand: null, deck: null });
             bjLiveFeedLast = '';
             soundClick();
         }
@@ -1800,6 +2020,9 @@ function patchMinesBalance() {
                 return;
             }
             deductBet(bet);
+            // Save initial mines session so refresh protection can kick in
+            const _bombs = parseInt(document.getElementById('mines-count-input').value) || 3;
+            GSM.save('mines', { active: true, userId: robloxUserId, bet, bombs: _bombs, revealedTiles: [], revealed: 0, multiplier: 1.0 });
             minesFeedLast = '';
         }
     }, true);
@@ -1848,6 +2071,9 @@ function patchTowersBalance() {
                 return;
             }
             deductBet(bet);
+            // Save initial towers session for refresh protection
+            const _diff = document.querySelector('.towers-diff-tabs .diff-btn.active')?.dataset.diff || 'easy';
+            GSM.save('towers', { active: true, userId: robloxUserId, bet, diff: _diff, curRow: 0, multiplier: 1.0, revealedRows: [] });
             towersFeedLast = '';
         }
     }, true);
@@ -2668,6 +2894,10 @@ function applySavePayload(data) {
 
     if(typeof window !== 'undefined' && typeof window.adminIdentify === 'function') {
         queueMicrotask(() => window.adminIdentify());
+    }
+    // Attempt to restore any interrupted game session now that we have a userId
+    if (typeof robloxUserId === 'number' && robloxUserId > 0) {
+        setTimeout(resumeGameSessions, 600);
     }
 }
 

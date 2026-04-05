@@ -1180,6 +1180,68 @@ app.post('/api/game/mines/cashout', express.json(), (req, res) => {
     res.json({ logic: g.logic });
 });
 
+/** Session-restore: check if server still has an active mines game for this user */
+app.get('/api/game/mines/status', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const userId = String(req.query.userId || '').trim();
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    const g = activeMinesGames.get(userId);
+    res.json({ active: !!g, bombs: g ? g.logic.filter(Boolean).length : 0 });
+});
+
+/** Session-restore: re-create server mines game after cold-start, ensuring bombs avoid already-revealed tiles */
+app.post('/api/game/mines/restore', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, bombs, revealedTiles } = req.body;
+    const uid = String(userId || '').trim();
+    if (!uid) return res.status(400).json({ error: 'Missing userId' });
+    if (activeMinesGames.has(uid)) return res.json({ ok: true, restored: false });
+    const safe = new Set(Array.isArray(revealedTiles) ? revealedTiles.map(Number) : []);
+    const nb = Math.min(Math.max(parseInt(bombs) || 3, 1), 24);
+    let mGrid = Array(25).fill(false);
+    let placed = 0, attempts = 0;
+    while (placed < nb && attempts < 20000) {
+        attempts++;
+        const idx = Math.floor(Math.random() * 25);
+        if (!mGrid[idx] && !safe.has(idx)) { mGrid[idx] = true; placed++; }
+    }
+    activeMinesGames.set(uid, { logic: mGrid });
+    res.json({ ok: true, restored: true });
+});
+
+/** Session-restore: check if server still has an active towers game for this user */
+app.get('/api/game/towers/status', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const userId = String(req.query.userId || '').trim();
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    const g = activeTowersGames.get(userId);
+    res.json({ active: !!g });
+});
+
+/** Session-restore: re-create server towers game after cold-start */
+app.post('/api/game/towers/restore', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, rows, width, bombs } = req.body;
+    const uid = String(userId || '').trim();
+    if (!uid) return res.status(400).json({ error: 'Missing userId' });
+    if (activeTowersGames.has(uid)) return res.json({ ok: true, restored: false });
+    const r = parseInt(rows) || 8;
+    const w = parseInt(width) || 4;
+    const nb = parseInt(bombs) || 1;
+    let logic = [];
+    for (let row = 0; row < r; row++) {
+        let rArr = Array(w).fill(false);
+        let placed = 0;
+        while (placed < nb) {
+            let i = Math.floor(Math.random() * w);
+            if (!rArr[i]) { rArr[i] = true; placed++; }
+        }
+        logic.push(rArr);
+    }
+    activeTowersGames.set(uid, { logic });
+    res.json({ ok: true, restored: true });
+});
+
 app.post('/api/game/blackjack/start', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const { userId, deck } = req.body;
