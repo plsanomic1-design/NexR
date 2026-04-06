@@ -5131,23 +5131,7 @@ function cbSelectFormat(fmt, btn) {
 function cbRenderLobbySlots() {
     const el = document.getElementById('cb-lobby-preview');
     if (!el) return;
-    const numTeams   = CB_FORMAT_TEAMS[_cbBattleFormat] || 2;
-    const perTeam    = CB_FORMAT_PER_TEAM[_cbBattleFormat] || 1;
-    const teamColors = CB_TEAM_COLORS;
-    const teamLabels = { 2:['Team A','Team B'], 3:['Team 1','Team 2','Team 3'], 4:['P1','P2','P3','P4'], 5:['P1','P2','P3','P4','P5'] };
-    const labels = teamLabels[numTeams] || Array.from({length:numTeams},(_,i)=>`Team ${i+1}`);
-    const teamsHtml = Array.from({length:numTeams}, (_, t) => {
-        const slotsHtml = Array.from({length:perTeam}, (_, s) =>
-            `<div class="cb-lobby-slot">${s===0?`<i class="fa-solid fa-user-plus" style="font-size:14px;color:${teamColors[t]}44;"></i>`:''}
-            <span class="slot-waiting">Waiting</span></div>`
-        ).join('');
-        return `
-            <div class="cb-lobby-team">
-                <div class="cb-lobby-team-label" style="color:${teamColors[t]}">${labels[t]}</div>
-                <div class="cb-lobby-slots-row">${slotsHtml}</div>
-            </div>`;
-    }).join('');
-    el.innerHTML = `<div class="cb-lobby-teams">${teamsHtml}</div>`;
+    el.innerHTML = '';
 }
 
 function cbRenderCreateCases() {
@@ -5596,6 +5580,13 @@ function cbBindSockets() {
                 }
                 fakeItems.push(r.item);
                 
+                // Add trailing items so the spinner loops smoothly and isn't empty post-winner
+                if (caseData) {
+                    for(let i=0; i<12; i++) {
+                        fakeItems.push(caseData.items[Math.floor(Math.random() * caseData.items.length)]);
+                    }
+                }
+                
                 track.style.transition = 'none';
                 track.style.transform = 'translate3d(0, 0, 0)';
                 
@@ -5683,8 +5674,8 @@ function cbBindSockets() {
                 if (b.isTie) {
                     winnerEl.innerHTML = `<h3>🤝 It's a Tie!</h3><p>All players have been refunded their original case costs.</p>`;
                 } else if (b.winner) {
-                    const pot = b.players.reduce((s, p) => s + p.paid, 0);
-                    winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won!</h3><p>Took the entire pot of ${pot.toLocaleString()} ZR$</p>`;
+                    const winAmount = b.players.find(p => p.userId === b.winner.userId)?.total || 0;
+                    winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${winAmount.toLocaleString()} ZR$</h3>`;
                 }
             }
             // Clear action buttons
