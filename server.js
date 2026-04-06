@@ -2010,14 +2010,19 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
     // Push balance update to any open tabs for this user
     emitBalanceRemoteSync(io, userId, { balance: newBalance, stats: {} });
 
-    
-    // Fiat value estimation (500 ZH$ = 3.50 EUR) -> 1 ZH$ = 0.007 EUR
+    // Fiat value estimation: 1 ZR$ = 0.007 EUR
     const fiatValue = parseFloat((zhAmount * 0.007).toFixed(2));
-    
+
+    // Look up username from in-memory connected players (best-effort)
+    let wdUsername = 'Unknown';
+    for (const p of onlinePlayers.values()) {
+        if (String(p.userId) === String(userId)) { wdUsername = p.username || 'Unknown'; break; }
+    }
+
     const wdReq = {
         id: `cwd_${Date.now()}_${userId}`,
         userId: userId,
-        username: saveData.username || 'Unknown',
+        username: wdUsername,
         coin: coin,
         address: address,
         extraId: extraId || '',
