@@ -4207,11 +4207,11 @@ select optgroup {
 .cb-battle-spinner-track { display: flex; flex-direction: column; transition: transform cubic-bezier(0.1, 1, 0.2, 1); padding-top: calc(55px - 53px); height: max-content; }
 .cb-spin-ver-item { height: 106px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; border-top: 1px solid rgba(255,255,255,.02); border-bottom: 1px solid rgba(255,255,255,.02); flex-shrink: 0; position: relative; }
 .cb-spin-ver-item::after { content: ''; position: absolute; bottom: 0; left: 15%; right: 15%; height: 3px; border-radius: 3px 3px 0 0; opacity: 0.5; }
-.cb-spin-ver-item.rarity-common::after { background: #9ca3af; }
-.cb-spin-ver-item.rarity-uncommon::after { background: #34d399; }
-.cb-spin-ver-item.rarity-rare::after { background: #60a5fa; }
-.cb-spin-ver-item.rarity-epic::after { background: #a855f7; }
-.cb-spin-ver-item.rarity-legendary::after { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; }
+.cb-spin-ver-item.cb-item-rarity-common::after { background: #9ca3af; }
+.cb-spin-ver-item.cb-item-rarity-uncommon::after { background: #34d399; }
+.cb-spin-ver-item.cb-item-rarity-rare::after { background: #60a5fa; }
+.cb-spin-ver-item.cb-item-rarity-epic::after { background: #a855f7; }
+.cb-spin-ver-item.cb-item-rarity-legendary::after { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; }
 .cb-spin-ver-item img { width: 50px; height: 50px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(255,255,255,.15)); }
 .cb-spin-ver-item .si-name { font-size: 10px; font-weight: 700; color: #fff; text-align: center; line-height: 1.1; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cb-spin-ver-item .si-val { font-size: 11px; font-weight: 800; }
@@ -4220,12 +4220,23 @@ select optgroup {
 .cb-spinner-arrow-right { right: 0; border-right: 6px solid #fff; }
 .cb-bot-badge { background: rgba(167,139,250,.2); color: #a78bfa; border: 1px solid rgba(167,139,250,.4); font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px; }
 
-/* Micro winnings for Battle */
+/* Micro and Medium winnings for Battle */
 .cb-roll-card.micro { padding: 4px; border-radius: 6px; width: 44px; height: 44px; justify-content: center; animation: cbRollIn .3s cubic-bezier(.34,1.56,.64,1); position: relative; }
 .cb-roll-card.micro img { width: 28px; height: 28px; }
 .cb-roll-card.micro .cb-roll-card-info { display: none; }
 .cb-roll-card.micro::after { content: ''; position: absolute; bottom: -1px; left: 10%; right: 10%; height: 2px; border-radius: 2px; }
 
+.cb-roll-card.medium { padding: 6px 8px; border-radius: 6px; width: 120px; animation: cbRollIn .3s cubic-bezier(.34,1.56,.64,1); position: relative; gap: 8px; border-bottom: 2px solid transparent; }
+.cb-roll-card.medium img { width: 24px; height: 24px; object-fit: contain; }
+.cb-roll-card.medium .cb-roll-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cb-roll-card.medium .cb-roll-card-name { font-size: 10px; opacity: 0.8; }
+.cb-roll-card.medium .cb-roll-card-val { font-size: 11px; }
+
+.cb-roll-card.cb-item-rarity-legendary { border-bottom-color: #f59e0b; }
+.cb-roll-card.cb-item-rarity-epic { border-bottom-color: #a855f7; }
+.cb-roll-card.cb-item-rarity-rare { border-bottom-color: #60a5fa; }
+.cb-roll-card.cb-item-rarity-uncommon { border-bottom-color: #34d399; }
+.cb-roll-card.cb-item-rarity-common { border-bottom-color: #9ca3af; }
 /* Fix missing Motion Blur classes */
 .is-spinning { filter: blur(1.5px); will-change: transform; -webkit-transform: translateZ(0); transform: translateZ(0); }
 .is-spinning-fast { filter: blur(3px); will-change: transform; -webkit-transform: translateZ(0); transform: translateZ(0); }
