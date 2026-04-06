@@ -3421,7 +3421,369 @@ io.on('connection', (socket) => {
     });
 });
 
+
+// ======================================================================
+// CASE BATTLES SYSTEM
+// ======================================================================
+
+const CASES_DATA = [
+    {
+        id: 'starter',
+        name: 'Starter Case',
+        price: 100,
+        image: '/case_starter.png',
+        color: '#00d2ff',
+        items: [
+            { id: 'blue_gem',    name: 'Blue Gem',      value: 30,   chance: 55, rarity: 'common',    icon: 'https://tr.rbxcdn.com/c4e72f0d3a3e73e37fc6db2c41df2e2d/420/420/Hat/Png' },
+            { id: 'gold_coin',   name: 'Gold Coin',     value: 120,  chance: 30, rarity: 'uncommon',  icon: 'https://tr.rbxcdn.com/cf9a9ffa928c54ef77a4ca20ba940793/420/420/Hat/Png' },
+            { id: 'crown',       name: 'Silver Crown',  value: 350,  chance: 12, rarity: 'rare',      icon: 'https://tr.rbxcdn.com/e9c4b27d34b0c773a5ac0b4b0c898b13/420/420/Hat/Png' },
+            { id: 'diamond',     name: 'Diamond',       value: 1100, chance: 3,  rarity: 'legendary', icon: 'https://tr.rbxcdn.com/d6e50c4e91218a6abff19c8278e7f0a5/420/420/Hat/Png' },
+        ]
+    },
+    {
+        id: 'standard',
+        name: 'ZephR$ Standard',
+        price: 500,
+        image: '/case_standard.png',
+        color: '#a855f7',
+        items: [
+            { id: 'bronze_shield', name: 'Bronze Shield', value: 100,  chance: 40, rarity: 'common',    icon: 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/420/420/Hat/Png' },
+            { id: 'silver_sword',  name: 'Silver Sword',  value: 380,  chance: 30, rarity: 'uncommon',  icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
+            { id: 'hoverboard',    name: 'Hover Board',   value: 850,  chance: 20, rarity: 'rare',      icon: 'https://tr.rbxcdn.com/0e31d68e6bdf7e02c3ffed56af3c2c0c/420/420/Hat/Png' },
+            { id: 'dominus',       name: 'Dominus',       value: 2400, chance: 8,  rarity: 'epic',      icon: 'https://tr.rbxcdn.com/c6a0a51ebff1de9b4e780bf6a8ac34bc/420/420/Hat/Png' },
+            { id: 'headless',      name: 'Headless',      value: 5500, chance: 2,  rarity: 'legendary', icon: 'https://tr.rbxcdn.com/3a2d4d8bf2a5d02de0ad6e0c60dbf0c2/420/420/Hat/Png' },
+        ]
+    },
+    {
+        id: 'elite',
+        name: 'Elite Case',
+        price: 2000,
+        image: '/case_elite.png',
+        color: '#ef4444',
+        items: [
+            { id: 'rare_aura',      name: 'Rare Aura',      value: 500,   chance: 35, rarity: 'uncommon',  icon: 'https://tr.rbxcdn.com/c4e72f0d3a3e73e37fc6db2c41df2e2d/420/420/Hat/Png' },
+            { id: 'dragon_scale',   name: 'Dragon Scale',   value: 1400,  chance: 30, rarity: 'rare',      icon: 'https://tr.rbxcdn.com/cf9a9ffa928c54ef77a4ca20ba940793/420/420/Hat/Png' },
+            { id: 'void_sword',     name: 'Void Sword',     value: 2900,  chance: 20, rarity: 'epic',      icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
+            { id: 'elite_crown',    name: 'Elite Crown',    value: 7000,  chance: 12, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/e9c4b27d34b0c773a5ac0b4b0c898b13/420/420/Hat/Png' },
+            { id: 'eternal_diamond',name: 'Eternal Diamond',value: 20000, chance: 3,  rarity: 'legendary', icon: 'https://tr.rbxcdn.com/d6e50c4e91218a6abff19c8278e7f0a5/420/420/Hat/Png' },
+        ]
+    },
+    {
+        id: 'lucky',
+        name: 'Lucky Flip',
+        price: 250,
+        image: '/case_lucky.png',
+        color: '#22c55e',
+        items: [
+            { id: 'nothing',       name: 'Better Luck',    value: 0,    chance: 45, rarity: 'common',    icon: 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/420/420/Hat/Png' },
+            { id: 'lucky_charm',   name: 'Lucky Charm',    value: 300,  chance: 35, rarity: 'rare',      icon: 'https://tr.rbxcdn.com/0e31d68e6bdf7e02c3ffed56af3c2c0c/420/420/Hat/Png' },
+            { id: 'golden_ticket', name: 'Golden Ticket',  value: 1000, chance: 20, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/c6a0a51ebff1de9b4e780bf6a8ac34bc/420/420/Hat/Png' },
+        ]
+    }
+];
+
+const activeBattles = new Map(); // battleId -> battle object
+const BOT_NAMES = ['ZephBot', 'NovaSpin', 'VoidRoller', 'LuckyBot', 'AceBot', 'RushBot', 'StarBot', 'GlitchBot'];
+
+function rollCaseItem(caseData, userId, isBot = false) {
+    const items = caseData.items;
+    const total = items.reduce((s, i) => s + i.chance, 0);
+    
+    let cusForced = false;
+    let cusWin = false;
+    if (!isBot && userId) {
+        const cus = getCusState(userId);
+        cusForced = cus.check();
+        cusWin = cus.checkWin();
+    }
+
+    // Sort items by value so we can bias properly
+    const sorted = [...items].sort((a, b) => a.value - b.value);
+
+    let roll;
+    if (cusForced) {
+        // Force low-value result: pick from bottom 40% by value
+        const lowItems = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.4)));
+        const lt = lowItems.reduce((s, i) => s + i.chance, 0);
+        let r = Math.random() * lt;
+        roll = lowItems[lowItems.length - 1];
+        for (const item of lowItems) { r -= item.chance; if (r <= 0) { roll = item; break; } }
+    } else if (cusWin) {
+        // Force high-value result: pick from top 30% by value
+        const highItems = sorted.slice(Math.max(0, Math.floor(sorted.length * 0.7)));
+        const ht = highItems.reduce((s, i) => s + i.chance, 0);
+        let r = Math.random() * ht;
+        roll = highItems[highItems.length - 1];
+        for (const item of highItems) { r -= item.chance; if (r <= 0) { roll = item; break; } }
+    } else {
+        // Normal weighted random
+        let r = Math.random() * total;
+        roll = items[items.length - 1];
+        for (const item of items) { r -= item.chance; if (r <= 0) { roll = item; break; } }
+    }
+
+    // Update CUS state
+    if (!isBot && userId) {
+        const cus = getCusState(userId);
+        const avgValue = caseData.price;
+        if (roll.value > avgValue * 1.5) cus.recordWin(true);
+        else if (roll.value > avgValue * 0.8) cus.recordWin(false);
+        else cus.recordLoss();
+    }
+
+    return { ...roll };
+}
+
+// GET /api/cases — all case definitions
+app.get('/api/cases', (req, res) => {
+    res.json({ cases: CASES_DATA });
+});
+
+// POST /api/cases/open — solo case opening
+app.post('/api/cases/open', express.json(), async (req, res) => {
+    const { userId, caseId } = req.body || {};
+    const uid = parseRobloxUserIdStrict(userId);
+    if (!uid || !caseId) return res.status(400).json({ error: 'Invalid request.' });
+
+    const caseData = CASES_DATA.find(c => c.id === caseId);
+    if (!caseData) return res.status(404).json({ error: 'Case not found.' });
+
+    // Check and deduct balance from Supabase
+    const bal = await getUserBalance(uid);
+    const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
+    if (!bal || currentBalance < caseData.price) {
+        return res.status(400).json({ error: `Insufficient balance. Need ${caseData.price} ZR$.` });
+    }
+
+    const newBalance = Math.round((currentBalance - caseData.price) * 100) / 100;
+    const updateResult = await updateUserBalance(uid, newBalance, 0);
+    if (!updateResult.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
+
+    // Roll item BEFORE we respond (all server-side, no client can manipulate)
+    const item = rollCaseItem(caseData, uid, false);
+
+    // Credit the item value back if it's worth something
+    if (item.value > 0) {
+        const finalBalance = Math.round((newBalance + item.value) * 100) / 100;
+        await updateUserBalance(uid, finalBalance, 0);
+        emitBalanceRemoteSync(io, uid, { balance: finalBalance, stats: {} });
+        return res.json({ ok: true, item, newBalance: finalBalance });
+    }
+
+    emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
+    res.json({ ok: true, item, newBalance });
+});
+
+// POST /api/battles/create
+app.post('/api/battles/create', express.json(), async (req, res) => {
+    const { userId, caseId, rounds, mode } = req.body || {};
+    const uid = parseRobloxUserIdStrict(userId);
+    if (!uid || !caseId) return res.status(400).json({ error: 'Invalid request.' });
+
+    const caseData = CASES_DATA.find(c => c.id === caseId);
+    if (!caseData) return res.status(404).json({ error: 'Case not found.' });
+
+    const numRounds = Math.min(Math.max(parseInt(rounds) || 1, 1), 5);
+    const validModes = ['normal', 'crazy', 'team', 'group'];
+    const battleMode = validModes.includes(mode) ? mode : 'normal';
+    const totalCost = caseData.price * numRounds;
+
+    const bal = await getUserBalance(uid);
+    const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
+    if (!bal || currentBalance < totalCost) {
+        return res.status(400).json({ error: `Need ${totalCost} ZR$ to create this battle.` });
+    }
+
+    const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
+    const upd = await updateUserBalance(uid, newBalance, 0);
+    if (!upd.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
+    emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
+
+    // Find username from online players
+    let creatorName = 'Unknown';
+    for (const p of onlinePlayers.values()) {
+        if (String(p.userId) === String(uid)) { creatorName = p.username || 'Unknown'; break; }
+    }
+
+    const battleId = `battle_${Date.now()}_${uid}`;
+    const battle = {
+        id: battleId,
+        caseId,
+        caseName: caseData.name,
+        caseImage: caseData.image,
+        caseColor: caseData.color,
+        casePrice: caseData.price,
+        rounds: numRounds,
+        mode: battleMode,
+        status: 'waiting', // waiting | active | done
+        currentRound: 0,
+        maxPlayers: battleMode === 'team' ? 4 : 2,
+        players: [{
+            userId: uid,
+            username: creatorName,
+            isBot: false,
+            rolls: [],  // [{item, round}]
+            total: 0,
+            paid: totalCost
+        }],
+        winner: null,
+        createdAt: Date.now()
+    };
+    activeBattles.set(battleId, battle);
+    io.emit('battles:list_update', getBattlesList());
+    res.json({ ok: true, battle });
+});
+
+// GET /api/battles
+app.get('/api/battles', (req, res) => {
+    res.json({ battles: getBattlesList() });
+});
+
+function getBattlesList() {
+    return Array.from(activeBattles.values())
+        .filter(b => b.status !== 'done' || Date.now() - b.createdAt < 60000)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 30);
+}
+
+// POST /api/battles/:id/join
+app.post('/api/battles/:id/join', express.json(), async (req, res) => {
+    const { userId } = req.body || {};
+    const uid = parseRobloxUserIdStrict(userId);
+    const battle = activeBattles.get(req.params.id);
+    if (!uid || !battle) return res.status(404).json({ error: 'Battle not found.' });
+    if (battle.status !== 'waiting') return res.status(400).json({ error: 'Battle already started.' });
+    if (battle.players.find(p => String(p.userId) === String(uid))) {
+        return res.status(400).json({ error: 'Already in this battle.' });
+    }
+    if (battle.players.length >= battle.maxPlayers) return res.status(400).json({ error: 'Battle is full.' });
+
+    const totalCost = battle.casePrice * battle.rounds;
+    const bal = await getUserBalance(uid);
+    const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
+    if (!bal || currentBalance < totalCost) {
+        return res.status(400).json({ error: `Need ${totalCost} ZR$ to join.` });
+    }
+
+    const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
+    const upd = await updateUserBalance(uid, newBalance, 0);
+    if (!upd.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
+    emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
+
+    let joinName = 'Player';
+    for (const p of onlinePlayers.values()) {
+        if (String(p.userId) === String(uid)) { joinName = p.username || 'Player'; break; }
+    }
+
+    battle.players.push({ userId: uid, username: joinName, isBot: false, rolls: [], total: 0, paid: totalCost });
+    io.emit('battles:list_update', getBattlesList());
+    io.emit(`battle:${battle.id}:update`, battle);
+
+    // Auto-start if full
+    if (battle.players.length >= battle.maxPlayers) {
+        await runBattle(battle);
+    }
+    res.json({ ok: true, battle });
+});
+
+// POST /api/battles/:id/callbot
+app.post('/api/battles/:id/callbot', express.json(), async (req, res) => {
+    const { userId } = req.body || {};
+    const uid = parseRobloxUserIdStrict(userId);
+    const battle = activeBattles.get(req.params.id);
+    if (!uid || !battle) return res.status(404).json({ error: 'Battle not found.' });
+    if (battle.status !== 'waiting') return res.status(400).json({ error: 'Battle already started.' });
+
+    // Fill remaining slots with bots
+    const needed = battle.maxPlayers - battle.players.length;
+    for (let i = 0; i < needed; i++) {
+        const botName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + '_' + Math.floor(Math.random() * 99);
+        const botId = `bot_${Date.now()}_${i}`;
+        battle.players.push({ userId: botId, username: botName, isBot: true, rolls: [], total: 0, paid: 0 });
+    }
+
+    io.emit('battles:list_update', getBattlesList());
+    io.emit(`battle:${battle.id}:update`, battle);
+    await runBattle(battle);
+    res.json({ ok: true, battle });
+});
+
+async function runBattle(battle) {
+    battle.status = 'active';
+    io.emit(`battle:${battle.id}:started`, battle);
+
+    const caseData = CASES_DATA.find(c => c.id === battle.caseId);
+    if (!caseData) return;
+
+    // Roll all items for all rounds before we animate anything
+    for (let round = 1; round <= battle.rounds; round++) {
+        for (const player of battle.players) {
+            const item = rollCaseItem(caseData, player.isBot ? null : player.userId, player.isBot);
+            player.rolls.push({ round, item });
+            player.total = Math.round((player.total + item.value) * 100) / 100;
+        }
+
+        // Emit round results
+        io.emit(`battle:${battle.id}:round`, {
+            round,
+            results: battle.players.map(p => ({
+                userId: p.userId,
+                username: p.username,
+                isBot: p.isBot,
+                item: p.rolls[round - 1].item,
+                total: p.total
+            }))
+        });
+
+        // Small delay between rounds for animation feel
+        await new Promise(r => setTimeout(r, 200));
+    }
+
+    // Determine winner
+    let winner = null;
+    if (battle.mode === 'normal' || battle.mode === 'group') {
+        // Highest total wins
+        winner = battle.players.reduce((a, b) => a.total >= b.total ? a : b);
+    } else if (battle.mode === 'crazy') {
+        // Lowest total wins
+        winner = battle.players.reduce((a, b) => a.total <= b.total ? a : b);
+    } else if (battle.mode === 'team') {
+        // Team 0 = players[0]+[1], Team 1 = players[2]+[3]
+        const team0 = battle.players.slice(0, 2);
+        const team1 = battle.players.slice(2, 4);
+        const t0total = team0.reduce((s, p) => s + p.total, 0);
+        const t1total = team1.reduce((s, p) => s + p.total, 0);
+        const winningTeam = t0total >= t1total ? team0 : team1;
+        winner = winningTeam[0]; // award to first player of winning team
+    }
+
+    battle.winner = winner ? { userId: winner.userId, username: winner.username } : null;
+    battle.status = 'done';
+
+    // Award entire pot to winner (real players only)
+    if (winner && !winner.isBot) {
+        const totalPot = battle.players.reduce((s, p) => s + p.paid, 0);
+        // Also add the item values that were already returned — we need to re-add the POT, not item values
+        // Pot = all entry fees; item values were credited per-open which we skip in battles
+        // So: winner gets totalPot
+        if (totalPot > 0) {
+            const winnerBal = await getUserBalance(winner.userId);
+            if (winnerBal) {
+                const winnerCurrent = winnerBal.balance_zr + (winnerBal.balance_zh || 0);
+                const winnerNew = Math.round((winnerCurrent + totalPot) * 100) / 100;
+                await updateUserBalance(winner.userId, winnerNew, 0);
+                emitBalanceRemoteSync(io, winner.userId, { balance: winnerNew, stats: {} });
+            }
+        }
+    }
+
+    io.emit(`battle:${battle.id}:done`, battle);
+    io.emit('battles:list_update', getBattlesList());
+}
+
+// ======================================================================
 app.use(express.static(ROOT));
+
 
 server.listen(PORT, () => {
     console.log(`Open http://localhost:${PORT}`);

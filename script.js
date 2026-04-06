@@ -43,6 +43,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof performActiveGamepassScan === 'function') {
             performActiveGamepassScan();
         }
+        // Init case battles when navigating to it
+        if (viewName === 'casebattles' && typeof cbInit === 'function') {
+            setTimeout(cbInit, 100);
+        }
     }
 
     // Attach click events to nav links
@@ -4843,5 +4847,477 @@ async function generateCryptoInvoice() {
     } finally {
         btn.disabled = false;
         btn.innerText = 'Generate Address';
+    }
+}
+
+// ======================================================================
+// CASE BATTLES SYSTEM
+// ======================================================================
+
+let _cbCases = [];         // All case definitions from server
+let _cbBattles = [];       // Live battles list
+let _cbCreateCaseId = null;
+let _cbCreateRounds = 1;
+let _cbCreateMode = 'normal';
+let _cbCurrentBattleId = null;
+window._cbSpinning = false;
+
+const RARITY_COLORS = {
+    common:    '#9ca3af',
+    uncommon:  '#34d399',
+    rare:      '#60a5fa',
+    epic:      '#a855f7',
+    legendary: '#f59e0b'
+};
+
+// --- Init ---
+async function cbInit() {
+    await cbLoadCases();
+    await cbLoadBattles();
+    cbBindSockets();
+}
+
+// Called whenever the view becomes active
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.nav-item[data-view]').forEach(link => {
+        link.addEventListener('click', () => {
+            if (link.dataset.view === 'casebattles') {
+                cbInit();
+            }
+        });
+    });
+});
+
+// --- API helpers ---
+async function cbApiFetch(path, opts = {}) {
+    const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, data };
+}
+
+// --- Load cases ---
+async function cbLoadCases() {
+    const { ok, data } = await cbApiFetch('/api/cases');
+    if (!ok) return;
+    _cbCases = data.cases || [];
+    cbRenderCasesGrid();
+    cbRenderCreateCases();
+}
+
+function cbRenderCasesGrid() {
+    const grid = document.getElementById('cb-cases-grid');
+    if (!grid) return;
+    grid.innerHTML = _cbCases.map(c => `
+        <div class="cb-case-card" style="--case-color:${c.color}" onclick="cbOpenCaseModal('${c.id}')">
+            <img class="cb-case-img" src="${c.image}" alt="${c.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 rx=%2210%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>%F0%9F%93%A6</text></svg>'">
+            <div class="cb-case-name">${c.name}</div>
+            <div class="cb-case-price">${c.price.toLocaleString()} <span>ZR$</span></div>
+            <div class="cb-case-items-preview">
+                ${c.items.map(i => `<span class="cb-item-rarity-dot rarity-${i.rarity}" title="${i.name}"></span>`).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+// --- Battles list ---
+async function cbLoadBattles() {
+    const { ok, data } = await cbApiFetch('/api/battles');
+    if (!ok) return;
+    _cbBattles = data.battles || [];
+    cbRenderBattlesList();
+}
+
+function cbRenderBattlesList() {
+    const el = document.getElementById('cb-battles-list');
+    if (!el) return;
+    if (!_cbBattles.length) {
+        el.innerHTML = '<div class="cb-empty"><i class="fa-solid fa-ghost"></i><p>No active battles.<br>Create one to get started!</p></div>';
+        return;
+    }
+    el.innerHTML = _cbBattles.map(b => {
+        const slots = b.maxPlayers;
+        const filled = b.players.length;
+        const playerPills = b.players.map(p =>
+            `<span class="cb-player-pill${p.isBot?' bot':''}"><i class="fa-solid fa-${p.isBot?'robot':'user'}"></i>${p.username}</span>`
+        ).join('');
+        const emptyPills = Array(slots - filled).fill(0).map(() =>
+            `<span class="cb-player-pill empty"><i class="fa-solid fa-plus"></i> Waiting...</span>`
+        ).join('');
+        const statusBadge = b.status === 'active' ? '🔴 Live' : b.status === 'done' ? '✅ Done' : '⏳ Waiting';
+        return `
+            <div class="cb-battle-row" onclick="cbOpenBattleRoom('${b.id}')">
+                <img class="cb-battle-row-img" src="${b.caseImage}" alt="${b.caseName}" onerror="this.style.display='none'">
+                <div class="cb-battle-row-info">
+                    <div class="cb-battle-row-name">${b.caseName} — ${b.rounds} round${b.rounds>1?'s':''}</div>
+                    <div class="cb-battle-row-meta">${CBModeLabel(b.mode)} · ${statusBadge}</div>
+                    <div class="cb-battle-row-players" style="margin-top:8px;">${playerPills}${emptyPills}</div>
+                </div>
+                <div class="cb-battle-row-price">${(b.casePrice*b.rounds).toLocaleString()} ZR$</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function CBModeLabel(m) {
+    return { normal:'Normal', crazy:'Crazy — Lowest Wins', team:'2v2 Teams', group:'Group' }[m] || m;
+}
+
+// --- Tabs ---
+function cbSwitchTab(tab, btn) {
+    document.querySelectorAll('.cb-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('cb-tab-battles').style.display = tab === 'battles' ? '' : 'none';
+    document.getElementById('cb-tab-cases').style.display = tab === 'cases' ? '' : 'none';
+}
+
+// --- Create modal ---
+function cbOpenCreateModal() {
+    document.getElementById('cb-create-modal').style.display = 'flex';
+    cbRenderCreateCases();
+}
+
+function cbRenderCreateCases() {
+    const el = document.getElementById('cb-create-cases');
+    if (!el || !_cbCases.length) return;
+    // Select first by default
+    if (!_cbCreateCaseId && _cbCases.length) _cbCreateCaseId = _cbCases[0].id;
+    el.innerHTML = _cbCases.map(c => `
+        <div class="cb-create-case-option${_cbCreateCaseId===c.id?' selected':''}" style="--case-color:${c.color}" onclick="cbSelectCase('${c.id}',this)">
+            <img src="${c.image}" alt="${c.name}" onerror="this.style.display='none'">
+            <div class="cc-name">${c.name}</div>
+            <div class="cc-price">${c.price} ZR$</div>
+        </div>
+    `).join('');
+    cbUpdateCreateCost();
+}
+
+function cbSelectCase(id, el) {
+    _cbCreateCaseId = id;
+    document.querySelectorAll('.cb-create-case-option').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    cbUpdateCreateCost();
+}
+
+function cbSelectRounds(n, btn) {
+    _cbCreateRounds = n;
+    document.querySelectorAll('.cb-round-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    cbUpdateCreateCost();
+}
+
+function cbSelectMode(m, btn) {
+    _cbCreateMode = m;
+    document.querySelectorAll('.cb-mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function cbUpdateCreateCost() {
+    const c = _cbCases.find(x => x.id === _cbCreateCaseId);
+    const cost = c ? c.price * _cbCreateRounds : 0;
+    const el = document.getElementById('cb-create-cost');
+    if (el) el.textContent = cost.toLocaleString() + ' ZR$';
+}
+
+async function cbConfirmCreate() {
+    if (!robloxUserId) return alert('Please log in first.');
+    if (!_cbCreateCaseId) return alert('Select a case first.');
+    const btn = document.getElementById('cb-create-confirm');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating...';
+    const { ok, data } = await cbApiFetch('/api/battles/create', {
+        method: 'POST',
+        body: JSON.stringify({ userId: robloxUserId, caseId: _cbCreateCaseId, rounds: _cbCreateRounds, mode: _cbCreateMode })
+    });
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-swords"></i> Create Battle';
+    if (!ok) return alert(data.error || 'Failed to create battle.');
+    document.getElementById('cb-create-modal').style.display = 'none';
+    // Switch to battles tab and open the room
+    cbSwitchTab('battles', document.querySelector('.cb-tab[data-tab="battles"]'));
+    cbOpenBattleRoom(data.battle.id, data.battle);
+}
+
+// --- Solo case open ---
+async function cbOpenCaseModal(caseId) {
+    if (!robloxUserId) return alert('Please log in first.');
+    const caseData = _cbCases.find(c => c.id === caseId);
+    if (!caseData) return;
+
+    const modal = document.getElementById('cb-open-modal');
+    const title = document.getElementById('cb-open-modal-title');
+    const result = document.getElementById('cb-open-result');
+    const track = document.getElementById('cb-spinner-track');
+
+    title.textContent = `Opening: ${caseData.name}`;
+    result.style.display = 'none';
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(0)';
+    track.innerHTML = '';
+    modal.style.display = 'flex';
+    window._cbSpinning = true;
+
+    // Request the roll from server FIRST
+    const { ok, data } = await cbApiFetch('/api/cases/open', {
+        method: 'POST',
+        body: JSON.stringify({ userId: robloxUserId, caseId })
+    });
+
+    if (!ok) {
+        window._cbSpinning = false;
+        modal.style.display = 'none';
+        return alert(data.error || 'Failed to open case.');
+    }
+
+    const winningItem = data.item;
+    if (typeof data.newBalance === 'number') {
+        roBalance = data.newBalance;
+        updateBalanceDisplay();
+    }
+
+    // Build spinner track (50 random items + winning item near end)
+    const ITEM_COUNT = 52;
+    const WIN_POS = 45; // winning item goes here
+    const ITEM_WIDTH = 118; // item width + margin
+
+    const items = [];
+    for (let i = 0; i < ITEM_COUNT; i++) {
+        const idx = Math.floor(Math.random() * caseData.items.length);
+        items.push(caseData.items[idx]);
+    }
+    items[WIN_POS] = winningItem; // override with actual result
+
+    track.innerHTML = items.map((item, i) => `
+        <div class="cb-spin-item rarity-${item.rarity}" data-idx="${i}">
+            <img src="${item.icon}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>%F0%9F%8E%81</text></svg>'">
+            <span class="si-name">${item.name}</span>
+            <span class="si-val" style="color:${RARITY_COLORS[item.rarity]||'#fff'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</span>
+        </div>
+    `).join('');
+
+    // Animate: scroll to winning item
+    await new Promise(r => setTimeout(r, 80)); // allow DOM paint
+
+    const wrapWidth = track.parentElement.offsetWidth;
+    const targetX = WIN_POS * ITEM_WIDTH - (wrapWidth / 2) + (ITEM_WIDTH / 2) - 20;
+
+    // Ease-out cubic animation using JS
+    await cbAnimateSpin(track, targetX, 4000);
+
+    // Highlight winning item
+    track.children[WIN_POS]?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    track.children[WIN_POS]?.style.setProperty('border-color', RARITY_COLORS[winningItem.rarity] || '#fff');
+    track.children[WIN_POS]?.style.setProperty('box-shadow', `0 0 20px ${RARITY_COLORS[winningItem.rarity]}66`);
+
+    // Show result
+    await new Promise(r => setTimeout(r, 600));
+    result.style.display = 'block';
+    document.getElementById('cb-result-item-img-wrap').innerHTML =
+        `<img src="${winningItem.icon}" alt="${winningItem.name}" style="filter:drop-shadow(0 0 16px ${RARITY_COLORS[winningItem.rarity]})">`;
+    document.getElementById('cb-result-item-name').textContent = winningItem.name;
+    document.getElementById('cb-result-item-value').textContent =
+        winningItem.value ? winningItem.value.toLocaleString() + ' ZR$' : 'No value';
+    document.getElementById('cb-result-item-value').style.color = RARITY_COLORS[winningItem.rarity] || '#fff';
+
+    window._cbSpinning = false;
+}
+
+function cbAnimateSpin(track, targetX, duration) {
+    return new Promise(resolve => {
+        const start = performance.now();
+        const startX = parseFloat(track.style.transform.replace('translateX(', '').replace('px)', '')) || 0;
+
+        function easeOut(t) {
+            return 1 - Math.pow(1 - t, 4); // quartic ease-out
+        }
+
+        function step(now) {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = easeOut(progress);
+            const currentX = startX + (targetX - startX) * eased;
+            track.style.transition = 'none';
+            track.style.transform = `translateX(-${currentX}px)`;
+            if (progress < 1) {
+                requestAnimationFrame(step);
+            } else {
+                resolve();
+            }
+        }
+        requestAnimationFrame(step);
+    });
+}
+
+// --- Battle room ---
+function cbOpenBattleRoom(battleId, battleData) {
+    _cbCurrentBattleId = battleId;
+    const modal = document.getElementById('cb-battle-modal');
+    modal.style.display = 'flex';
+    // Find battle in list or use passed data
+    const b = battleData || _cbBattles.find(x => x.id === battleId);
+    if (b) cbRenderBattleRoom(b);
+}
+
+function cbCloseBattleModal() {
+    document.getElementById('cb-battle-modal').style.display = 'none';
+    _cbCurrentBattleId = null;
+}
+
+function cbRenderBattleRoom(b) {
+    document.getElementById('cb-battle-title').textContent = `${b.caseName} — ${CBModeLabel(b.mode)}`;
+    // Meta
+    const meta = document.getElementById('cb-battle-meta');
+    meta.innerHTML = `<span>${b.rounds} round${b.rounds>1?'s':''}</span><span>${CBModeLabel(b.mode)}</span><span>${b.status==='waiting'?'⏳ Waiting for players':b.status==='active'?'🔴 Live':'✅ Done'}</span>`;
+
+    // Players area
+    const playersEl = document.getElementById('cb-battle-players');
+    playersEl.innerHTML = b.players.map(p => `
+        <div class="cb-battle-player-col${b.winner&&b.winner.userId===String(p.userId)?' winner':''}" id="bcol-${p.userId}">
+            <div class="cb-player-col-header">
+                <i class="fa-solid fa-${p.isBot?'robot':'user'}" style="color:${p.isBot?'#a78bfa':'#60a5fa'}"></i>
+                <span class="cb-player-col-name${p.isBot?' bot-name':''}">${p.username}</span>
+                <span class="cb-player-col-total" id="btotal-${p.userId}">${p.total.toLocaleString()} ZR$</span>
+            </div>
+            <div class="cb-player-rolls" id="brolls-${p.userId}">
+                ${p.rolls.map(r => cbRollCardHTML(r.item)).join('')}
+            </div>
+        </div>
+    `).join('');
+
+    // Empty player slots
+    const needed = b.maxPlayers - b.players.length;
+    for (let i = 0; i < needed; i++) {
+        playersEl.innerHTML += `
+            <div class="cb-battle-player-col" style="opacity:.4;">
+                <div class="cb-player-col-header">
+                    <i class="fa-solid fa-user-plus" style="color:var(--text-secondary)"></i>
+                    <span class="cb-player-col-name">Waiting...</span>
+                </div>
+                <div class="cb-player-rolls"></div>
+            </div>
+        `;
+    }
+
+    // Actions
+    const myId = String(robloxUserId);
+    const actions = document.getElementById('cb-battle-actions');
+    actions.innerHTML = '';
+    const isCreator = b.players.length && String(b.players[0].userId) === myId;
+    const hasJoined = b.players.find(p => String(p.userId) === myId);
+
+    if (b.status === 'waiting') {
+        if (!hasJoined) {
+            actions.innerHTML += `<button class="cb-btn cb-btn-join" onclick="cbJoinBattle('${b.id}')"><i class="fa-solid fa-right-to-bracket"></i> Join Battle</button>`;
+        }
+        if (isCreator) {
+            actions.innerHTML += `<button class="cb-btn cb-btn-callbot" onclick="cbCallBot('${b.id}')"><i class="fa-solid fa-robot"></i> Call Bot</button>`;
+        }
+    }
+
+    // Winner banner
+    const winnerEl = document.getElementById('cb-battle-winner');
+    if (b.status === 'done' && b.winner) {
+        winnerEl.style.display = 'block';
+        const pot = b.players.reduce((s, p) => s + p.paid, 0);
+        winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won!</h3><p>Took the entire pot of ${pot.toLocaleString()} ZR$</p>`;
+    } else {
+        winnerEl.style.display = 'none';
+    }
+}
+
+function cbRollCardHTML(item) {
+    return `
+        <div class="cb-roll-card">
+            <img src="${item.icon}" alt="${item.name}" onerror="this.style.display='none'">
+            <div class="cb-roll-card-info">
+                <div class="cb-roll-card-name">${item.name}</div>
+                <div class="cb-roll-card-val" style="color:${RARITY_COLORS[item.rarity]||'#a78bfa'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
+            </div>
+        </div>
+    `;
+}
+
+async function cbJoinBattle(battleId) {
+    if (!robloxUserId) return alert('Please log in first.');
+    const { ok, data } = await cbApiFetch(`/api/battles/${battleId}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: robloxUserId })
+    });
+    if (!ok) return alert(data.error || 'Could not join.');
+    if (typeof data.battle === 'object') cbRenderBattleRoom(data.battle);
+}
+
+async function cbCallBot(battleId) {
+    const { ok, data } = await cbApiFetch(`/api/battles/${battleId}/callbot`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: robloxUserId })
+    });
+    if (!ok) return alert(data.error || 'Could not call bot.');
+    if (typeof data.battle === 'object') cbRenderBattleRoom(data.battle);
+}
+
+// --- Socket.IO listeners for real-time battle updates ---
+function cbBindSockets() {
+    if (!socket) return;
+    // Remove old listeners to avoid duplicates
+    socket.off('battles:list_update');
+    socket.off('battles:round_result');
+
+    socket.on('battles:list_update', (battles) => {
+        _cbBattles = battles || [];
+        cbRenderBattlesList();
+    });
+
+    // Dynamic per-battle events when watching a room
+    if (_cbCurrentBattleId) {
+        const bid = _cbCurrentBattleId;
+        socket.off(`battle:${bid}:update`);
+        socket.off(`battle:${bid}:started`);
+        socket.off(`battle:${bid}:round`);
+        socket.off(`battle:${bid}:done`);
+
+        socket.on(`battle:${bid}:update`, (b) => cbRenderBattleRoom(b));
+        socket.on(`battle:${bid}:started`, (b) => cbRenderBattleRoom(b));
+
+        socket.on(`battle:${bid}:round`, ({ round, results }) => {
+            // Animate each player's new roll card dropping in
+            results.forEach(r => {
+                const rolls = document.getElementById(`brolls-${r.userId}`);
+                const totalEl = document.getElementById(`btotal-${r.userId}`);
+                if (rolls) {
+                    const card = document.createElement('div');
+                    card.className = 'cb-roll-card';
+                    card.innerHTML = `
+                        <img src="${r.item.icon}" alt="${r.item.name}" onerror="this.style.display='none'">
+                        <div class="cb-roll-card-info">
+                            <div class="cb-roll-card-name">${r.item.name}</div>
+                            <div class="cb-roll-card-val" style="color:${RARITY_COLORS[r.item.rarity]||'#a78bfa'}">${r.item.value?r.item.value.toLocaleString()+' ZR$':'—'}</div>
+                        </div>
+                    `;
+                    card.style.animation = 'cbRollIn .35s cubic-bezier(.34,1.56,.64,1)';
+                    rolls.appendChild(card);
+                }
+                if (totalEl) totalEl.textContent = r.total.toLocaleString() + ' ZR$';
+            });
+        });
+
+        socket.on(`battle:${bid}:done`, (b) => {
+            // Highlight winner column
+            if (b.winner) {
+                const col = document.getElementById(`bcol-${b.winner.userId}`);
+                if (col) col.classList.add('winner');
+            }
+            // Show winner banner
+            const winnerEl = document.getElementById('cb-battle-winner');
+            if (winnerEl && b.winner) {
+                winnerEl.style.display = 'block';
+                const pot = b.players.reduce((s, p) => s + p.paid, 0);
+                winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won!</h3><p>Took the entire pot of ${pot.toLocaleString()} ZR$</p>`;
+            }
+            // Clear action buttons
+            document.getElementById('cb-battle-actions').innerHTML = '';
+            // Update meta
+            const meta = document.getElementById('cb-battle-meta');
+            if (meta) meta.innerHTML = `<span>${b.rounds} round${b.rounds>1?'s':''}</span><span>${CBModeLabel(b.mode)}</span><span>✅ Done</span>`;
+        });
     }
 }

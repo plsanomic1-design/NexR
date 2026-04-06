@@ -59,6 +59,10 @@
                 <i class="fa-solid fa-coins"></i>
                 <span>Coinflip</span>
             </a>
+            <a href="#" class="nav-item" data-view="casebattles" title="Case Battles" id="nav-casebattles">
+                <i class="fa-solid fa-box-open"></i>
+                <span>Case Battles</span>
+            </a>
             <a href="#" class="nav-item" data-view="rooms" title="Voice Chat">
                 <i class="fa-solid fa-microphone-lines"></i>
                 <span>Voice Chat</span>
@@ -1600,6 +1604,119 @@
                 <i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Send tip
             </button>
         </div>
+    </div>
+
+    <!-- ====== CASE BATTLES VIEW ====== -->
+    <div id="view-casebattles" class="view">
+      <div class="cb-header">
+        <div class="cb-header-title">
+          <i class="fa-solid fa-box-open"></i>
+          <h1>Case Battles</h1>
+          <span class="cb-subtitle">Open cases, battle players, win ZR$</span>
+        </div>
+        <div class="cb-header-actions">
+          <button class="cb-btn cb-btn-create" id="cb-create-btn" onclick="cbOpenCreateModal()">
+            <i class="fa-solid fa-plus"></i> Create Battle
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="cb-tabs">
+        <button class="cb-tab active" data-tab="battles" onclick="cbSwitchTab('battles',this)">Live Battles</button>
+        <button class="cb-tab" data-tab="cases" onclick="cbSwitchTab('cases',this)">Open A Case</button>
+      </div>
+
+      <!-- Tab: Live Battles -->
+      <div id="cb-tab-battles" class="cb-tab-content">
+        <div id="cb-battles-list" class="cb-battles-list">
+          <div class="cb-empty"><i class="fa-solid fa-ghost"></i><p>No active battles.<br>Create one to get started!</p></div>
+        </div>
+      </div>
+
+      <!-- Tab: Cases -->
+      <div id="cb-tab-cases" class="cb-tab-content" style="display:none;">
+        <div id="cb-cases-grid" class="cb-cases-grid">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== CASE CREATE MODAL ====== -->
+    <div id="cb-create-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+      <div class="cb-modal">
+        <div class="cb-modal-header">
+          <h2><i class="fa-solid fa-swords"></i> Create Battle</h2>
+          <button class="cb-modal-close" onclick="document.getElementById('cb-create-modal').style.display='none'">&times;</button>
+        </div>
+        <div class="cb-modal-body">
+          <label class="cb-label">Select Case</label>
+          <div id="cb-create-cases" class="cb-create-cases-grid"></div>
+
+          <div class="cb-create-row">
+            <div class="cb-create-field">
+              <label class="cb-label">Rounds</label>
+              <div class="cb-round-btns">
+                <button class="cb-round-btn active" data-rounds="1" onclick="cbSelectRounds(1,this)">1</button>
+                <button class="cb-round-btn" data-rounds="2" onclick="cbSelectRounds(2,this)">2</button>
+                <button class="cb-round-btn" data-rounds="3" onclick="cbSelectRounds(3,this)">3</button>
+                <button class="cb-round-btn" data-rounds="5" onclick="cbSelectRounds(5,this)">5</button>
+              </div>
+            </div>
+            <div class="cb-create-field">
+              <label class="cb-label">Mode</label>
+              <div class="cb-mode-btns">
+                <button class="cb-mode-btn active" data-mode="normal" onclick="cbSelectMode('normal',this)" title="Highest total wins">Normal</button>
+                <button class="cb-mode-btn" data-mode="crazy" onclick="cbSelectMode('crazy',this)" title="Lowest total wins">Crazy</button>
+                <button class="cb-mode-btn" data-mode="group" onclick="cbSelectMode('group',this)" title="Free-for-all">Group</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="cb-cost-preview">
+            Total Cost: <strong id="cb-create-cost">100 ZR$</strong>
+          </div>
+        </div>
+        <div class="cb-modal-footer">
+          <button class="cb-btn cb-btn-create" id="cb-create-confirm" onclick="cbConfirmCreate()">
+            <i class="fa-solid fa-swords"></i> Create Battle
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== CASE OPEN MODAL (spinner) ====== -->
+    <div id="cb-open-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this&&!window._cbSpinning)this.style.display='none'">
+      <div class="cb-modal cb-open-modal-inner">
+        <div class="cb-modal-header">
+          <h2 id="cb-open-modal-title">Opening Case...</h2>
+          <button class="cb-modal-close" onclick="if(!window._cbSpinning)document.getElementById('cb-open-modal').style.display='none'">&times;</button>
+        </div>
+        <div class="cb-spinner-wrap">
+          <div class="cb-spinner-arrow"></div>
+          <div class="cb-spinner-track" id="cb-spinner-track"></div>
+        </div>
+        <div id="cb-open-result" class="cb-open-result" style="display:none;">
+          <div id="cb-result-item-img-wrap" class="cb-result-item-img"></div>
+          <div id="cb-result-item-name" class="cb-result-name"></div>
+          <div id="cb-result-item-value" class="cb-result-value"></div>
+          <button class="cb-btn cb-btn-create" style="margin-top:16px;" onclick="document.getElementById('cb-open-modal').style.display='none'">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== BATTLE ROOM MODAL ====== -->
+    <div id="cb-battle-modal" class="cb-modal-backdrop" style="display:none;">
+      <div class="cb-modal cb-battle-modal-inner">
+        <div class="cb-modal-header">
+          <h2 id="cb-battle-title">Battle</h2>
+          <div class="cb-battle-meta" id="cb-battle-meta"></div>
+          <button class="cb-modal-close" onclick="cbCloseBattleModal()">&times;</button>
+        </div>
+        <div id="cb-battle-players" class="cb-battle-players"></div>
+        <div id="cb-battle-actions" class="cb-battle-actions"></div>
+        <div id="cb-battle-winner" class="cb-battle-winner" style="display:none;"></div>
+      </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
