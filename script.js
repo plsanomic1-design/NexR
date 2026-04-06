@@ -5243,21 +5243,25 @@ function cbRollCardHTML(item) {
 
 async function cbJoinBattle(battleId) {
     if (!robloxUserId) return alert('Please log in first.');
+    const btn = document.querySelector('.cb-btn-join');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Joining...'; }
     const { ok, data } = await cbApiFetch(`/api/battles/${battleId}/join`, {
         method: 'POST',
         body: JSON.stringify({ userId: robloxUserId })
     });
     if (!ok) return alert(data.error || 'Could not join.');
-    if (typeof data.battle === 'object') cbRenderBattleRoom(data.battle);
+    // Let socket events handle rendering to prevent interrupting animation
 }
 
 async function cbCallBot(battleId) {
+    const btn = document.querySelector('.cb-btn-callbot');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-robot"></i> Calling...'; }
     const { ok, data } = await cbApiFetch(`/api/battles/${battleId}/callbot`, {
         method: 'POST',
         body: JSON.stringify({ userId: robloxUserId })
     });
     if (!ok) return alert(data.error || 'Could not call bot.');
-    if (typeof data.battle === 'object') cbRenderBattleRoom(data.battle);
+    // Let socket events handle rendering to prevent interrupting animation
 }
 
 // --- Socket.IO listeners for real-time battle updates ---

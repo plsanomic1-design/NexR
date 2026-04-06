@@ -3681,7 +3681,7 @@ app.post('/api/battles/:id/join', express.json(), async (req, res) => {
 
     // Auto-start if full
     if (battle.players.length >= battle.maxPlayers) {
-        await runBattle(battle);
+        runBattle(battle).catch(e => console.error(e));
     }
     res.json({ ok: true, battle });
 });
@@ -3704,7 +3704,7 @@ app.post('/api/battles/:id/callbot', express.json(), async (req, res) => {
 
     io.emit('battles:list_update', getBattlesList());
     io.emit(`battle:${battle.id}:update`, battle);
-    await runBattle(battle);
+    runBattle(battle).catch(e => console.error(e));
     res.json({ ok: true, battle });
 });
 
@@ -3760,14 +3760,17 @@ async function runBattle(battle) {
     battle.winner = winner ? { userId: winner.userId, username: winner.username } : null;
     battle.status = 'done';
 
-    // Award entire total items value to winner (real players only)
+    // Award winner their own unboxed total value (as requested by user)
     if (winner && !winner.isBot) {
-        const totalItemsValue = battle.players.reduce((s, p) => s + p.total, 0);
-        if (totalItemsValue > 0) {
+        // Find the actual winning player object to get their specific total
+        const winnerObj = battle.players.find(p => p.userId === winner.userId);
+        const winnerItemsValue = winnerObj ? winnerObj.total : 0;
+        
+        if (winnerItemsValue > 0) {
             const winnerBal = await getUserBalance(winner.userId);
             if (winnerBal) {
                 const winnerCurrent = winnerBal.balance_zr + (winnerBal.balance_zh || 0);
-                const winnerNew = Math.round((winnerCurrent + totalItemsValue) * 100) / 100;
+                const winnerNew = Math.round((winnerCurrent + winnerItemsValue) * 100) / 100;
                 await updateUserBalance(winner.userId, winnerNew, 0);
                 emitBalanceRemoteSync(io, winner.userId, { balance: winnerNew, stats: {} });
             }
