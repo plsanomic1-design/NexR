@@ -1096,14 +1096,14 @@
                     <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <h2>Crypto Deposit</h2>
-                <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Enter the amount of Fiat (Euro, Pounds, etc.) you want to spend. Minimum is 1.00.</p>
+                <p id="dep-crypto-min-text" style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Enter the amount of Fiat (Euro, Pounds, etc.) you want to spend. Minimum is <strong>1.00 EUR</strong>.</p>
                 
                 <div style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
                     <div class="input-group">
                         <label>Spend Fiat Amount</label>
                         <div style="display:flex; gap:10px;">
                             <div class="input-wrapper" style="width:100px;">
-                                <select id="dep-fiat-currency" onchange="updateCryptoZhPreview()" style="width:100%; background:transparent; border:none; color:#fff; padding:12px; outline:none; font-weight:bold;">
+                                <select id="dep-fiat-currency" onchange="updateCryptoZhPreview(); updateCryptoMinAmount();" style="width:100%; background:transparent; border:none; color:#fff; padding:12px; outline:none; font-weight:bold;">
                                     <option value="eur">EUR (€)</option>
                                     <option value="gbp">GBP (£)</option>
                                     <option value="usd">USD ($)</option>
@@ -1119,7 +1119,7 @@
                     <div class="input-group">
                         <label>Select Cryptocurrency</label>
                         <div class="input-wrapper">
-                            <select id="dep-crypto-coin" style="width:100%; background:var(--bg-input); border:none; color:#fff; padding:12px 14px; border-radius:8px; font-size:14px; outline:none;">
+                            <select id="dep-crypto-coin" onchange="updateCryptoMinAmount()" style="width:100%; background:var(--bg-input); border:none; color:#fff; padding:12px 14px; border-radius:8px; font-size:14px; outline:none;">
                                 <optgroup label="Popular">
                                     <option value="btc">Bitcoin (BTC)</option>
                                     <option value="eth">Ethereum (ETH)</option>
@@ -1193,9 +1193,18 @@
                     </div>
 
                     <label style="font-size: 11px; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">To Address</label>
-                    <div style="display:flex; align-items:center; gap:10px; margin-top:5px;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-top:5px; margin-bottom:15px;">
                         <input type="text" id="dep-crypto-pay-address" value="" readonly style="flex:1; background:var(--bg-input); border:none; color:var(--text-primary); padding:10px; border-radius:6px; font-family:monospace; font-size:12px;">
                         <button class="btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('dep-crypto-pay-address').value); alert('Copied address!')" style="padding:10px 15px;"><i class="fa-solid fa-copy"></i></button>
+                    </div>
+
+                    <div id="dep-crypto-extra-wrap" style="display:none;">
+                        <label id="dep-crypto-extra-label" style="font-size: 11px; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Destination Tag / Memo</label>
+                        <div style="display:flex; align-items:center; gap:10px; margin-top:5px;">
+                            <input type="text" id="dep-crypto-pay-extra" value="" readonly style="flex:1; background:var(--bg-input); border:none; color:var(--text-primary); padding:10px; border-radius:6px; font-family:monospace; font-size:12px;">
+                            <button class="btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('dep-crypto-pay-extra').value); alert('Copied!')" style="padding:10px 15px;"><i class="fa-solid fa-copy"></i></button>
+                        </div>
+                        <p style="margin-top:8px; font-size:11px; color:var(--red); line-height:1.4;"><strong>IMPORTANT:</strong> You must include this tag/memo or your funds will be lost.</p>
                     </div>
                 </div>
 

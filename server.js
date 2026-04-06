@@ -1651,6 +1651,25 @@ app.options('/api/deposit/crypto/create', (req, res) => {
     res.sendStatus(204);
 });
 
+app.get('/api/deposit/crypto/min-amount', async (req, res) => {
+    const coin = String(req.query.coin || 'btc').toLowerCase();
+    const fiat = String(req.query.fiat || 'eur').toLowerCase();
+    
+    try {
+        const response = await fetch(`https://api.nowpayments.io/v1/min-amount?currency_from=${coin}&currency_to=${fiat}&fiat_equivalent=${fiat}`, {
+            headers: { 'x-api-key': process.env.NOWPAYMENTS_API_KEY }
+        });
+        const data = await response.json();
+        let minFiat = data.fiat_equivalent ? parseFloat(data.fiat_equivalent) : 1.00;
+        // add 5% buffer to be safe against market drops before user pays
+        minFiat = minFiat * 1.05; 
+        res.json({ min_fiat: minFiat });
+    } catch (e) {
+        console.error('NOWPayments min-amount error:', e);
+        res.json({ min_fiat: 1.00 });
+    }
+});
+
 app.post('/api/deposit/crypto/create', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const body = req.body || {};
@@ -1695,6 +1714,7 @@ app.post('/api/deposit/crypto/create', async (req, res) => {
             pay_address: data.pay_address,
             pay_amount: data.pay_amount,
             pay_currency: data.pay_currency,
+            pay_extra_id: data.payin_extra_id || data.pay_extra_id || data.extra_id || null,
             order_id: data.order_id
         });
     } catch (e) {

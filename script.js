@@ -2308,6 +2308,7 @@ function goDepPage(num) {
     const page = document.getElementById('dep-page-' + num);
     if(page) page.style.display = 'block';
     if(num === 3) updateDepGamePassUi();
+    if(num === 'crypto1') updateCryptoMinAmount();
 }
 
 function updateDepGamePassUi() {
@@ -4540,6 +4541,42 @@ function updateCryptoZhPreview() {
     document.getElementById('dep-crypto-receive-zh').innerText = zh;
 }
 
+async function updateCryptoMinAmount() {
+    const coin = document.getElementById('dep-crypto-coin').value;
+    const fiat = document.getElementById('dep-fiat-currency').value;
+    const minText = document.getElementById('dep-crypto-min-text');
+    const fiatInput = document.getElementById('dep-fiat-amount');
+    const btn = document.getElementById('dep-crypto-generate-btn');
+    
+    if (!minText || !fiatInput) return;
+
+    minText.innerHTML = `Calculating minimum for <strong style="color:var(--text-primary);">${coin.toUpperCase()}</strong>...`;
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`/api/deposit/crypto/min-amount?coin=${coin}&fiat=${fiat}`);
+        const data = await res.json();
+        
+        let safeMin = data.min_fiat ? data.min_fiat : 1.00;
+        // Add a bit more padding and round up
+        safeMin = Math.ceil(safeMin * 10) / 10; 
+        safeMin = Math.max(1.00, safeMin); 
+        
+        fiatInput.min = safeMin;
+        minText.innerHTML = `Enter the amount of Fiat you want to spend. Minimum is <strong style="color:var(--accent);">${safeMin.toFixed(2)} ${fiat.toUpperCase()}</strong> for this coin.`;
+        
+        // Auto-correct if below min
+        if (parseFloat(fiatInput.value) < safeMin) {
+            fiatInput.value = safeMin.toFixed(2);
+            updateCryptoZhPreview();
+        }
+    } catch(e) {
+        minText.innerText = `Enter the amount of Fiat you want to spend. Minimum is 1.00 ${fiat.toUpperCase()}.`;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 async function generateCryptoInvoice() {
     if (!robloxUserId) {
         showGameToast('Please link your Roblox account first.', 'var(--red)');
@@ -4584,6 +4621,24 @@ async function generateCryptoInvoice() {
         document.getElementById('dep-crypto-pay-amount').innerText = data.pay_amount;
         document.getElementById('dep-crypto-pay-coin').innerText = data.pay_currency.toUpperCase();
         document.getElementById('dep-crypto-pay-address').value = data.pay_address;
+        
+        // Handle Extra ID (Destination Tag / Memo)
+        const extraWrap = document.getElementById('dep-crypto-extra-wrap');
+        const extraInput = document.getElementById('dep-crypto-pay-extra');
+        const extraLabel = document.getElementById('dep-crypto-extra-label');
+        
+        const extraId = data.pay_extra_id || data.extra_id || data.payin_extra_id;
+        
+        if (extraId) {
+            extraInput.value = extraId;
+            extraWrap.style.display = 'block';
+            // Custom labels for certain coins
+            if (coin === 'xrp') extraLabel.innerText = 'Destination Tag';
+            else if (coin === 'xlm') extraLabel.innerText = 'Memo';
+            else extraLabel.innerText = 'Memo / Extra ID';
+        } else {
+            extraWrap.style.display = 'none';
+        }
         
         // Generate QR code using external API
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${data.pay_address}`;
