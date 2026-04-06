@@ -3831,28 +3831,51 @@ async function runBattle(battle) {
 
     // Determine winner
     let winner = null;
+    let isTie = false;
+    let winningTeam = null;
+
     if (battle.mode === 'normal' || battle.mode === 'group') {
-        // Highest total wins
-        winner = battle.players.reduce((a, b) => a.total >= b.total ? a : b);
+        const max = Math.max(...battle.players.map(p => p.total));
+        const winners = battle.players.filter(p => p.total === max);
+        if (winners.length > 1) isTie = true;
+        else winner = winners[0];
     } else if (battle.mode === 'crazy') {
-        // Lowest total wins
-        winner = battle.players.reduce((a, b) => a.total <= b.total ? a : b);
+        const min = Math.min(...battle.players.map(p => p.total));
+        const winners = battle.players.filter(p => p.total === min);
+        if (winners.length > 1) isTie = true;
+        else winner = winners[0];
     } else if (battle.mode === 'team') {
-        // Team 0 = players[0]+[1], Team 1 = players[2]+[3]
         const team0 = battle.players.slice(0, 2);
         const team1 = battle.players.slice(2, 4);
         const t0total = team0.reduce((s, p) => s + p.total, 0);
         const t1total = team1.reduce((s, p) => s + p.total, 0);
-        const winningTeam = t0total >= t1total ? team0 : team1;
-        winner = winningTeam[0]; // award to first player of winning team
+        
+        if (t0total === t1total) isTie = true;
+        else {
+            winningTeam = t0total > t1total ? team0 : team1;
+            winner = winningTeam[0]; // flag index 0 for UI highlight
+        }
     }
 
     battle.winner = winner ? { userId: winner.userId, username: winner.username } : null;
+    battle.isTie = isTie;
     battle.status = 'done';
 
-    // Award winner their own unboxed total value (as requested by user)
-    if (winner && !winner.isBot) {
-        // Find the actual winning player object to get their specific total
+    if (isTie) {
+        const refundAmount = (caseData.price * battle.rounds);
+        for (const player of battle.players) {
+            if (!player.isBot) {
+                const bal = await getUserBalance(player.userId);
+                if (bal) {
+                    const current = bal.balance_zr + (bal.balance_zh || 0);
+                    const newBal = Math.round((current + refundAmount) * 100) / 100;
+                    await updateUserBalance(player.userId, newBal, 0);
+                    emitBalanceRemoteSync(io, player.userId, { balance: newBal, stats: {} });
+                }
+            }
+        }
+    } else if (winner && !winner.isBot) {
+        // Award winner their own unboxed total value
         const winnerObj = battle.players.find(p => p.userId === winner.userId);
         const winnerItemsValue = winnerObj ? winnerObj.total : 0;
         

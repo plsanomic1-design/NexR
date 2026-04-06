@@ -5320,8 +5320,7 @@ async function cbOpenCaseModal(caseId) {
 
     await new Promise(r => setTimeout(r, 80));
 
-    const wrapWidth = track.parentElement.offsetWidth;
-    const targetX   = WIN_POS * ITEM_WIDTH - (wrapWidth / 2) + (ITEM_WIDTH / 2);
+    const targetX   = WIN_POS * ITEM_WIDTH;
 
     // Play whoosh + start motion blur
     cbSoundEngine.whoosh();
@@ -5480,7 +5479,7 @@ function cbRenderBattleRoom(b) {
             ${b.players.map(p => `
             <div class="cb-1v1-spinner-line" id="bspinnerbox-${p.userId}" style="height:70px; margin-bottom:5px;">
                 <div class="win-tick"></div>
-                <div class="cb-battle-spinner-track" id="bspinner-${p.userId}" style="flex-direction:row; padding-left:calc(50% - 53px); padding-top:0;"></div>
+                <div class="cb-battle-spinner-track" id="bspinner-${p.userId}" style="flex-direction:row; padding-left:calc(50% - 67px); padding-top:0;"></div>
             </div>`).join('')}
         </div>
 
@@ -5612,8 +5611,7 @@ function cbBindSockets() {
                 await new Promise(res => setTimeout(res, 50 + Math.random()*200));
                 
                 const itemWidth = 134;
-                const wrapWidth = track.parentElement.offsetWidth;
-                const targetVal = (30 * itemWidth) - (wrapWidth/2) + (itemWidth/2);
+                const targetVal = 30 * itemWidth;
                 
                 cbSoundEngine.whoosh();
                 track.classList.add('is-spinning-fast');
@@ -5680,10 +5678,14 @@ function cbBindSockets() {
             }
             // Show winner banner
             const winnerEl = document.getElementById('cb-battle-winner');
-            if (winnerEl && b.winner) {
+            if (winnerEl) {
                 winnerEl.style.display = 'block';
-                const pot = b.players.reduce((s, p) => s + p.paid, 0);
-                winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won!</h3><p>Took the entire pot of ${pot.toLocaleString()} ZR$</p>`;
+                if (b.isTie) {
+                    winnerEl.innerHTML = `<h3>🤝 It's a Tie!</h3><p>All players have been refunded their original case costs.</p>`;
+                } else if (b.winner) {
+                    const pot = b.players.reduce((s, p) => s + p.paid, 0);
+                    winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won!</h3><p>Took the entire pot of ${pot.toLocaleString()} ZR$</p>`;
+                }
             }
             // Clear action buttons
             document.getElementById('cb-battle-actions').innerHTML = '';
