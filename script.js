@@ -4533,6 +4533,13 @@ document.getElementById('admin-search-input')?.addEventListener('keypress', (e) 
 // ==============================================
 // NOWPayments Crypto Deposit logic
 // ==============================================
+function updateCryptoZhPreview() {
+    const amount = parseFloat(document.getElementById('dep-fiat-amount').value) || 0;
+    // 0.007 Fiat = 1 ZH$
+    const zh = Math.floor(amount / 0.007);
+    document.getElementById('dep-crypto-receive-zh').innerText = zh;
+}
+
 async function generateCryptoInvoice() {
     if (!robloxUserId) {
         showGameToast('Please link your Roblox account first.', 'var(--red)');
@@ -4540,12 +4547,13 @@ async function generateCryptoInvoice() {
     }
     
     const coin = document.getElementById('dep-crypto-coin').value;
-    const amount = parseInt(document.getElementById('dep-crypto-amount').value, 10);
+    const fiatCurrency = document.getElementById('dep-fiat-currency').value;
+    const fiatAmount = parseFloat(document.getElementById('dep-fiat-amount').value);
     const errEl = document.getElementById('dep-crypto-error');
     const btn = document.getElementById('dep-crypto-generate-btn');
     
-    if (!amount || amount < 100) {
-        errEl.innerText = 'Minimum deposit is 100 ZH$.';
+    if (!fiatAmount || fiatAmount < 1.00) {
+        errEl.innerText = 'Minimum deposit is 1.00 Fiat.';
         errEl.style.display = 'block';
         return;
     }
@@ -4561,7 +4569,8 @@ async function generateCryptoInvoice() {
             body: JSON.stringify({
                 userId: robloxUserId,
                 currency: coin,
-                amountZh: amount
+                fiatCurrency: fiatCurrency,
+                fiatAmount: fiatAmount
             })
         });
         

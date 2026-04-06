@@ -1096,28 +1096,73 @@
                     <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <h2>Crypto Deposit</h2>
-                <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Select the cryptocurrency you want to pay with and the amount of ZH$ you want to receive. (Minimum 100 ZH$)</p>
+                <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Enter the amount of Fiat (Euro, Pounds, etc.) you want to spend. Minimum is 1.00.</p>
                 
                 <div style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
+                    <div class="input-group">
+                        <label>Spend Fiat Amount</label>
+                        <div style="display:flex; gap:10px;">
+                            <div class="input-wrapper" style="width:100px;">
+                                <select id="dep-fiat-currency" onchange="updateCryptoZhPreview()" style="width:100%; background:transparent; border:none; color:#fff; padding:12px; outline:none; font-weight:bold;">
+                                    <option value="eur">EUR (€)</option>
+                                    <option value="gbp">GBP (£)</option>
+                                    <option value="usd">USD ($)</option>
+                                </select>
+                            </div>
+                            <div class="input-wrapper" style="flex:1;">
+                                <input type="number" id="dep-fiat-amount" min="1.00" value="3.50" step="0.50" oninput="updateCryptoZhPreview()">
+                            </div>
+                        </div>
+                        <p style="margin-top: 8px; font-size: 13px; color: var(--text-secondary);">You will receive: <strong style="color:var(--green); font-size:15px;" id="dep-crypto-receive-zh">500</strong> <strong style="color:var(--green);">ZH$</strong></p>
+                    </div>
+
                     <div class="input-group">
                         <label>Select Cryptocurrency</label>
                         <div class="input-wrapper">
                             <select id="dep-crypto-coin" style="width:100%; background:var(--bg-input); border:none; color:#fff; padding:12px 14px; border-radius:8px; font-size:14px; outline:none;">
-                                <option value="eth">Ethereum (ETH)</option>
-                                <option value="btc">Bitcoin (BTC)</option>
-                                <option value="ltc">Litecoin (LTC)</option>
-                                <option value="sol">Solana (SOL)</option>
-                                <option value="doge">Dogecoin (DOGE)</option>
-                                <option value="usdttrc20">USDT (TRC20)</option>
+                                <optgroup label="Popular">
+                                    <option value="btc">Bitcoin (BTC)</option>
+                                    <option value="eth">Ethereum (ETH)</option>
+                                    <option value="ltc">Litecoin (LTC)</option>
+                                    <option value="sol">Solana (SOL)</option>
+                                    <option value="xrp">Ripple (XRP)</option>
+                                    <option value="doge">Dogecoin (DOGE)</option>
+                                    <option value="usdttrc20">USDT (Tron/TRC20)</option>
+                                </optgroup>
+                                <optgroup label="More Altcoins">
+                                    <option value="ada">Cardano (ADA)</option>
+                                    <option value="trx">Tron (TRX)</option>
+                                    <option value="bch">Bitcoin Cash (BCH)</option>
+                                    <option value="xmr">Monero (XMR)</option>
+                                    <option value="matic">Polygon (MATIC)</option>
+                                    <option value="bnbbsc">BNB (BSC)</option>
+                                    <option value="shib">Shiba Inu (SHIB)</option>
+                                    <option value="dash">Dash (DASH)</option>
+                                    <option value="xlm">Stellar (XLM)</option>
+                                    <option value="zec">Zcash (ZEC)</option>
+                                    <option value="dot">Polkadot (DOT)</option>
+                                    <option value="avaxc">Avalanche (AVAX)</option>
+                                    <option value="algo">Algorand (ALGO)</option>
+                                    <option value="nano">Nano (XNO)</option>
+                                    <option value="uni">Uniswap (UNI)</option>
+                                    <option value="link">Chainlink (LINK)</option>
+                                    <option value="atom">Cosmos (ATOM)</option>
+                                    <option value="ton">Toncore (TON)</option>
+                                    <option value="arb">Arbitrum (ARB)</option>
+                                    <option value="op">Optimism (OP)</option>
+                                    <option value="pepe">Pepe (PEPE)</option>
+                                    <option value="floki">Floki (FLOKI)</option>
+                                    <option value="apt">Aptos (APT)</option>
+                                    <option value="near">Near (NEAR)</option>
+                                    <option value="icp">Internet Computer (ICP)</option>
+                                    <option value="qnt">Quant (QNT)</option>
+                                    <option value="fil">Filecoin (FIL)</option>
+                                    <option value="vet">VeChain (VET)</option>
+                                    <option value="ftm">Fantom (FTM)</option>
+                                    <option value="sand">The Sandbox (SAND)</option>
+                                    <option value="mana">Decentraland (MANA)</option>
+                                </optgroup>
                             </select>
-                        </div>
-                    </div>
-                    
-                    <div class="input-group">
-                        <label>Amount (ZH$)</label>
-                        <div class="input-wrapper">
-                            <span class="input-icon currency-input-mark" aria-hidden="true">ZH$</span>
-                            <input type="number" id="dep-crypto-amount" min="100" value="500" placeholder="e.g. 500">
                         </div>
                     </div>
                 </div>

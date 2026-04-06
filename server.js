@@ -1656,15 +1656,14 @@ app.post('/api/deposit/crypto/create', async (req, res) => {
     const body = req.body || {};
     const userId = parseInt(String(body.userId || ''), 10);
     const currency = String(body.currency || '').toLowerCase();
-    const amountZh = parseInt(body.amountZh || 0, 10);
+    const fiatCurrency = String(body.fiatCurrency || 'eur').toLowerCase();
+    const fiatAmount = parseFloat(body.fiatAmount || 0);
     
-    if (!userId || !currency || amountZh < 100) {
-        return res.status(400).json({ error: 'Invalid request. Minimum deposit is 100 ZH$.' });
+    if (!userId || !currency || fiatAmount < 1.00) {
+        return res.status(400).json({ error: 'Invalid request. Minimum deposit is 1.00 Fiat.' });
     }
     
-    // Exchange rate: 500 ZH$ = 3.50 EUR -> 1 ZH$ = 0.007 EUR
-    const eurAmount = parseFloat((amountZh * 0.007).toFixed(2));
-    if (eurAmount < 0.5) return res.status(400).json({ error: 'Deposit amount too small for crypto networks.' });
+    const eurAmount = parseFloat(fiatAmount.toFixed(2));
     
     const orderId = `deps_${userId}_${Date.now()}`;
     
@@ -1677,11 +1676,11 @@ app.post('/api/deposit/crypto/create', async (req, res) => {
             },
             body: JSON.stringify({
                 price_amount: eurAmount,
-                price_currency: 'eur',
+                price_currency: fiatCurrency,
                 pay_currency: currency,
                 ipn_callback_url: 'https://' + req.get('host') + '/api/deposit/crypto/webhook',
                 order_id: orderId,
-                order_description: `ZephR$ Deposit: ${amountZh} ZH$`
+                order_description: `ZephR$ Deposit: ${fiatAmount} ${fiatCurrency.toUpperCase()}`
             })
         });
         

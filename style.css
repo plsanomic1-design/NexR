@@ -4049,3 +4049,14 @@ input:checked + .slider:before { transform: translateX(14px); }
     background: linear-gradient(135deg, #d97706 0%, #ca8a04 100%);
     color: #0c0a09;
 }
+
+select option {
+    background-color: var(--bg-panel, #1a1c29);
+    color: #ffffff;
+}
+
+select optgroup {
+    background-color: var(--bg-panel, #1a1c29);
+    color: var(--text-secondary, #8b949e);
+    font-weight: bold;
+}
