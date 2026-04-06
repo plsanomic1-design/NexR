@@ -165,649 +165,6 @@
         <div id="tournament-banner-strip" class="tournament-banner-strip" style="display:none;" role="region" aria-label="Active tournaments"></div>
         
         <div class="page-content" id="page-content">
-            <div id="view-home" class="view active">
-                <header class="home-hero">
-                    <div class="home-hero__intro">
-                        <span class="home-hero__eyebrow">ZephR$</span>
-                        <h1 class="home-hero__title">Play &amp; wager</h1>
-                        <p class="home-hero__sub">Choose a game below. Balance syncs when you link Roblox.</p>
-                    </div>
-                    <aside class="home-wallet-card" aria-label="Your balance">
-                        <h3 class="home-wallet-card__title">Wallet</h3>
-                        <div class="balance-item balance-item--hero">
-                            <div class="balance-icon zr"><span class="balance-zr-letter">ZR$</span></div>
-                            <span class="balance-name">ZR$</span>
-                            <span class="balance-val" id="home-balance">0.00</span>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap:8px;">
-                            <button type="button" class="btn-primary btn-deposit-full" id="home-deposit-btn" onclick="openDepositModal()">Add funds</button>
-                            <div class="home-social-actions">
-                                <button type="button" class="home-social-btn home-social-btn--rain" onclick="openRainModal()"><i class="fa-solid fa-cloud-showers-heavy" aria-hidden="true"></i> Rain</button>
-                                <button type="button" class="home-social-btn home-social-btn--tip" onclick="openTipModal()"><i class="fa-solid fa-hand-holding-dollar" aria-hidden="true"></i> Tip</button>
-                            </div>
-                        </div>
-                    </aside>
-                </header>
-
-                <section class="home-games-block" aria-labelledby="home-games-heading">
-                    <div class="home-section-head">
-                        <h2 id="home-games-heading">Games</h2>
-                        <span class="home-section-hint">Tap a tile to open</span>
-                    </div>
-                <div class="games-grid games-grid--mosaic">
-                    <div class="game-card crash" onclick="document.querySelector('[data-view=crash]').click()">
-                        <div class="game-card-visual crash-visual" aria-hidden="true"></div>
-                        <div class="badge badge-popular">Popular</div>
-                        <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">🚀</span>
-                        <h3 class="card-title">CRASH</h3>
-                    </div>
-                    <div class="game-card blackjack" onclick="document.querySelector('[data-view=blackjack]').click()">
-                        <div class="game-card-visual bj-visual" aria-hidden="true"></div>
-                        <div class="badge badge-new">New Release</div>
-                        <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">🃏</span>
-                        <h3 class="card-title">BLACKJACK</h3>
-                    </div>
-                    <div class="game-card dice" onclick="document.querySelector('[data-view=dice]').click()">
-                        <div class="game-card-visual dice-visual" aria-hidden="true"></div>
-                        <div class="badge badge-popular">Popular</div>
-                        <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">🎲</span>
-                        <h3 class="card-title">DICE</h3>
-                    </div>
-                    <div class="game-card mines" onclick="document.querySelector('[data-view=mines]').click()">
-                        <div class="game-card-visual mines-visual" aria-hidden="true"></div>
-                        <div class="badge badge-new">New Release</div>
-                        <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">💎</span>
-                        <h3 class="card-title">MINES</h3>
-                    </div>
-                </div>
-                </section>
-
-                <section class="live-feed-section" aria-labelledby="live-feed-heading">
-                    <div class="feed-header">
-                        <h2 id="live-feed-heading">Activity</h2>
-                        <span class="feed-header-hint">Recent rounds</span>
-                    </div>
-                    <div class="feed-tabs">
-                        <button class="feed-tab active">All Games</button>
-                        <button class="feed-tab">High wins</button>
-                        <button class="feed-tab">Lucky wins</button>
-                    </div>
-                    
-                    <table class="feed-table">
-                        <thead>
-                            <tr>
-                                <th>Game</th>
-                                <th>Username</th>
-                                <th>Amount</th>
-                                <th>Multiplier</th>
-                                <th>Payout</th>
-                                <th>Time</th>
-                            </tr>
-                        </thead>
-                        <tbody id="live-feed-body">
-                            <!-- populated by JS -->
-                        </tbody>
-                    </table>
-                </section>
-            </div>
-            <div id="view-blackjack" class="view">
-                <div class="game-layout">
-                    <!-- Betting Panel -->
-                    <div class="bet-panel">
-                        <div class="bet-tabs">
-                            <button class="bet-tab active">Manual</button>
-                            <button class="bet-tab">Auto</button>
-                        </div>
-                        
-                        <div class="input-group">
-                            <label>Bet amount</label>
-                            <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
-                                <input type="number" id="bj-bet-input" value="25" min="1">
-                                <div class="input-actions">
-                                    <button onclick="document.getElementById('bj-bet-input').value /= 2">1/2</button>
-                                    <button onclick="document.getElementById('bj-bet-input').value *= 2">2x</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="bj-actions">
-                            <button class="bj-action-btn" id="bj-hit-btn" disabled>Hit <i class="fa-solid fa-hand-pointer"></i></button>
-                            <button class="bj-action-btn" id="bj-stand-btn" disabled>Stand <i class="fa-solid fa-hand"></i></button>
-                            <button class="bj-action-btn" id="bj-double-btn" disabled>Double <i class="fa-solid fa-check-double"></i></button>
-                            <button class="bj-action-btn" id="bj-split-btn" disabled>Split <i class="fa-solid fa-arrows-split-up-and-left"></i></button>
-                        </div>
-                        
-                        <div style="margin-top:20px; display:flex; align-items:center; gap:10px;">
-                            <label class="switch">
-                                <input type="checkbox">
-                                <span class="slider round"></span>
-                            </label>
-                            <span style="font-size:12px; color:var(--text-secondary);">Basic Strategy Hints <i class="fa-solid fa-info-circle"></i></span>
-                        </div>
-
-                        <button class="btn-primary" id="bj-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Place bet</button>
-                    </div>
-                    
-                    <!-- Game Area -->
-                    <div class="game-area bj-area">
-                        <div class="bj-table">
-                            <div class="bj-center-text">
-                                <div class="bj-pays">BLACKJACK PAYS 3 TO 2</div>
-                                <div class="bj-ins">INSURANCE PAYS 2 TO 1</div>
-                            </div>
-                            
-                            <div class="dealer-area">
-                                <div class="hand-score" id="bj-dealer-score" style="display:none;">0</div>
-                                <div class="cards-container" id="bj-dealer-cards">
-                                    <!-- Cards go here -->
-                                </div>
-                            </div>
-                            
-                            <div class="player-area">
-                                <div class="cards-container" id="bj-player-cards">
-                                    <!-- Cards go here -->
-                                </div>
-                                <div class="hand-score" id="bj-player-score" style="display:none;">0</div>
-                            </div>
-
-                            <div class="bj-message" id="bj-message" style="display:none;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div id="view-mines" class="view">
-                <div class="game-layout">
-                    <!-- Betting Panel -->
-                    <div class="bet-panel">
-                        <div class="bet-tabs">
-                            <button class="bet-tab active">Manual</button>
-                            <button class="bet-tab">Auto</button>
-                        </div>
-                        
-                        <div class="input-group">
-                            <label>Bet amount</label>
-                            <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
-                                <input type="number" id="mines-bet-input" value="25" min="1">
-                                <div class="input-actions">
-                                    <button onclick="document.getElementById('mines-bet-input').value /= 2">1/2</button>
-                                    <button onclick="document.getElementById('mines-bet-input').value *= 2">2x</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="input-group">
-                            <label>Mines</label>
-                            <div class="input-wrapper">
-                                <input type="number" id="mines-count-input" value="3" min="1" max="24" style="padding-left:15px;">
-                                <div class="input-actions" style="margin-right: -4px;">
-                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 1">1</button>
-                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 3">3</button>
-                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 5">5</button>
-                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 10">10</button>
-                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 24">24</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="input-group">
-                            <label>Total earnings</label>
-                            <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
-                                <span class="input-icon currency-input-mark" style="color:var(--green)" aria-hidden="true">ZR$</span>
-                                <input type="text" id="mines-earnings" value="0.00" readonly style="color:var(--green)">
-                            </div>
-                        </div>
-
-                        <button class="btn-primary" id="mines-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Start new game</button>
-                    </div>
-                    
-                    <!-- Game Area -->
-                    <div class="game-area mines-area">
-                        <div class="mines-grid" id="mines-grid">
-                            <!-- JS generates 25 tiles -->
-                        </div>
-                        <div class="mines-message" id="mines-message" style="display:none;"></div>
-                    </div>
-                </div>
-            </div>
-            <div id="view-towers" class="view">
-                <div class="game-layout">
-                    <!-- Betting Panel -->
-                    <div class="bet-panel">
-                        <div class="bet-tabs">
-                            <button class="bet-tab active">Manual</button>
-                            <button class="bet-tab">Auto</button>
-                        </div>
-                        
-                        <div class="input-group">
-                            <label>Bet amount</label>
-                            <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
-                                <input type="number" id="towers-bet-input" value="25" min="1">
-                                <div class="input-actions">
-                                    <button onclick="document.getElementById('towers-bet-input').value /= 2">1/2</button>
-                                    <button onclick="document.getElementById('towers-bet-input').value *= 2">2x</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="input-group">
-                            <label>Difficulty</label>
-                            <div class="towers-diff-tabs" id="towers-diff-tabs">
-                                <button class="diff-btn active" data-diff="easy">Easy</button>
-                                <button class="diff-btn" data-diff="normal">Normal</button>
-                                <button class="diff-btn" data-diff="hard">Hard</button>
-                            </div>
-                        </div>
-
-                        <button class="btn-primary" id="towers-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Start new game</button>
-                    </div>
-                    
-                    <!-- Game Area -->
-                    <div class="game-area towers-area">
-                        <div class="towers-grid-container" id="towers-grid-container">
-                            <!-- JS generates tower rows -->
-                        </div>
-                        <div class="towers-message" id="towers-message" style="display:none;"></div>
-                    </div>
-                </div>
-            </div>
-            <div id="view-dice" class="view">
-                <div class="game-layout">
-                    <!-- Betting Panel -->
-                    <div class="bet-panel">
-                        <div class="bet-tabs">
-                            <button class="bet-tab active">Manual</button>
-                        </div>
-                        
-                        <div class="input-group">
-                            <label>Bet amount</label>
-                            <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
-                                <input type="number" id="dice-bet-input" value="25" min="1">
-                                <div class="input-actions">
-                                    <button onclick="document.getElementById('dice-bet-input').value /= 2">1/2</button>
-                                    <button onclick="document.getElementById('dice-bet-input').value *= 2">2x</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="input-group">
-                            <label>Total Profit (x<span id="dice-profit-multi">1.98</span>)</label>
-                            <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
-                                <span class="input-icon currency-input-mark" style="color:var(--text-secondary)" aria-hidden="true">ZR$</span>
-                                <input type="text" id="dice-profit-input" value="49.50" readonly style="color:var(--text-secondary)">
-                            </div>
-                        </div>
-
-                        <button class="btn-primary" id="dice-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Place bet</button>
-                    </div>
-                    
-                    <!-- Game Area -->
-                    <div class="game-area dice-area">
-                        <div class="dice-slider-container">
-                            <div class="dice-history-bars" id="dice-history">
-                                <!-- Previous rolls -->
-                            </div>
-                            
-                            <div class="slider-track-bg"></div>
-                            <div class="slider-track-fill" id="dice-track-fill"></div>
-                            <input type="range" min="2" max="98" value="50" class="dice-slider" id="dice-slider">
-                            
-                            <div class="dice-slider-labels">
-                                <span>0</span>
-                                <span>25</span>
-                                <span>50</span>
-                                <span>75</span>
-                                <span>100</span>
-                            </div>
-                            <div class="dice-result-marker" id="dice-result-marker">00.00</div>
-                        </div>
-
-                        <div class="dice-controls-row">
-                            <div class="dice-ctrl-box">
-                                <label>Multiplier</label>
-                                <div class="input-wrapper">
-                                    <input type="number" id="dice-multi-input" value="1.98" step="0.01">
-                                    <i class="fa-solid fa-xmark input-icon"></i>
-                                </div>
-                            </div>
-                            <div class="dice-ctrl-box">
-                                <label>Roll Over</label>
-                                <div class="input-wrapper">
-                                    <input type="number" id="dice-target-input" value="50">
-                                    <i class="fa-solid fa-arrows-rotate input-icon" style="cursor:pointer;" id="dice-toggle-dir"></i>
-                                </div>
-                            </div>
-                            <div class="dice-ctrl-box">
-                                <label>Win Chance</label>
-                                <div class="input-wrapper">
-                                    <input type="number" id="dice-chance-input" value="50">
-                                    <i class="fa-solid fa-percent input-icon"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="dice-message" id="dice-message" style="display:none;"></div>
-                    </div>
-                </div>
-            </div>
-            <div id="view-plinko" class="view">
-                <div class="game-layout">
-                    <!-- Betting Panel -->
-                    <div class="bet-panel">
-                        <div class="bet-tabs">
-                            <button class="bet-tab active">Manual</button>
-                            <button class="bet-tab">Auto</button>
-                        </div>
-                        
-                        <div class="input-group">
-                            <label>Difficulty</label>
-                            <div class="towers-diff-tabs" id="plinko-diff-tabs" style="display:flex; gap:5px; margin-bottom: 5px;">
-                                <button class="diff-btn active" data-diff="easy">Easy</button>
-                                <button class="diff-btn" data-diff="normal">Normal</button>
-                                <button class="diff-btn" data-diff="hard">Hard</button>
-                            </div>
-                        </div>
-
-                        <div class="input-group">
-                            <label>Bet amount</label>
-                            <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
-                                <input type="number" id="plinko-bet-input" value="25" min="1">
-                                <div class="input-actions">
-                                    <button onclick="document.getElementById('plinko-bet-input').value /= 2">1/2</button>
-                                    <button onclick="document.getElementById('plinko-bet-input').value *= 2">2x</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="input-group">
-                            <label>Amount of rows</label>
-                            <div class="input-wrapper" style="padding: 4px;">
-                                <input type="number" id="plinko-rows-input" value="10" readonly style="margin-left: 10px; width: 40px; border: none; background: transparent; color: white;">
-                                <div class="plinko-row-btns input-actions" style="margin-left: auto;">
-                                    <button class="row-btn" data-r="8">8</button>
-                                    <button class="row-btn active" style="background:var(--bg-panel); color:white;" data-r="10">10</button>
-                                    <button class="row-btn" data-r="12">12</button>
-                                    <button class="row-btn" data-r="14">14</button>
-                                    <button class="row-btn" data-r="16">16</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button class="btn-secondary" id="plinko-play-btn" style="width:100%; margin-top: auto; padding: 15px; cursor: not-allowed; opacity: 0.7;" disabled>Closed for maintenance</button>
-                    </div>
-                    
-                    <!-- Game Area -->
-                    <div class="game-area plinko-area">
-                        <canvas id="plinko-canvas" width="600" height="400"></canvas>
-                        <div id="plinko-buckets" class="plinko-buckets"></div>
-                    </div>
-                </div>
-            </div>
-            <div id="view-coinflip" class="view">
-                <div class="coinflip-layout">
-                    <header class="coinflip-header">
-                        <div>
-                            <h2 style="font-size: 28px; font-weight: 800; display:flex; align-items:center; gap: 10px;">
-                                <i class="fa-solid fa-coins" style="color:var(--accent);"></i> Coinflip
-                            </h2>
-                            <p style="color:var(--text-secondary); margin-top:5px;">PVP. Winner takes all. 5% house fee.</p>
-                        </div>
-                        <div class="cf-create-card">
-                            <div class="input-group" style="margin-bottom:0;">
-                                <div class="input-wrapper" style="width:140px;">
-                                    <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
-                                    <input type="number" id="cf-create-amount" value="50" min="1">
-                                </div>
-                            </div>
-                            <button class="btn-primary" id="cf-create-btn-main" onclick="createCoinflip()" style="width:100%; padding:15px;">Create Flip</button>
-                        </div>
-                    </header>
-
-                    <div class="cf-lobby-grid" id="cf-lobby-grid">
-                        <div class="chat-system-msg" style="grid-column: 1 / -1; padding: 40px;">No active coinflips. Create one to start!</div>
-                    </div>
-                </div>
-            </div>
-            <div id="view-rooms" class="view">
-                <div class="voice-layout">
-                    <header class="voice-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;">
-                        <div>
-                            <h2 style="font-size: 28px; font-weight: 800; display:flex; align-items:center; gap: 10px;">
-                                <i class="fa-solid fa-microphone-lines" style="color:var(--accent);"></i> Voice Chat
-                            </h2>
-                            <p style="color:var(--text-secondary); margin-top:5px;">Connect with other players in real-time. Peer-to-peer audio.</p>
-                        </div>
-                        <div class="voice-controls" style="display:flex; gap: 10px;">
-                            <button class="btn-primary voice-connect-btn" id="voice-connect-btn">
-                                <i class="fa-solid fa-plug"></i> Connect to Voice
-                            </button>
-                            <button class="btn-secondary voice-icon-btn hidden" id="voice-mute-btn" title="Mute Microphone" style="display:none; padding: 12px 18px;">
-                                <i class="fa-solid fa-microphone"></i>
-                            </button>
-                            <button class="btn-secondary voice-icon-btn hidden" id="voice-deaf-btn" title="Deafen Audio" style="display:none; padding: 12px 18px;">
-                                <i class="fa-solid fa-headphones"></i>
-                            </button>
-                            <button class="btn-secondary voice-icon-btn hidden" id="voice-disconnect-btn" title="Disconnect" style="display:none; padding: 12px 18px; color: var(--red);">
-                                <i class="fa-solid fa-phone-slash"></i>
-                            </button>
-                        </div>
-                    </header>
-
-                    <div id="voice-status-banner" style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); text-align:center; margin-bottom:25px; color:var(--text-secondary); font-size:14px;">
-                        You are currently disconnected. Click "Connect to Voice" to join the lobby.
-                    </div>
-
-                    <div id="voice-participants-grid" class="voice-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px;">
-                        <!-- Generated by voice.js -->
-                    </div>
-                </div>
-            </div>
-            <div id="view-crash" class="view">
-                <div class="crash-layout" style="display:flex; gap:20px; align-items:flex-start;">
-                    <!-- Left Column -->
-                    <div style="width: 300px; display:flex; flex-direction:column; gap:20px;">
-                        <!-- Betting Panel -->
-                        <div class="bet-panel">
-                            <div class="bet-tabs">
-                                <button class="bet-tab active">Manual</button>
-                                <button class="bet-tab">Auto</button>
-                            </div>
-                            
-                            <div class="input-group">
-                                <label>Bet amount</label>
-                                <div class="input-wrapper">
-                                    <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
-                                    <input type="number" id="crash-bet-input" value="30" min="1">
-                                    <div class="input-actions">
-                                        <button onclick="document.getElementById('crash-bet-input').value /= 2">1/2</button>
-                                        <button onclick="document.getElementById('crash-bet-input').value *= 2">2x</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="input-group">
-                                <label>Auto cashout (multiplier)</label>
-                                <div class="input-wrapper">
-                                    <input type="number" id="crash-auto-input" value="2.00" step="0.10">
-                                    <div class="input-actions">
-                                        <button onclick="document.getElementById('crash-auto-input').value = ''">Disable</button>
-                                        <button onclick="document.getElementById('crash-auto-input').value = '2.00'">2.00x</button>
-                                        <button onclick="document.getElementById('crash-auto-input').value = '10.00'">10.00x</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button class="btn-primary" id="crash-play-btn" style="width:100%; margin-top: 15px; padding: 15px;">Join next game</button>
-                        </div>
-
-                        <!-- Players List -->
-                        <div class="bet-panel" style="min-height: 250px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
-                                <span style="font-weight: 700; font-size: 14px;">0 Players</span>
-                                <span style="font-size: 13px; color: var(--text-secondary);">0 <span class="currency-inline">ZR$</span></span>
-                            </div>
-                            <div class="crash-players-list" style="color:var(--text-secondary); font-size:12px; text-align:center; padding-top: 20px;">
-                                <!-- Players would go here -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right Column (Game Area) -->
-                    <div class="game-area crash-area" style="flex:1; position:relative; overflow:hidden; background: linear-gradient(to bottom, #2c3258, #16182a); padding:0; display:flex; flex-direction:column; border-radius:12px; min-height:550px;">
-                        
-                        <!-- Top Header inside area -->
-                        <div style="display:flex; justify-content:space-between; padding: 20px; z-index: 10;">
-                            <div class="crash-history" id="crash-history" style="display:flex; gap:6px;">
-                                <span class="history-pill win">10.41</span>
-                                <span class="history-pill" style="background:#f5af19; color:#1a1c2d;">2.01</span>
-                                <span class="history-pill win">7.91</span>
-                                <span class="history-pill lose">1.12</span>
-                                <span class="history-pill" style="background:#f5af19; color:#1a1c2d;">3.16</span>
-                                <span class="history-pill lose">1.00</span>
-                                <span class="history-pill lose">1.16</span>
-                            </div>
-                            <div style="font-size: 12px; color: var(--text-secondary); display:flex; align-items:center; gap:10px;">
-                                <span><i class="fa-solid fa-question text-secondary"></i> Fairness</span>
-                                <span>Network status <i class="fa-solid fa-wifi" style="color:var(--green)"></i></span>
-                            </div>
-                        </div>
-
-                        <!-- Main Screen Display -->
-                        <div style="position:absolute; top: 120px; left:0; width:100%; text-align:center; z-index:5;">
-                            <div id="crash-multi-display" style="font-size: 84px; font-weight: 800; color: white;">1.00x</div>
-                            <div id="crash-status-text" style="font-size: 18px; color: var(--text-secondary); margin-top:-10px;">Current payout</div>
-                        </div>
-
-                        <!-- Canvas -->
-                        <canvas id="crash-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:2;"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div id="view-profile" class="view">
-                <div class="profile-new-layout">
-                    <!-- Banner & Identity -->
-                    <div class="prof-header">
-                        <div class="prof-banner"></div>
-                        <div class="prof-identity">
-                            <img id="profile-main-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" class="prof-avatar" alt="Avatar">
-                            <div class="prof-info">
-                                <div id="prof-username-disp" class="prof-uname">artirzu</div>
-                                <div class="prof-uid">UID: <span id="prof-uid-val">8cd7d3d0...</span></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Glassmorphic Stat Row -->
-                    <div class="prof-stats-grid">
-                        <div class="prof-stat-card">
-                            <div class="prof-stat-label">Rain Winnings</div>
-                            <div id="prof-rain" class="prof-stat-val">0</div>
-                        </div>
-                        <div class="prof-stat-card">
-                            <div class="prof-stat-label">Total deposited</div>
-                            <div id="prof-deposited" class="prof-stat-val">0</div>
-                        </div>
-                        <div class="prof-stat-card">
-                            <div class="prof-stat-label">Total withdrawn</div>
-                            <div id="prof-withdrawn" class="prof-stat-val">0</div>
-                        </div>
-                        <div class="prof-stat-card">
-                            <div class="prof-stat-label">Total wagered</div>
-                            <div id="prof-wagered" class="prof-stat-val">0</div>
-                        </div>
-                        <div class="prof-stat-card">
-                            <div class="prof-stat-label">XP Balance</div>
-                            <div id="prof-xp" class="prof-stat-val">0</div>
-                        </div>
-                    </div>
-                    <div style="color:var(--text-secondary); font-size:12px; text-align:center; margin-bottom: 25px;">Stat update in 3m 45s</div>
-
-                    <!-- Tabs & Content -->
-                    <div class="prof-content-area">
-                        <div class="profile-tabs centered-tabs" style="display:flex; gap:25px; font-weight: 600; font-size: 14px;">
-                            <button class="prof-tab active" data-ptab="transactions">Transactions</button>
-                            <button class="prof-tab" data-ptab="deposits">Deposits</button>
-                            <button class="prof-tab" data-ptab="withdrawals">Withdrawals</button>
-                            <button class="prof-tab" data-ptab="settings">Settings</button>
-                        </div>
-
-                        <div class="prof-tab-boards">
-                            <!-- Transactions -->
-                            <div class="ptab-content" id="ptab-transactions" style="display:block;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                                    <h2 style="font-size:22px; font-weight:600;">Transactions</h2>
-                                    <select class="prof-select" style="background:var(--bg-panel); color:var(--text-secondary); border:1px solid rgba(255,255,255,0.05); padding:10px 15px; border-radius:6px; outline:none; font-family:inherit; min-width:120px; font-size:13px; font-weight:600;">
-                                        <option>Games</option>
-                                    </select>
-                                </div>
-                                <div class="table-wrap">
-                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
-                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
-                                    </div>
-                                    <div id="prof-tx-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
-                                        <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No transactions yet.</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Deposits -->
-                            <div class="ptab-content" id="ptab-deposits" style="display:none;">
-                                <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Deposits</h2>
-                                <div class="table-wrap">
-                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
-                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
-                                    </div>
-                                    <div id="prof-dep-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
-                                        <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No deposits yet.</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Withdrawals -->
-                            <div class="ptab-content" id="ptab-withdrawals" style="display:none;">
-                                <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Withdrawals</h2>
-                                <div class="table-wrap">
-                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
-                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
-                                    </div>
-                                    
-                                    <h3 style="font-size:14px; margin: 10px 0; color:var(--accent);">Crypto Withdrawals</h3>
-                                    <div id="prof-crypto-wd-list" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 20px;">
-                                        <div style="text-align:center; padding: 20px; color:var(--text-secondary); font-size:13px;">No crypto withdrawals yet.</div>
-                                    </div>
-                                    
-                                    <h3 style="font-size:14px; margin: 10px 0; color:var(--text-primary);">Gamepass Withdrawals</h3>
-                                    <div id="prof-wd-list" style="display:flex; flex-direction:column; gap:12px; min-height: 150px;">
-                                        <div style="text-align:center; padding: 20px; color:var(--text-secondary); font-size:13px;">No withdrawals yet.</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Settings -->
-                            <div class="ptab-content" id="ptab-settings" style="display:none;">
-                                <div style="display:flex; gap: 40px; justify-content:center; max-width:800px; margin: 0 auto;">
-                                    <div style="width:200px; display:flex; flex-direction:column; gap:20px; font-size:14px; font-weight:600;">
-                                        <div style="color:white; cursor:pointer;" class="settings-menu-item active">Change Username</div>
-                                        <div style="color:var(--text-secondary); cursor:pointer;" class="settings-menu-item">Provably Fair</div>
-                                    </div>
-                                    <div style="flex:1;">
-                                        <h3 style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:20px; letter-spacing:1px;">CHANGE USERNAME</h3>
-                                        <div class="input-wrapper" style="background:var(--bg-input); border-radius:8px; border:1px solid rgba(255,255,255,0.05); height: 50px; margin-bottom:20px;">
-                                            <input type="text" id="prof-new-username" placeholder="Enter new username" style="width:100%; padding:0 20px; background:transparent; border:none; color:white; font-size:14px; font-family:inherit; outline:none;" value="artirzu">
-                                        </div>
-                                        <button class="btn-primary" style="width:100%; padding:15px;" onclick="saveProfUsername()">Save Changes</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                    </div>
-                </div>
-            </div>
 <!-- ====== CASE BATTLES VIEW ====== -->
     <div id="view-casebattles" class="view">
       <div class="cb-header">
@@ -1640,6 +997,650 @@
         </div>
     </div>
 
+
+            <div id="view-home" class="view active">
+                <header class="home-hero">
+                    <div class="home-hero__intro">
+                        <span class="home-hero__eyebrow">ZephR$</span>
+                        <h1 class="home-hero__title">Play &amp; wager</h1>
+                        <p class="home-hero__sub">Choose a game below. Balance syncs when you link Roblox.</p>
+                    </div>
+                    <aside class="home-wallet-card" aria-label="Your balance">
+                        <h3 class="home-wallet-card__title">Wallet</h3>
+                        <div class="balance-item balance-item--hero">
+                            <div class="balance-icon zr"><span class="balance-zr-letter">ZR$</span></div>
+                            <span class="balance-name">ZR$</span>
+                            <span class="balance-val" id="home-balance">0.00</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <button type="button" class="btn-primary btn-deposit-full" id="home-deposit-btn" onclick="openDepositModal()">Add funds</button>
+                            <div class="home-social-actions">
+                                <button type="button" class="home-social-btn home-social-btn--rain" onclick="openRainModal()"><i class="fa-solid fa-cloud-showers-heavy" aria-hidden="true"></i> Rain</button>
+                                <button type="button" class="home-social-btn home-social-btn--tip" onclick="openTipModal()"><i class="fa-solid fa-hand-holding-dollar" aria-hidden="true"></i> Tip</button>
+                            </div>
+                        </div>
+                    </aside>
+                </header>
+
+                <section class="home-games-block" aria-labelledby="home-games-heading">
+                    <div class="home-section-head">
+                        <h2 id="home-games-heading">Games</h2>
+                        <span class="home-section-hint">Tap a tile to open</span>
+                    </div>
+                <div class="games-grid games-grid--mosaic">
+                    <div class="game-card crash" onclick="document.querySelector('[data-view=crash]').click()">
+                        <div class="game-card-visual crash-visual" aria-hidden="true"></div>
+                        <div class="badge badge-popular">Popular</div>
+                        <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">🚀</span>
+                        <h3 class="card-title">CRASH</h3>
+                    </div>
+                    <div class="game-card blackjack" onclick="document.querySelector('[data-view=blackjack]').click()">
+                        <div class="game-card-visual bj-visual" aria-hidden="true"></div>
+                        <div class="badge badge-new">New Release</div>
+                        <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">🃏</span>
+                        <h3 class="card-title">BLACKJACK</h3>
+                    </div>
+                    <div class="game-card dice" onclick="document.querySelector('[data-view=dice]').click()">
+                        <div class="game-card-visual dice-visual" aria-hidden="true"></div>
+                        <div class="badge badge-popular">Popular</div>
+                        <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">🎲</span>
+                        <h3 class="card-title">DICE</h3>
+                    </div>
+                    <div class="game-card mines" onclick="document.querySelector('[data-view=mines]').click()">
+                        <div class="game-card-visual mines-visual" aria-hidden="true"></div>
+                        <div class="badge badge-new">New Release</div>
+                        <span class="game-card-glyph game-card-glyph--emoji" aria-hidden="true">💎</span>
+                        <h3 class="card-title">MINES</h3>
+                    </div>
+                </div>
+                </section>
+
+                <section class="live-feed-section" aria-labelledby="live-feed-heading">
+                    <div class="feed-header">
+                        <h2 id="live-feed-heading">Activity</h2>
+                        <span class="feed-header-hint">Recent rounds</span>
+                    </div>
+                    <div class="feed-tabs">
+                        <button class="feed-tab active">All Games</button>
+                        <button class="feed-tab">High wins</button>
+                        <button class="feed-tab">Lucky wins</button>
+                    </div>
+                    
+                    <table class="feed-table">
+                        <thead>
+                            <tr>
+                                <th>Game</th>
+                                <th>Username</th>
+                                <th>Amount</th>
+                                <th>Multiplier</th>
+                                <th>Payout</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="live-feed-body">
+                            <!-- populated by JS -->
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+            <div id="view-blackjack" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                            <button class="bet-tab">Auto</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
+                                <input type="number" id="bj-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('bj-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('bj-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bj-actions">
+                            <button class="bj-action-btn" id="bj-hit-btn" disabled>Hit <i class="fa-solid fa-hand-pointer"></i></button>
+                            <button class="bj-action-btn" id="bj-stand-btn" disabled>Stand <i class="fa-solid fa-hand"></i></button>
+                            <button class="bj-action-btn" id="bj-double-btn" disabled>Double <i class="fa-solid fa-check-double"></i></button>
+                            <button class="bj-action-btn" id="bj-split-btn" disabled>Split <i class="fa-solid fa-arrows-split-up-and-left"></i></button>
+                        </div>
+                        
+                        <div style="margin-top:20px; display:flex; align-items:center; gap:10px;">
+                            <label class="switch">
+                                <input type="checkbox">
+                                <span class="slider round"></span>
+                            </label>
+                            <span style="font-size:12px; color:var(--text-secondary);">Basic Strategy Hints <i class="fa-solid fa-info-circle"></i></span>
+                        </div>
+
+                        <button class="btn-primary" id="bj-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Place bet</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area bj-area">
+                        <div class="bj-table">
+                            <div class="bj-center-text">
+                                <div class="bj-pays">BLACKJACK PAYS 3 TO 2</div>
+                                <div class="bj-ins">INSURANCE PAYS 2 TO 1</div>
+                            </div>
+                            
+                            <div class="dealer-area">
+                                <div class="hand-score" id="bj-dealer-score" style="display:none;">0</div>
+                                <div class="cards-container" id="bj-dealer-cards">
+                                    <!-- Cards go here -->
+                                </div>
+                            </div>
+                            
+                            <div class="player-area">
+                                <div class="cards-container" id="bj-player-cards">
+                                    <!-- Cards go here -->
+                                </div>
+                                <div class="hand-score" id="bj-player-score" style="display:none;">0</div>
+                            </div>
+
+                            <div class="bj-message" id="bj-message" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-mines" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                            <button class="bet-tab">Auto</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
+                                <input type="number" id="mines-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('mines-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('mines-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Mines</label>
+                            <div class="input-wrapper">
+                                <input type="number" id="mines-count-input" value="3" min="1" max="24" style="padding-left:15px;">
+                                <div class="input-actions" style="margin-right: -4px;">
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 1">1</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 3">3</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 5">5</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 10">10</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 24">24</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Total earnings</label>
+                            <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
+                                <span class="input-icon currency-input-mark" style="color:var(--green)" aria-hidden="true">ZR$</span>
+                                <input type="text" id="mines-earnings" value="0.00" readonly style="color:var(--green)">
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="mines-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Start new game</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area mines-area">
+                        <div class="mines-grid" id="mines-grid">
+                            <!-- JS generates 25 tiles -->
+                        </div>
+                        <div class="mines-message" id="mines-message" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-towers" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                            <button class="bet-tab">Auto</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
+                                <input type="number" id="towers-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('towers-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('towers-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Difficulty</label>
+                            <div class="towers-diff-tabs" id="towers-diff-tabs">
+                                <button class="diff-btn active" data-diff="easy">Easy</button>
+                                <button class="diff-btn" data-diff="normal">Normal</button>
+                                <button class="diff-btn" data-diff="hard">Hard</button>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="towers-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Start new game</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area towers-area">
+                        <div class="towers-grid-container" id="towers-grid-container">
+                            <!-- JS generates tower rows -->
+                        </div>
+                        <div class="towers-message" id="towers-message" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-dice" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
+                                <input type="number" id="dice-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('dice-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('dice-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Total Profit (x<span id="dice-profit-multi">1.98</span>)</label>
+                            <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
+                                <span class="input-icon currency-input-mark" style="color:var(--text-secondary)" aria-hidden="true">ZR$</span>
+                                <input type="text" id="dice-profit-input" value="49.50" readonly style="color:var(--text-secondary)">
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="dice-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Place bet</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area dice-area">
+                        <div class="dice-slider-container">
+                            <div class="dice-history-bars" id="dice-history">
+                                <!-- Previous rolls -->
+                            </div>
+                            
+                            <div class="slider-track-bg"></div>
+                            <div class="slider-track-fill" id="dice-track-fill"></div>
+                            <input type="range" min="2" max="98" value="50" class="dice-slider" id="dice-slider">
+                            
+                            <div class="dice-slider-labels">
+                                <span>0</span>
+                                <span>25</span>
+                                <span>50</span>
+                                <span>75</span>
+                                <span>100</span>
+                            </div>
+                            <div class="dice-result-marker" id="dice-result-marker">00.00</div>
+                        </div>
+
+                        <div class="dice-controls-row">
+                            <div class="dice-ctrl-box">
+                                <label>Multiplier</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="dice-multi-input" value="1.98" step="0.01">
+                                    <i class="fa-solid fa-xmark input-icon"></i>
+                                </div>
+                            </div>
+                            <div class="dice-ctrl-box">
+                                <label>Roll Over</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="dice-target-input" value="50">
+                                    <i class="fa-solid fa-arrows-rotate input-icon" style="cursor:pointer;" id="dice-toggle-dir"></i>
+                                </div>
+                            </div>
+                            <div class="dice-ctrl-box">
+                                <label>Win Chance</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="dice-chance-input" value="50">
+                                    <i class="fa-solid fa-percent input-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dice-message" id="dice-message" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-plinko" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                            <button class="bet-tab">Auto</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Difficulty</label>
+                            <div class="towers-diff-tabs" id="plinko-diff-tabs" style="display:flex; gap:5px; margin-bottom: 5px;">
+                                <button class="diff-btn active" data-diff="easy">Easy</button>
+                                <button class="diff-btn" data-diff="normal">Normal</button>
+                                <button class="diff-btn" data-diff="hard">Hard</button>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
+                                <input type="number" id="plinko-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="document.getElementById('plinko-bet-input').value /= 2">1/2</button>
+                                    <button onclick="document.getElementById('plinko-bet-input').value *= 2">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Amount of rows</label>
+                            <div class="input-wrapper" style="padding: 4px;">
+                                <input type="number" id="plinko-rows-input" value="10" readonly style="margin-left: 10px; width: 40px; border: none; background: transparent; color: white;">
+                                <div class="plinko-row-btns input-actions" style="margin-left: auto;">
+                                    <button class="row-btn" data-r="8">8</button>
+                                    <button class="row-btn active" style="background:var(--bg-panel); color:white;" data-r="10">10</button>
+                                    <button class="row-btn" data-r="12">12</button>
+                                    <button class="row-btn" data-r="14">14</button>
+                                    <button class="row-btn" data-r="16">16</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="btn-secondary" id="plinko-play-btn" style="width:100%; margin-top: auto; padding: 15px; cursor: not-allowed; opacity: 0.7;" disabled>Closed for maintenance</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area plinko-area">
+                        <canvas id="plinko-canvas" width="600" height="400"></canvas>
+                        <div id="plinko-buckets" class="plinko-buckets"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-coinflip" class="view">
+                <div class="coinflip-layout">
+                    <header class="coinflip-header">
+                        <div>
+                            <h2 style="font-size: 28px; font-weight: 800; display:flex; align-items:center; gap: 10px;">
+                                <i class="fa-solid fa-coins" style="color:var(--accent);"></i> Coinflip
+                            </h2>
+                            <p style="color:var(--text-secondary); margin-top:5px;">PVP. Winner takes all. 5% house fee.</p>
+                        </div>
+                        <div class="cf-create-card">
+                            <div class="input-group" style="margin-bottom:0;">
+                                <div class="input-wrapper" style="width:140px;">
+                                    <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
+                                    <input type="number" id="cf-create-amount" value="50" min="1">
+                                </div>
+                            </div>
+                            <button class="btn-primary" id="cf-create-btn-main" onclick="createCoinflip()" style="width:100%; padding:15px;">Create Flip</button>
+                        </div>
+                    </header>
+
+                    <div class="cf-lobby-grid" id="cf-lobby-grid">
+                        <div class="chat-system-msg" style="grid-column: 1 / -1; padding: 40px;">No active coinflips. Create one to start!</div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-rooms" class="view">
+                <div class="voice-layout">
+                    <header class="voice-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;">
+                        <div>
+                            <h2 style="font-size: 28px; font-weight: 800; display:flex; align-items:center; gap: 10px;">
+                                <i class="fa-solid fa-microphone-lines" style="color:var(--accent);"></i> Voice Chat
+                            </h2>
+                            <p style="color:var(--text-secondary); margin-top:5px;">Connect with other players in real-time. Peer-to-peer audio.</p>
+                        </div>
+                        <div class="voice-controls" style="display:flex; gap: 10px;">
+                            <button class="btn-primary voice-connect-btn" id="voice-connect-btn">
+                                <i class="fa-solid fa-plug"></i> Connect to Voice
+                            </button>
+                            <button class="btn-secondary voice-icon-btn hidden" id="voice-mute-btn" title="Mute Microphone" style="display:none; padding: 12px 18px;">
+                                <i class="fa-solid fa-microphone"></i>
+                            </button>
+                            <button class="btn-secondary voice-icon-btn hidden" id="voice-deaf-btn" title="Deafen Audio" style="display:none; padding: 12px 18px;">
+                                <i class="fa-solid fa-headphones"></i>
+                            </button>
+                            <button class="btn-secondary voice-icon-btn hidden" id="voice-disconnect-btn" title="Disconnect" style="display:none; padding: 12px 18px; color: var(--red);">
+                                <i class="fa-solid fa-phone-slash"></i>
+                            </button>
+                        </div>
+                    </header>
+
+                    <div id="voice-status-banner" style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); text-align:center; margin-bottom:25px; color:var(--text-secondary); font-size:14px;">
+                        You are currently disconnected. Click "Connect to Voice" to join the lobby.
+                    </div>
+
+                    <div id="voice-participants-grid" class="voice-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px;">
+                        <!-- Generated by voice.js -->
+                    </div>
+                </div>
+            </div>
+            <div id="view-crash" class="view">
+                <div class="crash-layout" style="display:flex; gap:20px; align-items:flex-start;">
+                    <!-- Left Column -->
+                    <div style="width: 300px; display:flex; flex-direction:column; gap:20px;">
+                        <!-- Betting Panel -->
+                        <div class="bet-panel">
+                            <div class="bet-tabs">
+                                <button class="bet-tab active">Manual</button>
+                                <button class="bet-tab">Auto</button>
+                            </div>
+                            
+                            <div class="input-group">
+                                <label>Bet amount</label>
+                                <div class="input-wrapper">
+                                    <span class="input-icon currency-input-mark" aria-hidden="true">ZR$</span>
+                                    <input type="number" id="crash-bet-input" value="30" min="1">
+                                    <div class="input-actions">
+                                        <button onclick="document.getElementById('crash-bet-input').value /= 2">1/2</button>
+                                        <button onclick="document.getElementById('crash-bet-input').value *= 2">2x</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label>Auto cashout (multiplier)</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="crash-auto-input" value="2.00" step="0.10">
+                                    <div class="input-actions">
+                                        <button onclick="document.getElementById('crash-auto-input').value = ''">Disable</button>
+                                        <button onclick="document.getElementById('crash-auto-input').value = '2.00'">2.00x</button>
+                                        <button onclick="document.getElementById('crash-auto-input').value = '10.00'">10.00x</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary" id="crash-play-btn" style="width:100%; margin-top: 15px; padding: 15px;">Join next game</button>
+                        </div>
+
+                        <!-- Players List -->
+                        <div class="bet-panel" style="min-height: 250px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                                <span style="font-weight: 700; font-size: 14px;">0 Players</span>
+                                <span style="font-size: 13px; color: var(--text-secondary);">0 <span class="currency-inline">ZR$</span></span>
+                            </div>
+                            <div class="crash-players-list" style="color:var(--text-secondary); font-size:12px; text-align:center; padding-top: 20px;">
+                                <!-- Players would go here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column (Game Area) -->
+                    <div class="game-area crash-area" style="flex:1; position:relative; overflow:hidden; background: linear-gradient(to bottom, #2c3258, #16182a); padding:0; display:flex; flex-direction:column; border-radius:12px; min-height:550px;">
+                        
+                        <!-- Top Header inside area -->
+                        <div style="display:flex; justify-content:space-between; padding: 20px; z-index: 10;">
+                            <div class="crash-history" id="crash-history" style="display:flex; gap:6px;">
+                                <span class="history-pill win">10.41</span>
+                                <span class="history-pill" style="background:#f5af19; color:#1a1c2d;">2.01</span>
+                                <span class="history-pill win">7.91</span>
+                                <span class="history-pill lose">1.12</span>
+                                <span class="history-pill" style="background:#f5af19; color:#1a1c2d;">3.16</span>
+                                <span class="history-pill lose">1.00</span>
+                                <span class="history-pill lose">1.16</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); display:flex; align-items:center; gap:10px;">
+                                <span><i class="fa-solid fa-question text-secondary"></i> Fairness</span>
+                                <span>Network status <i class="fa-solid fa-wifi" style="color:var(--green)"></i></span>
+                            </div>
+                        </div>
+
+                        <!-- Main Screen Display -->
+                        <div style="position:absolute; top: 120px; left:0; width:100%; text-align:center; z-index:5;">
+                            <div id="crash-multi-display" style="font-size: 84px; font-weight: 800; color: white;">1.00x</div>
+                            <div id="crash-status-text" style="font-size: 18px; color: var(--text-secondary); margin-top:-10px;">Current payout</div>
+                        </div>
+
+                        <!-- Canvas -->
+                        <canvas id="crash-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:2;"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div id="view-profile" class="view">
+                <div class="profile-new-layout">
+                    <!-- Banner & Identity -->
+                    <div class="prof-header">
+                        <div class="prof-banner"></div>
+                        <div class="prof-identity">
+                            <img id="profile-main-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" class="prof-avatar" alt="Avatar">
+                            <div class="prof-info">
+                                <div id="prof-username-disp" class="prof-uname">artirzu</div>
+                                <div class="prof-uid">UID: <span id="prof-uid-val">8cd7d3d0...</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Glassmorphic Stat Row -->
+                    <div class="prof-stats-grid">
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Rain Winnings</div>
+                            <div id="prof-rain" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Total deposited</div>
+                            <div id="prof-deposited" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Total withdrawn</div>
+                            <div id="prof-withdrawn" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Total wagered</div>
+                            <div id="prof-wagered" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">XP Balance</div>
+                            <div id="prof-xp" class="prof-stat-val">0</div>
+                        </div>
+                    </div>
+                    <div style="color:var(--text-secondary); font-size:12px; text-align:center; margin-bottom: 25px;">Stat update in 3m 45s</div>
+
+                    <!-- Tabs & Content -->
+                    <div class="prof-content-area">
+                        <div class="profile-tabs centered-tabs" style="display:flex; gap:25px; font-weight: 600; font-size: 14px;">
+                            <button class="prof-tab active" data-ptab="transactions">Transactions</button>
+                            <button class="prof-tab" data-ptab="deposits">Deposits</button>
+                            <button class="prof-tab" data-ptab="withdrawals">Withdrawals</button>
+                            <button class="prof-tab" data-ptab="settings">Settings</button>
+                        </div>
+
+                        <div class="prof-tab-boards">
+                            <!-- Transactions -->
+                            <div class="ptab-content" id="ptab-transactions" style="display:block;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                                    <h2 style="font-size:22px; font-weight:600;">Transactions</h2>
+                                    <select class="prof-select" style="background:var(--bg-panel); color:var(--text-secondary); border:1px solid rgba(255,255,255,0.05); padding:10px 15px; border-radius:6px; outline:none; font-family:inherit; min-width:120px; font-size:13px; font-weight:600;">
+                                        <option>Games</option>
+                                    </select>
+                                </div>
+                                <div class="table-wrap">
+                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                    </div>
+                                    <div id="prof-tx-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                        <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No transactions yet.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Deposits -->
+                            <div class="ptab-content" id="ptab-deposits" style="display:none;">
+                                <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Deposits</h2>
+                                <div class="table-wrap">
+                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                    </div>
+                                    <div id="prof-dep-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                        <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No deposits yet.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Withdrawals -->
+                            <div class="ptab-content" id="ptab-withdrawals" style="display:none;">
+                                <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Withdrawals</h2>
+                                <div class="table-wrap">
+                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                    </div>
+                                    
+                                    <h3 style="font-size:14px; margin: 10px 0; color:var(--accent);">Crypto Withdrawals</h3>
+                                    <div id="prof-crypto-wd-list" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 20px;">
+                                        <div style="text-align:center; padding: 20px; color:var(--text-secondary); font-size:13px;">No crypto withdrawals yet.</div>
+                                    </div>
+                                    
+                                    <h3 style="font-size:14px; margin: 10px 0; color:var(--text-primary);">Gamepass Withdrawals</h3>
+                                    <div id="prof-wd-list" style="display:flex; flex-direction:column; gap:12px; min-height: 150px;">
+                                        <div style="text-align:center; padding: 20px; color:var(--text-secondary); font-size:13px;">No withdrawals yet.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Settings -->
+                            <div class="ptab-content" id="ptab-settings" style="display:none;">
+                                <div style="display:flex; gap: 40px; justify-content:center; max-width:800px; margin: 0 auto;">
+                                    <div style="width:200px; display:flex; flex-direction:column; gap:20px; font-size:14px; font-weight:600;">
+                                        <div style="color:white; cursor:pointer;" class="settings-menu-item active">Change Username</div>
+                                        <div style="color:var(--text-secondary); cursor:pointer;" class="settings-menu-item">Provably Fair</div>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <h3 style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:20px; letter-spacing:1px;">CHANGE USERNAME</h3>
+                                        <div class="input-wrapper" style="background:var(--bg-input); border-radius:8px; border:1px solid rgba(255,255,255,0.05); height: 50px; margin-bottom:20px;">
+                                            <input type="text" id="prof-new-username" placeholder="Enter new username" style="width:100%; padding:0 20px; background:transparent; border:none; color:white; font-size:14px; font-family:inherit; outline:none;" value="artirzu">
+                                        </div>
+                                        <button class="btn-primary" style="width:100%; padding:15px;" onclick="saveProfUsername()">Save Changes</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div><!-- /.app-shell -->
     <!-- ====== CASE CREATE MODAL ====== -->
@@ -1724,4 +1725,5 @@
     <script src="voice.js"></script>
 </body>
 </html>
+
 
