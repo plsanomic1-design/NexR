@@ -1574,7 +1574,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ===== GLOBAL BALANCE SYSTEM =====
 let roBalance = 0.00;    // ZR$ (main currency)
-let roBalanceZh = 0.00;  // ZH$ (social/hex currency)
+// roBalanceZh removed completely
 let referralEarned = 0;
 let referredCount = 0;
 
@@ -1620,7 +1620,7 @@ function updateBalanceDisplay() {
 
     // Update ZH$ display if element exists
     const zhEl = document.getElementById('tb-balance-zh');
-    if(zhEl) zhEl.textContent = roBalanceZh.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if(zhEl) zhEl.textContent = formatted;
 
     // Animate the topbar value briefly
     const chip = document.querySelector('.balance-chip');
@@ -2672,6 +2672,83 @@ async function confirmWithdraw() {
     }
 }
 
+// ===== CRYPTO WITHDRAWAL SYSTEM =====
+function updateCryptoWdPreview() {
+    const amtStr = document.getElementById('wd-crypto-amount')?.value;
+    const prevEl = document.getElementById('wd-crypto-fiat-preview');
+    if (!amtStr || !prevEl) return;
+    
+    let zhAmt = parseInt(amtStr, 10);
+    if (isNaN(zhAmt) || zhAmt < 0) zhAmt = 0;
+    
+    // Convert ZH$ to EUR
+    const eurVal = (zhAmt * 0.007).toFixed(2);
+    prevEl.textContent = `${eurVal} EUR`;
+}
+
+async function requestCryptoWithdraw() {
+    if (!robloxUserId) return alert("You must be signed in.");
+    
+    const coin = document.getElementById('wd-crypto-coin').value;
+    const address = document.getElementById('wd-crypto-address').value.trim();
+    const extraId = document.getElementById('wd-crypto-extra').value.trim();
+    const zhAmount = parseInt(document.getElementById('wd-crypto-amount').value, 10);
+    const errEl = document.getElementById('wd-crypto-error-msg');
+    const btn = document.getElementById('wd-crypto-submit-btn');
+    
+    const showErr = (msg) => {
+        if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    };
+    if (errEl) errEl.style.display = 'none';
+    
+    if (isNaN(zhAmount) || zhAmount < 1800) {
+        return showErr("Minimum withdrawal is 1800 ZH$.");
+    }
+    if (!address) {
+        return showErr("Please provide your destination wallet address.");
+    }
+    
+    // Determine if coin REQUIRES tag (like XRP, XLM)
+    const requiresTag = ['xrp', 'xlm'].includes(coin.toLowerCase());
+    if (requiresTag && !extraId) {
+        return showErr(`A Destination Tag / Memo is REQUIRED for ${coin.toUpperCase()} withdrawals or your funds will be lost!`);
+    } else if (requiresTag && extraId.length < 2) {
+        return showErr("Please enter a valid Destination Tag.");
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Processing...';
+    }
+
+    try {
+        const res = await fetch('/api/withdraw/crypto/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: robloxUserId, coin, address, extraId, zhAmount })
+        });
+        const data = await res.json();
+        
+        if (!data.ok) {
+            throw new Error(data.error || 'Failed to submit withdrawal request.');
+        }
+        
+        // Success
+        saveToStorage(); // Force local flush
+        goWdPage(1); // Return to index page
+        setTimeout(() => alert('Crypto Withdrawal Requested successfully! It is now pending admin review.'), 300);
+        
+    } catch(e) {
+        showErr(e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = 'Request Withdrawal';
+        }
+    }
+}
+
+
 // ===== PROFILE SYSTEM =====
 let userStats = {
     rainWinnings: 0,
@@ -2787,9 +2864,70 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.ptab-content').forEach(c => c.style.display = 'none');
             const target = document.getElementById('ptab-' + tab);
             if(target) target.style.display = 'block';
+            
+            if (tab === 'withdrawals') {
+                loadProfileCryptoWd();
+            }
         });
     });
 });
+
+async function loadProfileCryptoWd() {
+    const listDiv = document.getElementById('prof-crypto-wd-list');
+    if (!listDiv || !robloxUserId) return;
+    try {
+        const res = await fetch('/api/withdraw/crypto/list?userId=' + robloxUserId);
+        const data = await res.json();
+        
+        if (!data.list || data.list.length === 0) {
+            listDiv.innerHTML = '<div style="text-align:center; padding: 20px; color:var(--text-secondary); font-size:13px;">No crypto withdrawals yet.</div>';
+            return;
+        }
+        
+        listDiv.innerHTML = data.list.map(wd => {
+            let statusColor = "var(--text-secondary)";
+            let statusText = wd.status.toUpperCase();
+            if (wd.status === 'pending') statusColor = "orange";
+            if (wd.status === 'paid') statusColor = "var(--green)";
+            if (wd.status === 'cancelled' || wd.status === 'rejected') statusColor = "var(--red)";
+            
+            const dateStr = new Date(wd.createdAt).toLocaleString();
+            
+            return `
+            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:6px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:14px; font-weight:bold; color:white; margin-bottom:4px;">${wd.zhAmount} ZH$ &nbsp;<i class="fa-solid fa-arrow-right-long" style="opacity:0.5; font-size:10px;"></i>&nbsp; <span style="text-transform:uppercase; color:var(--accent);">${wd.coin}</span></div>
+                    <div style="font-size:11px; color:var(--text-secondary); margin-bottom:2px;">Wallet: ${wd.address}</div>
+                    <div style="font-size:10px; color:var(--text-secondary);">${dateStr}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:12px; font-weight:bold; color:${statusColor}; margin-bottom:6px;">${statusText}</div>
+                    ${wd.status === 'pending' ? `<button class="btn-secondary" style="padding:4px 10px; font-size:11px; color:var(--red); border-color:var(--red);" onclick="cancelCryptoWd('${wd.id}')">Cancel</button>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function cancelCryptoWd(wdId) {
+    if (!confirm('Are you sure you want to cancel this withdrawal and refund your ZH$?')) return;
+    try {
+        const res = await fetch('/api/withdraw/crypto/cancel', {
+            method: 'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ userId: robloxUserId, wdId })
+        });
+        const data = await res.json();
+        if(!data.ok) throw new Error(data.error || 'Failed to cancel');
+        alert('Withdrawal cancelled. Your ZH$ has been refunded.');
+        loadProfileCryptoWd();
+        saveToStorage(); // triggers global refresh of balances
+    } catch (e) {
+        alert(e.message);
+    }
+}
 
 function saveProfUsername() {
     const inp = document.getElementById('prof-new-username');
@@ -2886,7 +3024,6 @@ function buildSaveObject() {
         robloxUserId: robloxUserId,
         robloxAvatarUrl: robloxAvatarUrl,
         balance: roBalance,
-        balanceZh: roBalanceZh,
         referralEarned: referralEarned,
         referredCount: referredCount,
         stats: { ...userStats },
@@ -2910,7 +3047,7 @@ function applySavePayload(data) {
         robloxAvatarUrl = data.robloxAvatarUrl;
     } else if(data.robloxAvatarUrl === null || data.robloxAvatarUrl === '') robloxAvatarUrl = null;
     if(typeof data.balance === 'number' && data.balance >= 0) roBalance = data.balance;
-    if(typeof data.balanceZh === 'number' && data.balanceZh >= 0) roBalanceZh = data.balanceZh;
+    // legacy balanceZh sync removed
     if(typeof data.flipBalance === 'number' && data.flipBalance > 0) roBalance += data.flipBalance;
     if(typeof data.referralEarned === 'number' && data.referralEarned >= 0) referralEarned = data.referralEarned;
     if(typeof data.referredCount === 'number' && data.referredCount >= 0) referredCount = data.referredCount;
@@ -3759,7 +3896,7 @@ if (socket) {
 
     socket.on('balance:update', ({ balance, balanceZh }) => {
         if (typeof balance === 'number' && balance >= 0) roBalance = balance;
-        if (typeof balanceZh === 'number' && balanceZh >= 0) roBalanceZh = balanceZh;
+        // legacy balanceZh socket sync removed
         updateBalanceDisplay();
         updateProfViews();
         // Don't saveToStorage right away to avoid loop if sync was from server
@@ -3768,7 +3905,7 @@ if (socket) {
     socket.on('balance:remote_sync', ({ userId, balance, balanceZh, stats }) => {
         if (!robloxUserId || !accountsMatchServerLocal(userId, robloxUserId)) return;
         if (typeof balance === 'number' && balance >= 0) roBalance = balance;
-        if (typeof balanceZh === 'number' && balanceZh >= 0) roBalanceZh = balanceZh;
+        // legacy balanceZh socket sync removed
         if (stats && typeof stats === 'object') {
             userStats = { ...userStats, ...stats };
             refreshWithdrawCooldown();
@@ -3840,6 +3977,50 @@ if (socket) {
 
     socket.on('admin:tournaments_data', (data) => {
         if (data && Array.isArray(data.tournaments)) renderAdminTournamentsList(data.tournaments);
+    });
+
+    socket.on('admin:crypto_wd_update', (list) => {
+        const container = document.getElementById('admin-crypto-wd-list');
+        if (!container) return;
+        
+        if (!list || list.length === 0) {
+            container.innerHTML = '<span style="font-size:12px;color:var(--text-secondary);">No pending crypto withdrawals.</span>';
+            return;
+        }
+        
+        container.innerHTML = list.map(req => {
+            const date = new Date(req.createdAt).toLocaleString();
+            return `
+                <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:8px; padding:12px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <div style="font-size:14px; font-weight:700;"><i class="fa-solid fa-user"></i> ${req.username} <span style="font-size:10px; opacity:0.5;">(${req.userId})</span></div>
+                        <div style="font-size:11px; color:var(--text-secondary);">${date}</div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                        <div>
+                            <div style="font-size:12px; color:var(--text-secondary);">Amount to Send</div>
+                            <div style="font-size:16px; font-weight:800; color:var(--green);">${req.fiatAmount} EUR <span style="font-size:12px; font-weight:normal; color:var(--text-secondary);">(${req.zhAmount} ZH$)</span></div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:12px; color:var(--text-secondary);">Coin</div>
+                            <div style="font-size:16px; font-weight:800; color:var(--accent); text-transform:uppercase;">${req.coin}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                        <input type="text" readonly value="${req.address}" style="flex:1; background:var(--bg-input); border:none; padding:8px; border-radius:4px; font-size:11px; color:#fff;" onclick="this.select(); navigator.clipboard.writeText(this.value); alert('Address Copied!')" />
+                        <div style="font-size:10px; color:var(--text-secondary); cursor:pointer;" onclick="alert('Address copied!')">Copy Address</div>
+                    </div>
+                    ${req.extraId ? `<div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                        <input type="text" readonly value="${req.extraId}" style="flex:1; background:rgba(255,100,100,0.1); border:1px solid rgba(255,100,100,0.3); padding:8px; border-radius:4px; font-size:11px; color:var(--red);" onclick="this.select(); navigator.clipboard.writeText(this.value); alert('Tag Copied!')" />
+                        <div style="font-size:10px; color:var(--red); font-weight:bold; cursor:pointer;">Copy Tag</div>
+                    </div>` : ''}
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-primary" style="flex:1; background:var(--green); padding:8px 12px; font-size:12px;" onclick="adminActionCryptoWd('${req.id}', 'paid')"><i class="fa-solid fa-check"></i> Mark as Paid</button>
+                        <button class="btn-secondary" style="background:var(--red); border:none; padding:8px 12px; font-size:12px;" onclick="adminActionCryptoWd('${req.id}', 'reject')"><i class="fa-solid fa-xmark"></i> Reject & Refund</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
     });
 
     socket.on('tournaments:update', (list) => {
@@ -3946,8 +4127,7 @@ if (socket) {
             socket.emit('player:identify', {
                 userId: pId,
                 username: uname,
-                balance: typeof roBalance !== 'undefined' ? roBalance : 0,
-                balanceZh: typeof roBalanceZh !== 'undefined' ? roBalanceZh : 0
+                balance: typeof roBalance !== 'undefined' ? roBalance : 0
             });
         }
     };
@@ -4281,6 +4461,7 @@ window.openAdminModal = function(e) {
             if (typeof socket !== 'undefined' && socket && typeof robloxUserId !== 'undefined') {
                 socket.emit('admin:get_online_users', { adminUserId: robloxUserId });
                 socket.emit('admin:tournaments_list', { adminUserId: robloxUserId });
+                socket.emit('admin:get_crypto_wd', { adminUserId: robloxUserId });
             }
         };
         queueMicrotask(requestList);
@@ -4296,6 +4477,16 @@ window.closeAdminModal = function(e) {
     if (e && e.target && e.target.id !== 'admin-modal-backdrop') return;
     const backdrop = document.getElementById('admin-modal-backdrop');
     if (backdrop) backdrop.classList.remove('show');
+};
+
+window.adminActionCryptoWd = function(wdId, action) {
+    if (!wdId || !action) return;
+    if (action === 'paid' && !confirm('Are you absolutely sure you have sent the crypto to the player? This cannot be undone.')) return;
+    if (action === 'reject' && !confirm('Reject this withdrawal and refund the ZH$ back to the player?')) return;
+    
+    if (typeof socket !== 'undefined' && socket && typeof robloxUserId !== 'undefined') {
+        socket.emit('admin:action_crypto_wd', { adminUserId: robloxUserId, wdId, action });
+    }
 };
 
 window.adminLookupUser = function() {

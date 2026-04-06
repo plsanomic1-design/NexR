@@ -37,6 +37,7 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 8080;
 const ROOT = __dirname;
 const TOURNAMENTS_FILE = path.join(ROOT, 'data', 'tournaments.json');
+const CRYPTO_WD_FILE = path.join(ROOT, 'data', 'crypto_withdrawals.json');
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
 const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || '').trim();
@@ -283,15 +284,15 @@ async function getUserBalance(userId) {
  * Flow: SELECT row → PATCH if exists, else INSERT.
  * @returns {Promise<{ ok: true } | { ok: false, step: string, detail: string, status?: number }>}
  */
-async function updateUserBalance(userId, balanceZr, balanceZh) {
+async function updateUserBalance(userId, balanceZr, legacyBalanceZh = 0) {
     if (!supabaseEnabled()) {
         return { ok: false, step: 'config', detail: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY' };
     }
     const uid = encodeURIComponent(String(userId));
     const row = {
         user_id: String(userId),
-        balance_zr: balanceZr,
-        balance_zh: balanceZh,
+        balance_zr: balanceZr + legacyBalanceZh,
+        balance_zh: 0,
         updated_at: new Date().toISOString()
     };
 
@@ -455,10 +456,7 @@ async function persistAccountSave(userId, save) {
     }
     const uid = encodeURIComponent(String(userId));
     const balanceZr = typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0;
-    const balanceZh =
-        typeof save.balanceZh === 'number' && save.balanceZh >= 0 ? save.balanceZh : 0;
-
-    const balResult = await updateUserBalance(userId, balanceZr, balanceZh);
+    const balResult = await updateUserBalance(userId, balanceZr, 0);
     if (!balResult.ok) {
         return {
             ok: false,
@@ -593,8 +591,7 @@ async function loadAccountFromSupabase(userId) {
 
     const save = {
         robloxUserId: userId,
-        balance: bal.balance_zr,
-        balanceZh: bal.balance_zh,
+        balance: bal.balance_zr + (bal.balance_zh || 0),
         transactions: clientTxs.slice(0, 100),
         savedAt: typeof profile.savedAt === 'number' ? profile.savedAt : Date.now()
     };
@@ -1749,19 +1746,19 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                 processedCryptoPayments.add(order_id);
                 if (processedCryptoPayments.size > 50000) processedCryptoPayments.clear();
                 
-                // Reverse calculation: ZH$ = EUR / 0.007
-                const zhAmount = Math.round(parseFloat(price_amount) / 0.007);
+                // Reverse calculation: ZR$ = EUR / 0.007
+                const depositAmount = Math.round(parseFloat(price_amount) / 0.007);
                 
-                if (userId && zhAmount > 0 && supabaseEnabled()) {
+                if (userId && depositAmount > 0 && supabaseEnabled()) {
                     try {
                         const uid = parseRobloxNumericId(userId);
                         const bal = await getUserBalance(uid);
                         if (bal) {
-                            const newZh = bal.balance_zh + zhAmount;
-                            const result = await updateUserBalance(uid, bal.balance_zr, newZh);
+                            const newBal = bal.balance_zr + depositAmount; // legacy balance_zh is merged on next login via loadAccountFromSupabase
+                            const result = await updateUserBalance(uid, newBal, 0); // we pass 0 here because it's merged naturally or zeroed
                             if (result.ok) {
-                                emitBalanceRemoteSync(io, uid, { balance: bal.balance_zr, balanceZh: newZh, stats: {} });
-                                console.log(`Credited ${zhAmount} ZH$ (crypto) to user ${uid}`);
+                                emitBalanceRemoteSync(io, uid, { balance: newBal, stats: {} });
+                                console.log(`Credited ${depositAmount} ZR$ (crypto) to user ${uid}`);
                             }
                         }
                     } catch (e) {
@@ -1952,6 +1949,95 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
 
     console.log(`[Deposit] user=${userId} gp=${gamePassId} credited=${credit} newBal=${save.balance}`);
     res.json({ ok: true, save, credited: credit });
+});
+
+app.get('/api/deposit/robux/status', async (req, res) => {
+    // legacy mock for gamepass deposit flow
+    const uid = req.query.userId || req.query.robloxUserId;
+    res.json({ deposited: true, processed: false, remaining: 0, pendingTiers: [] });
+});
+
+// ===================================
+// CRYPTO WITHDRAWAL API
+// ===================================
+
+app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
+    let { userId, coin, address, extraId, zhAmount } = req.body;
+    userId = parseRobloxUserIdStrict(userId);
+    zhAmount = parseInt(zhAmount, 10);
+    
+    if (!userId || !coin || !address || isNaN(zhAmount) || zhAmount < 500) {
+        return res.status(400).json({ error: 'Invalid request. Minimum is 500 ZH$.' });
+    }
+    
+    const saveData = await readAccountJson(userId);
+    if (!saveData || saveData.balance < zhAmount) {
+        return res.status(400).json({ error: 'Insufficient balance.' });
+    }
+    
+    // Deduct locally (active save) + queue sync
+    saveData.balance -= zhAmount;
+    await persistAccountSave(userId, saveData);
+    
+    // Fiat value estimation (500 ZH$ = 3.50 EUR) -> 1 ZH$ = 0.007 EUR
+    const fiatValue = parseFloat((zhAmount * 0.007).toFixed(2));
+    
+    const wdReq = {
+        id: `cwd_${Date.now()}_${userId}`,
+        userId: userId,
+        username: saveData.username || 'Unknown',
+        coin: coin,
+        address: address,
+        extraId: extraId || '',
+        zhAmount: zhAmount,
+        fiatAmount: fiatValue,
+        fiatCurrency: 'eur',
+        status: 'pending',
+        createdAt: Date.now()
+    };
+    
+    cryptoWdState.push(wdReq);
+    saveCryptoWd();
+    
+    res.json({ ok: true, request: wdReq });
+    
+    // Notify admins if connected
+    io.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
+});
+
+app.get('/api/withdraw/crypto/list', (req, res) => {
+    let userId = parseRobloxUserIdStrict(req.query.userId || req.query.robloxUserId);
+    if (!userId) return res.json({ list: [] });
+    
+    // Send all withdrawals (including paid/rejected/cancelled) for their history
+    const userWds = cryptoWdState.filter(w => w.userId === userId).sort((a,b) => b.createdAt - a.createdAt);
+    res.json({ list: userWds });
+});
+
+app.post('/api/withdraw/crypto/cancel', express.json(), async (req, res) => {
+    let { userId, wdId } = req.body;
+    userId = parseRobloxUserIdStrict(userId);
+    if (!userId || !wdId) return res.status(400).json({ error: 'Invalid request' });
+    
+    const wdIndex = cryptoWdState.findIndex(w => w.id === wdId && w.userId === userId && w.status === 'pending');
+    if (wdIndex === -1) return res.status(404).json({ error: 'Pending withdrawal not found or already processed.' });
+    
+    const reqWd = cryptoWdState[wdIndex];
+    cryptoWdState[wdIndex].status = 'cancelled';
+    saveCryptoWd();
+    
+    // Refund the user's ZR$
+    const save = await readAccountJson(userId);
+    if (save) {
+        save.balance = (save.balance || 0) + reqWd.zhAmount;
+        await persistAccountSave(userId, save);
+        emitBalanceRemoteSync(io, userId, save);
+    }
+    
+    res.json({ ok: true });
+    
+    // Notify admins
+    io.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
 });
 
 /**
@@ -2365,9 +2451,36 @@ function saveTournamentsSync() {
         fs.mkdirSync(path.dirname(TOURNAMENTS_FILE), { recursive: true });
         fs.writeFileSync(TOURNAMENTS_FILE, JSON.stringify(tournamentsState, null, 2), 'utf8');
     } catch (e) {
-        console.error('[Tournaments] save failed:', e && e.message);
+        console.error('Error saving tournaments:', e.message);
     }
 }
+
+// ----------------------------------------------------
+// CRYPTO WITHDRAWALS PERSISTENCE
+// ----------------------------------------------------
+let cryptoWdState = [];
+
+function loadCryptoWd() {
+    try {
+        if (fs.existsSync(CRYPTO_WD_FILE)) {
+            const raw = fs.readFileSync(CRYPTO_WD_FILE, 'utf8');
+            cryptoWdState = JSON.parse(raw);
+        }
+    } catch (e) {
+        console.error('Error loading crypto withdrawals:', e.message);
+    }
+}
+function saveCryptoWd() {
+    try {
+        fs.mkdirSync(path.dirname(CRYPTO_WD_FILE), { recursive: true });
+        fs.writeFileSync(CRYPTO_WD_FILE, JSON.stringify(cryptoWdState, null, 2), 'utf8');
+    } catch (e) {
+        console.error('Error saving crypto withdrawals:', e.message);
+    }
+}
+
+loadTournamentsSync();
+loadCryptoWd();
 
 function tournamentScore(metric, baseline, save) {
     const s = save.stats && typeof save.stats === 'object' ? save.stats : {};
@@ -2513,9 +2626,7 @@ async function finalizeTournamentById(tournamentId) {
         const save = await readAccountJson(w.uid);
         if (!save) continue;
         if (!save.stats || typeof save.stats !== 'object') save.stats = {};
-        if (t.prizeCurrency === 'zh') {
-            save.balanceZh = (typeof save.balanceZh === 'number' ? save.balanceZh : 0) + share;
-        } else {
+        if (t.prizeCurrency === 'zh' || t.prizeCurrency === 'zr') {
             save.balance = (typeof save.balance === 'number' ? save.balance : 0) + share;
         }
         const pr = await persistAccountSave(w.uid, save);
@@ -2532,8 +2643,6 @@ async function finalizeTournamentById(tournamentId) {
     broadcastTournamentsUpdate();
     return { ok: true, winners: paid, topScore: maxScore };
 }
-
-loadTournamentsSync();
 
 io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
@@ -2560,6 +2669,7 @@ io.on('connection', (socket) => {
             balance: data.balance || 0,
             balanceZh: data.balanceZh || 0
         });
+        if (ADMIN_IDS.includes(String(uid))) socket.isAdminMod = true;
     });
 
     socket.emit('crash:sync_state', {
@@ -2890,6 +3000,44 @@ io.on('connection', (socket) => {
             }, 500);
 
         } catch (e) {}
+    });
+
+    // ===================================
+    // ADMIN ACTIONS
+    // ===================================
+
+    socket.on('admin:get_crypto_wd', ({ adminUserId }) => {
+        if (!socket.isAdminMod) return;
+        socket.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
+    });
+
+    socket.on('admin:action_crypto_wd', async ({ adminUserId, wdId, action }) => {
+        if (!socket.isAdminMod) return;
+        const wdIndex = cryptoWdState.findIndex(w => w.id === wdId && w.status === 'pending');
+        if (wdIndex === -1) return;
+        
+        const req = cryptoWdState[wdIndex];
+        
+        if (action === 'paid') {
+            cryptoWdState[wdIndex].status = 'paid';
+            saveCryptoWd();
+            socket.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
+            console.log(`[Admin] Wd ${wdId} marked as paid by ${adminUserId}`);
+        } else if (action === 'reject') {
+            cryptoWdState[wdIndex].status = 'rejected';
+            saveCryptoWd();
+            
+            // Refund the user
+            const save = await readAccountJson(req.userId);
+            if (save) {
+                save.balance = (save.balance || 0) + req.zhAmount;
+                await persistAccountSave(req.userId, save);
+                emitBalanceRemoteSync(io, req.userId, save);
+            }
+            
+            socket.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
+            console.log(`[Admin] Wd ${wdId} rejected and refunded by ${adminUserId}`);
+        }
     });
 
     // ============================================================
