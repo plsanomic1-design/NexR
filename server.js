@@ -3760,17 +3760,14 @@ async function runBattle(battle) {
     battle.winner = winner ? { userId: winner.userId, username: winner.username } : null;
     battle.status = 'done';
 
-    // Award entire pot to winner (real players only)
+    // Award entire total items value to winner (real players only)
     if (winner && !winner.isBot) {
-        const totalPot = battle.players.reduce((s, p) => s + p.paid, 0);
-        // Also add the item values that were already returned — we need to re-add the POT, not item values
-        // Pot = all entry fees; item values were credited per-open which we skip in battles
-        // So: winner gets totalPot
-        if (totalPot > 0) {
+        const totalItemsValue = battle.players.reduce((s, p) => s + p.total, 0);
+        if (totalItemsValue > 0) {
             const winnerBal = await getUserBalance(winner.userId);
             if (winnerBal) {
                 const winnerCurrent = winnerBal.balance_zr + (winnerBal.balance_zh || 0);
-                const winnerNew = Math.round((winnerCurrent + totalPot) * 100) / 100;
+                const winnerNew = Math.round((winnerCurrent + totalItemsValue) * 100) / 100;
                 await updateUserBalance(winner.userId, winnerNew, 0);
                 emitBalanceRemoteSync(io, winner.userId, { balance: winnerNew, stats: {} });
             }
