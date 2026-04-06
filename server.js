@@ -3735,8 +3735,8 @@ async function runBattle(battle) {
             }))
         });
 
-        // Small delay between rounds for animation feel
-        await new Promise(r => setTimeout(r, 200));
+        // Delay between rounds for animation
+        await new Promise(r => setTimeout(r, 4500));
     }
 
     // Determine winner

@@ -5177,6 +5177,11 @@ function cbRenderBattleRoom(b) {
                 <span class="cb-player-col-name${p.isBot?' bot-name':''}">${p.username}</span>
                 <span class="cb-player-col-total" id="btotal-${p.userId}">${p.total.toLocaleString()} ZR$</span>
             </div>
+            <div class="cb-battle-spinner-box" id="bspinnerbox-${p.userId}" style="display: ${b.status==='active'?'block':'none'}">
+                <div class="cb-spinner-arrow-left"></div>
+                <div class="cb-spinner-arrow-right"></div>
+                <div class="cb-battle-spinner-track" id="bspinner-${p.userId}"></div>
+            </div>
             <div class="cb-player-rolls" id="brolls-${p.userId}">
                 ${p.rolls.map(r => cbRollCardHTML(r.item)).join('')}
             </div>
@@ -5278,12 +5283,41 @@ function cbBindSockets() {
         socket.on(`battle:${bid}:update`, (b) => cbRenderBattleRoom(b));
         socket.on(`battle:${bid}:started`, (b) => cbRenderBattleRoom(b));
 
-        socket.on(`battle:${bid}:round`, ({ round, results }) => {
-            // Animate each player's new roll card dropping in
-            results.forEach(r => {
-                const rolls = document.getElementById(`brolls-${r.userId}`);
-                const totalEl = document.getElementById(`btotal-${r.userId}`);
-                if (rolls) {
+        socket.on(`battle:${bid}:round`, async ({ round, results }) => {
+            const b = _cbBattles.find(x => x.id === bid);
+            const caseData = b ? _cbCases.find(c => c.id === b.caseId) : null;
+            
+            // Build and spin each player's vertical track concurrently
+            const spinPromises = results.map(async (r) => {
+                const track = document.getElementById(`bspinner-${r.userId}`);
+                if (!track) return;
+                
+                let fakeItems = [];
+                if (caseData) {
+                    for(let i=0; i<30; i++) {
+                        fakeItems.push(caseData.items[Math.floor(Math.random() * caseData.items.length)]);
+                    }
+                }
+                fakeItems.push(r.item);
+                
+                track.style.transition = 'none';
+                track.style.transform = 'translateY(0)';
+                track.innerHTML = fakeItems.map(item => `
+                    <div class="cb-spin-ver-item rarity-${item.rarity}">
+                        <img src="${item.icon}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>%F0%9F%8E%81</text></svg>'">
+                        <span class="si-name">${item.name}</span>
+                        <span class="si-val" style="color:${RARITY_COLORS[item.rarity]||'#fff'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</span>
+                    </div>
+                `).join('');
+                
+                // wait slight random delay so they don't look perfectly synced
+                await new Promise(res => setTimeout(res, 50 + Math.random()*150));
+                
+                const itemHeight = 131; // height + border
+                const wrapHeight = track.parentElement.offsetHeight;
+                const targetY = (30 * itemHeight) - (wrapHeight/2) + (itemHeight/2);
+                
+                return cbAnimateSpinVert(track, targetY, 3500).then(() => {
                     const card = document.createElement('div');
                     card.className = 'cb-roll-card';
                     card.innerHTML = `
@@ -5294,11 +5328,31 @@ function cbBindSockets() {
                         </div>
                     `;
                     card.style.animation = 'cbRollIn .35s cubic-bezier(.34,1.56,.64,1)';
-                    rolls.appendChild(card);
-                }
-                if (totalEl) totalEl.textContent = r.total.toLocaleString() + ' ZR$';
+                    document.getElementById(`brolls-${r.userId}`)?.appendChild(card);
+                    
+                    const totalEl = document.getElementById(`btotal-${r.userId}`);
+                    if (totalEl) totalEl.textContent = r.total.toLocaleString() + ' ZR$';
+                });
             });
+            
+            await Promise.all(spinPromises);
         });
+
+        function cbAnimateSpinVert(track, targetY, duration) {
+            return new Promise(resolve => {
+                const start = performance.now();
+                function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
+                function step(now) {
+                    const progress = Math.min((now - start) / duration, 1);
+                    const currentY = targetY * easeOut(progress);
+                    track.style.transition = 'none';
+                    track.style.transform = `translateY(-${currentY}px)`;
+                    if (progress < 1) requestAnimationFrame(step);
+                    else resolve();
+                }
+                requestAnimationFrame(step);
+            });
+        }
 
         socket.on(`battle:${bid}:done`, (b) => {
             // Highlight winner column
