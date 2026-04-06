@@ -5261,7 +5261,7 @@ async function cbOpenCaseModal(caseId) {
     title.innerHTML = `<i class="fa-solid fa-box-open" style="color:#a78bfa;"></i> Opening: ${caseData.name}`;
     result.style.display = 'none';
     track.style.transition = 'none';
-    track.style.transform = 'translateX(0)';
+    track.style.transform = 'translate3d(0, 0, 0)';
     track.innerHTML = '';
     track.classList.remove('is-spinning','is-spinning-fast');
     modal.style.display = 'flex';
@@ -5385,7 +5385,7 @@ function cbAnimateSpin(track, targetX, duration) {
             const currentX = startX + (targetX - startX) * eased;
 
             track.style.transition = 'none';
-            track.style.transform  = `translateX(-${currentX}px)`;
+            track.style.transform  = `translate3d(-${currentX}px, 0, 0)`;
 
             // Tick sound proportional to velocity
             const velocity = (eased - prevEased) / (1 / 60); // approx velocity
@@ -5427,53 +5427,122 @@ function cbRenderBattleRoom(b) {
 
     // Players area
     const playersEl = document.getElementById('cb-battle-players');
-    let format = '1v1';
-    for (const [k, v] of Object.entries(CB_FORMAT_PLAYERS)) { if (v === b.maxPlayers) { format = k; break; } }
-    const numTeams = CB_FORMAT_TEAMS[format] || 2;
-    const perTeam = CB_FORMAT_PER_TEAM[format] || 1;
-    const teamColors = CB_TEAM_COLORS;
-    const teamLabels = { 2:['Team A','Team B'], 3:['Team 1','Team 2','Team 3'], 4:['P1','P2','P3','P4'], 5:['P1','P2','P3','P4','P5'] };
-    const labels = teamLabels[numTeams] || Array.from({length:numTeams},(_,i)=>`Team ${i+1}`);
-
-    const allSlots = Array(b.maxPlayers).fill(null);
-    b.players.forEach((p, i) => allSlots[i] = p);
-
     let html = '';
-    let slotIdx = 0;
-    for (let t = 0; t < numTeams; t++) {
-        html += `<div class="cb-team-group">
-            <div class="cb-team-group-label" style="color:${teamColors[t]}">${labels[t]}</div>
-            <div class="cb-team-players">`;
-        for (let s = 0; s < perTeam; s++) {
-            const p = allSlots[slotIdx++];
-            if (p) {
-                html += `
-                    <div class="cb-battle-player-col${b.winner&&b.winner.userId===String(p.userId)?' winner':''}" id="bcol-${p.userId}">
-                        <div class="cb-player-col-header">
-                            <span class="cb-player-col-name${p.isBot?' bot-name':''}">${p.username}</span>
-                            ${p.isBot ? '<span class="cb-bot-badge">BOT</span>' : ''}
-                            <span class="cb-player-col-total" id="btotal-${p.userId}">${p.total.toLocaleString()} ZR$</span>
-                        </div>
-                        <div class="cb-battle-spinner-box" id="bspinnerbox-${p.userId}" style="display: ${b.status==='active'?'block':'none'}">
-                            <div class="cb-spinner-arrow-left"></div>
-                            <div class="cb-spinner-arrow-right"></div>
-                            <div class="cb-battle-spinner-track" id="bspinner-${p.userId}"></div>
-                        </div>
-                        <div class="cb-player-rolls" id="brolls-${p.userId}">
-                            ${p.rolls.map(r => cbRollCardHTML(r.item)).join('')}
-                        </div>
-                    </div>`;
-            } else {
-                html += `
-                    <div class="cb-battle-player-col" style="border-style:dashed;">
-                        <div class="cb-slot-waiting">
-                            <i class="fa-solid fa-user-plus"></i>
-                            <span>Waiting...</span>
-                        </div>
-                    </div>`;
+
+    const caseData = _cbCases.find(c => c.id === b.caseId);
+    const caseImg = caseData ? caseData.image : '';
+
+    if (b.maxPlayers === 2) {
+        // --- 1V1 HORIZONTAL LAYOUT ---
+        const p1 = b.players[0] || { username: 'Waiting...', total: 0, rolls: [], isWait: true };
+        const p2 = b.players[1] || { username: 'Waiting...', total: 0, rolls: [], isWait: true };
+        
+        html = `
+        <div class="cb-1v1-battle">
+            <div class="cb-1v1-players-header">
+                <!-- Player 1 -->
+                <div class="cb-1v1-player" style="${p1.isWait?'opacity:.4':''}">
+                    <div class="avatar"><i class="fa-solid fa-${p1.isWait?'user-plus':(p1.isBot?'robot':'user')}" style="color:${p1.isBot?'#a78bfa':'#60a5fa'}"></i></div>
+                    <div class="details">
+                        <div class="name">${p1.username} ${p1.isBot ? '<span class="cb-bot-badge">BOT</span>' : ''}</div>
+                        ${!p1.isWait ? `<div class="total" id="btotal-${p1.userId}">${p1.total.toLocaleString()} ZR$</div>` : ''}
+                    </div>
+                </div>
+                <!-- Center Case Info -->
+                <div class="cb-1v1-center-case" style="display:${b.status==='active'?'flex':'none'}">
+                    <div class="round-lbl">Round</div>
+                    <div class="cb-1v1-center-hex">
+                        <img src="${caseImg}" onerror="this.style.display='none'">
+                        <span>${b.caseName}</span>
+                    </div>
+                </div>
+                <!-- Player 2 -->
+                <div class="cb-1v1-player right" style="${p2.isWait?'opacity:.4':''}">
+                    <div class="avatar"><i class="fa-solid fa-${p2.isWait?'user-plus':(p2.isBot?'robot':'user')}" style="color:${p2.isBot?'#a78bfa':'#fc6161'}"></i></div>
+                    <div class="details">
+                        <div class="name">${p2.username} ${p2.isBot ? '<span class="cb-bot-badge">BOT</span>' : ''}</div>
+                        ${!p2.isWait ? `<div class="total" id="btotal-${p2.userId}">${p2.total.toLocaleString()} ZR$</div>` : ''}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="cb-1v1-spinners" style="display:${b.status==='active'?'block':'none'}">
+                ${!p1.isWait ? `
+                <div class="cb-1v1-spinner-line" id="bspinnerbox-${p1.userId}">
+                    <div class="win-tick"></div>
+                    <div class="cb-battle-spinner-track" id="bspinner-${p1.userId}" style="flex-direction:row; padding-left:calc(50% - 53px); padding-top:0;"></div>
+                </div>` : ''}
+                ${!p2.isWait ? `
+                <div class="cb-1v1-spinner-line" id="bspinnerbox-${p2.userId}">
+                    <div class="win-tick"></div>
+                    <div class="cb-battle-spinner-track" id="bspinner-${p2.userId}" style="flex-direction:row; padding-left:calc(50% - 53px); padding-top:0;"></div>
+                </div>` : ''}
+            </div>
+
+            <div class="cb-1v1-winnings-area">
+                <div class="cb-1v1-win-col">
+                    <div class="cb-1v1-win-header">${p1.username}'s Winnings</div>
+                    <div class="cb-1v1-win-items" id="brolls-${p1.userId||'p1'}">
+                         ${p1.rolls.map(r => cbRollCardHTML(r.item)).join('')}
+                    </div>
+                </div>
+                <div class="cb-1v1-win-col">
+                    <div class="cb-1v1-win-header">${p2.username}'s Winnings</div>
+                    <div class="cb-1v1-win-items" id="brolls-${p2.userId||'p2'}">
+                         ${p2.rolls.map(r => cbRollCardHTML(r.item)).join('')}
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    } else {
+        // --- VERTICAL MULTIPLAYER LAYOUT ---
+        let format = '1v1';
+        for (const [k, v] of Object.entries(CB_FORMAT_PLAYERS)) { if (v === b.maxPlayers) { format = k; break; } }
+        const numTeams = CB_FORMAT_TEAMS[format] || 2;
+        const perTeam = CB_FORMAT_PER_TEAM[format] || 1;
+        const teamColors = CB_TEAM_COLORS;
+        const teamLabels = { 2:['Team A','Team B'], 3:['Team 1','Team 2','Team 3'], 4:['P1','P2','P3','P4'], 5:['P1','P2','P3','P4','P5'] };
+        const labels = teamLabels[numTeams] || Array.from({length:numTeams},(_,i)=>`Team ${i+1}`);
+
+        const allSlots = Array(b.maxPlayers).fill(null);
+        b.players.forEach((p, i) => allSlots[i] = p);
+
+        let slotIdx = 0;
+        for (let t = 0; t < numTeams; t++) {
+            html += `<div class="cb-team-group">
+                <div class="cb-team-group-label" style="color:${teamColors[t]}">${labels[t]}</div>
+                <div class="cb-team-players">`;
+            for (let s = 0; s < perTeam; s++) {
+                const p = allSlots[slotIdx++];
+                if (p) {
+                    html += `
+                        <div class="cb-battle-player-col${b.winner&&b.winner.userId===String(p.userId)?' winner':''}" id="bcol-${p.userId}">
+                            <div class="cb-player-col-header">
+                                <span class="cb-player-col-name${p.isBot?' bot-name':''}">${p.username}</span>
+                                ${p.isBot ? '<span class="cb-bot-badge">BOT</span>' : ''}
+                                <span class="cb-player-col-total" id="btotal-${p.userId}">${p.total.toLocaleString()} ZR$</span>
+                            </div>
+                            <div class="cb-battle-spinner-box" id="bspinnerbox-${p.userId}" style="display: ${b.status==='active'?'block':'none'}">
+                                <div class="cb-spinner-arrow-left"></div>
+                                <div class="cb-spinner-arrow-right"></div>
+                                <div class="cb-battle-spinner-track" id="bspinner-${p.userId}"></div>
+                            </div>
+                            <div class="cb-player-rolls" id="brolls-${p.userId}" style="flex-direction:row; flex-wrap:wrap;">
+                                ${p.rolls.map(r => cbRollCardHTML(r.item)).join('')}
+                            </div>
+                        </div>`;
+                } else {
+                    html += `
+                        <div class="cb-battle-player-col" style="border-style:dashed;">
+                            <div class="cb-slot-waiting">
+                                <i class="fa-solid fa-user-plus"></i>
+                                <span>Waiting...</span>
+                            </div>
+                        </div>`;
+                }
             }
+            html += `</div></div>`;
         }
-        html += `</div></div>`;
     }
     playersEl.innerHTML = html;
 
@@ -5506,12 +5575,8 @@ function cbRenderBattleRoom(b) {
 
 function cbRollCardHTML(item) {
     return `
-        <div class="cb-roll-card">
+        <div class="cb-roll-card micro rarity-${item.rarity}" title="${item.name} (${item.value?item.value.toLocaleString()+' ZR$':'—'})">
             <img src="${item.icon}" alt="${item.name}" onerror="this.style.display='none'">
-            <div class="cb-roll-card-info">
-                <div class="cb-roll-card-name">${item.name}</div>
-                <div class="cb-roll-card-val" style="color:${RARITY_COLORS[item.rarity]||'#a78bfa'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
-            </div>
         </div>
     `;
 }
@@ -5567,8 +5632,9 @@ function cbBindSockets() {
         socket.on(`battle:${bid}:round`, async ({ round, results }) => {
             const b = _cbBattles.find(x => x.id === bid);
             const caseData = b ? _cbCases.find(c => c.id === b.caseId) : null;
+            const is1v1 = b && b.maxPlayers === 2;
             
-            // Build and spin each player's vertical track concurrently
+            // Build and spin each player's track concurrently
             const spinPromises = results.map(async (r) => {
                 const track = document.getElementById(`bspinner-${r.userId}`);
                 if (!track) return;
@@ -5582,28 +5648,38 @@ function cbBindSockets() {
                 fakeItems.push(r.item);
                 
                 track.style.transition = 'none';
-                track.style.transform = 'translateY(0)';
-                track.innerHTML = fakeItems.map(item => `
-                    <div class="cb-spin-ver-item rarity-${item.rarity}">
-                        <img src="${item.icon}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>🎁</text></svg>'">
-                        <span class="si-name">${item.name}</span>
-                        <span class="si-val" style="color:${RARITY_COLORS[item.rarity]||'#fff'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</span>
-                    </div>
-                `).join('');
+                track.style.transform = is1v1 ? 'translate3d(0, 0, 0)' : 'translate3d(0, 0, 0)';
+                
+                if (is1v1) {
+                    // HORIZONTAL track items
+                    track.innerHTML = fakeItems.map(item => `
+                        <div class="cb-spin-ver-item rarity-${item.rarity}" style="width:106px; flex-direction:row; border:none; border-left:1px solid rgba(255,255,255,.02); border-right:1px solid rgba(255,255,255,.02);">
+                            <img src="${item.icon}" alt="${item.name}" style="width:40px; height:40px;" onerror="this.style.display='none'">
+                        </div>
+                    `).join('');
+                } else {
+                    // VERTICAL track items
+                    track.innerHTML = fakeItems.map(item => `
+                        <div class="cb-spin-ver-item rarity-${item.rarity}">
+                            <img src="${item.icon}" alt="${item.name}" onerror="this.style.display='none'">
+                            <span class="si-name">${item.name}</span>
+                        </div>
+                    `).join('');
+                }
                 
                 // wait slight random delay so they don't look perfectly synced
                 await new Promise(res => setTimeout(res, 50 + Math.random()*200));
                 
-                const itemHeight = 131; // height + border
-                const wrapHeight = track.parentElement.offsetHeight;
-                const targetY = (30 * itemHeight) - (wrapHeight/2) + (itemHeight/2);
+                const itemMetric = is1v1 ? 106 : 131; // width vs height
+                const wrapMetric = is1v1 ? track.parentElement.offsetWidth : track.parentElement.offsetHeight;
+                const targetVal = (30 * itemMetric) - (wrapMetric/2) + (itemMetric/2);
                 
                 cbSoundEngine.whoosh();
                 track.classList.add('is-spinning-fast');
                 setTimeout(() => { track.classList.remove('is-spinning-fast'); track.classList.add('is-spinning'); }, 1500);
                 setTimeout(() => { track.classList.remove('is-spinning'); }, 3000);
 
-                return cbAnimateSpinVert(track, targetY, 3800).then(async () => {
+                return cbAnimateSpinDirection(track, targetVal, 3800, is1v1 ? 'X' : 'Y').then(async () => {
                     cbSoundEngine.click();
                     track.classList.remove('is-spinning', 'is-spinning-fast');
                     
@@ -5612,16 +5688,9 @@ function cbBindSockets() {
                     await new Promise(res => setTimeout(res, 200));
                     cbSoundEngine.result(r.item.rarity);
 
-                    const card = document.createElement('div');
-                    card.className = 'cb-roll-card';
-                    card.innerHTML = `
-                        <img src="${r.item.icon}" alt="${r.item.name}" onerror="this.style.display='none'">
-                        <div class="cb-roll-card-info">
-                            <div class="cb-roll-card-name">${r.item.name}</div>
-                            <div class="cb-roll-card-val" style="color:${RARITY_COLORS[r.item.rarity]||'#a78bfa'}">${r.item.value?r.item.value.toLocaleString()+' ZR$':'—'}</div>
-                        </div>
-                    `;
-                    card.style.animation = 'cbRollIn .4s cubic-bezier(.34,1.56,.64,1)';
+                    const tmpDiv = document.createElement('div');
+                    tmpDiv.innerHTML = cbRollCardHTML(r.item);
+                    const card = tmpDiv.firstElementChild;
                     document.getElementById(`brolls-${r.userId}`)?.appendChild(card);
                     
                     const totalEl = document.getElementById(`btotal-${r.userId}`);
@@ -5632,7 +5701,7 @@ function cbBindSockets() {
             await Promise.all(spinPromises);
         });
 
-        function cbAnimateSpinVert(track, targetY, duration) {
+        function cbAnimateSpinDirection(track, targetVal, duration, dir) {
             return new Promise(resolve => {
                 const start = performance.now();
                 let prevEased = 0;
@@ -5641,10 +5710,14 @@ function cbBindSockets() {
                     const elapsed = now - start;
                     const progress = Math.min(elapsed / duration, 1);
                     const eased = easeOut(progress);
-                    const currentY = targetY * eased;
+                    const currentVal = targetVal * eased;
 
                     track.style.transition = 'none';
-                    track.style.transform = `translateY(-${currentY}px)`;
+                    if (dir === 'X') {
+                        track.style.transform = `translate3d(-${currentVal}px, 0, 0)`;
+                    } else {
+                        track.style.transform = `translate3d(0, -${currentVal}px, 0)`;
+                    }
 
                     const velocity = (eased - prevEased) / (1 / 60);
                     const normVel = Math.min(1, velocity * 50);

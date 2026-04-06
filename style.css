@@ -4172,3 +4172,60 @@ select optgroup {
 .cb-roll-card-name { font-size: 11px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cb-roll-card-val { font-size: 12px; font-weight: 800; color: #a78bfa; }
 .cb-battle-actions { display: flex; gap: 10px; padding: 0 24px 16px; flex-wrap: wrap; }
+
+/* 1v1 Battle Layout */
+.cb-1v1-battle { display: flex; flex-direction: column; width: 100%; border-top: 1px solid rgba(255,255,255,.05); }
+.cb-1v1-players-header { display: flex; justify-content: space-between; align-items: stretch; padding: 16px 24px; position: relative; }
+.cb-1v1-player { display: flex; align-items: center; gap: 12px; }
+.cb-1v1-player.right { flex-direction: row-reverse; text-align: right; }
+.cb-1v1-player .avatar { background: rgba(255,255,255,.1); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid rgba(255,255,255,.1); }
+.cb-1v1-player .avatar i { font-size: 20px; }
+.cb-1v1-player .details { display: flex; flex-direction: column; justify-content: center; }
+.cb-1v1-player .name { font-weight: 800; font-size: 15px; color: #fff; display: flex; align-items: center; gap: 6px; }
+.cb-1v1-player .total { font-weight: 700; font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.cb-1v1-center-case { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; z-index: 10; filter: drop-shadow(0 0 20px rgba(0,0,0,0.5)); }
+.cb-1v1-center-case .round-lbl { font-size: 11px; font-weight: 800; color: #a78bfa; text-transform: uppercase; margin-bottom: 2px; }
+.cb-1v1-center-hex { background: linear-gradient(135deg, rgba(20,24,35,0.9), rgba(30,36,50,0.9)); border: 2px solid rgba(167,139,250,.3); border-radius: 12px; padding: 12px 24px; box-shadow: 0 0 15px rgba(167,139,250,.1); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.cb-1v1-center-hex img { width: 50px; height: 50px; object-fit: contain; margin-bottom: 4px; filter: drop-shadow(0 0 8px rgba(255,255,255,.2)); }
+.cb-1v1-center-hex span { font-size: 12px; font-weight: 700; color: #fff; }
+.cb-1v1-spinners { position: relative; border-bottom: 1px solid rgba(255,255,255,.05); border-top: 1px solid rgba(255,255,255,.05); background: rgba(0,0,0,.15); padding: 5px 0; overflow: hidden; }
+.cb-1v1-spinner-line { position: relative; margin: 5px 24px; overflow: hidden; border-radius: 8px; border: 1px solid rgba(255,255,255,.05); background: rgba(255,255,255,.02); height: 100px; display: flex; align-items: center; }
+.cb-1v1-spinner-line::before, .cb-1v1-spinner-line::after { content: ''; position: absolute; top: 0; bottom: 0; width: 60px; z-index: 5; pointer-events: none; }
+.cb-1v1-spinner-line::before { left: 0; background: linear-gradient(to right, #13151f, transparent); }
+.cb-1v1-spinner-line::after { right: 0; background: linear-gradient(to left, #13151f, transparent); }
+.cb-1v1-spinner-line .win-tick { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: #f59e0b; z-index: 10; box-shadow: 0 0 10px #f59e0b; pointer-events: none; }
+.cb-1v1-winnings-area { display: flex; padding: 16px 24px; gap: 40px; }
+.cb-1v1-win-col { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.cb-1v1-win-header { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 800; color: var(--text-secondary); margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px dashed rgba(255,255,255,.05); }
+.cb-1v1-win-items { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Multiplayer (Vertical) Box classes restored */
+.cb-team-group { display: flex; flex-direction: column; flex: 1; min-width: 250px; background: rgba(0,0,0,.1); border-radius: 12px; border: 1px solid rgba(255,255,255,.03); margin-bottom: 12px; }
+.cb-team-group-label { font-size: 13px; font-weight: 800; padding: 8px 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,.05); }
+.cb-team-players { display: flex; flex: 1; gap: 10px; padding: 10px; overflow-x: auto; }
+.cb-battle-spinner-box { height: 110px; position: relative; overflow: hidden; border-bottom: 1px solid rgba(255,255,255,.05); background: rgba(0,0,0,.2); }
+.cb-battle-spinner-track { display: flex; flex-direction: column; transition: transform cubic-bezier(0.1, 1, 0.2, 1); padding-top: calc(55px - 53px); height: max-content; }
+.cb-spin-ver-item { height: 106px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; border-top: 1px solid rgba(255,255,255,.02); border-bottom: 1px solid rgba(255,255,255,.02); flex-shrink: 0; position: relative; }
+.cb-spin-ver-item::after { content: ''; position: absolute; bottom: 0; left: 15%; right: 15%; height: 3px; border-radius: 3px 3px 0 0; opacity: 0.5; }
+.cb-spin-ver-item.rarity-common::after { background: #9ca3af; }
+.cb-spin-ver-item.rarity-uncommon::after { background: #34d399; }
+.cb-spin-ver-item.rarity-rare::after { background: #60a5fa; }
+.cb-spin-ver-item.rarity-epic::after { background: #a855f7; }
+.cb-spin-ver-item.rarity-legendary::after { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; }
+.cb-spin-ver-item img { width: 50px; height: 50px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(255,255,255,.15)); }
+.cb-spin-ver-item .si-name { font-size: 10px; font-weight: 700; color: #fff; text-align: center; line-height: 1.1; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cb-spin-ver-item .si-val { font-size: 11px; font-weight: 800; }
+.cb-spinner-arrow-left, .cb-spinner-arrow-right { position: absolute; top: 50%; transform: translateY(-50%); width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; z-index: 10; pointer-events: none; }
+.cb-spinner-arrow-left { left: 0; border-left: 6px solid #fff; }
+.cb-spinner-arrow-right { right: 0; border-right: 6px solid #fff; }
+.cb-bot-badge { background: rgba(167,139,250,.2); color: #a78bfa; border: 1px solid rgba(167,139,250,.4); font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px; }
+
+/* Micro winnings for Battle */
+.cb-roll-card.micro { padding: 4px; border-radius: 6px; width: 44px; height: 44px; justify-content: center; animation: cbRollIn .3s cubic-bezier(.34,1.56,.64,1); position: relative; }
+.cb-roll-card.micro img { width: 28px; height: 28px; }
+.cb-roll-card.micro .cb-roll-card-info { display: none; }
+.cb-roll-card.micro::after { content: ''; position: absolute; bottom: -1px; left: 10%; right: 10%; height: 2px; border-radius: 2px; }
+
+/* Fix missing Motion Blur classes */
+.is-spinning { filter: blur(1.5px); will-change: transform; -webkit-transform: translateZ(0); transform: translateZ(0); }
+.is-spinning-fast { filter: blur(3px); will-change: transform; -webkit-transform: translateZ(0); transform: translateZ(0); }
