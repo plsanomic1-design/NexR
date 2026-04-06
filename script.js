@@ -5150,6 +5150,7 @@ function cbAnimateSpin(track, targetX, duration) {
 // --- Battle room ---
 function cbOpenBattleRoom(battleId, battleData) {
     _cbCurrentBattleId = battleId;
+    cbBindSockets(); // Re-bind sockets now that we have a specific battle ID
     const modal = document.getElementById('cb-battle-modal');
     modal.style.display = 'flex';
     // Find battle in list or use passed data
