@@ -1705,23 +1705,23 @@ app.post('/api/deposit/crypto/create', async (req, res) => {
 });
 
 app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
-    const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
-    if (!ipnSecret) return res.status(500).send('IPN secret not configured');
-    
-    const sig = req.headers['x-nowpayments-sig'];
-    if (!sig) return res.status(400).send('No signature');
-    
-    // Sort keys before hashing according to NowPayments docs
-    const hmac = crypto.createHmac('sha512', ipnSecret);
-    hmac.update(JSON.stringify(req.body, Object.keys(req.body).sort()));
-    if (sig !== hmac.digest('hex')) {
-        return res.status(403).send('Invalid signature');
-    }
-    
-    const { payment_status, order_id, price_amount } = req.body;
-    
-    // We only credit when payment is completely finished
-    if (payment_status === 'finished') {
+    const { payment_id } = req.body;
+    if (!payment_id) return res.status(400).send('No payment ID');
+
+    // To completely avoid JSON-parsing formatting bugs with the HMAC signature, we directly query the NowPayments API
+    // using our server's internal API Key. This securely guarantees the payment data is real.
+    try {
+        const verifyRes = await fetch(`https://api.nowpayments.io/v1/payment/${payment_id}`, {
+            headers: { 'x-api-key': process.env.NOWPAYMENTS_API_KEY }
+        });
+        
+        if (!verifyRes.ok) return res.status(403).send('Invalid payment_id lookup');
+        
+        const paymentData = await verifyRes.json();
+        const { payment_status, order_id, price_amount } = paymentData;
+        
+        // We only credit when payment is completely finished
+        if (payment_status === 'finished') {
         const parts = String(order_id).split('_');
         if (parts.length >= 2 && parts[0] === 'deps') {
             const userId = parseInt(parts[1], 10);
@@ -1751,7 +1751,12 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                 }
             }
         }
+        } // close if payment_status === 'finished'
+    } catch (e) {
+        console.error('Crypto Webhook verify error:', e);
+        return res.status(500).send('Verify error');
     }
+    
     res.status(200).send('OK');
 });
 
