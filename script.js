@@ -4854,13 +4854,21 @@ async function generateCryptoInvoice() {
 // CASE BATTLES SYSTEM
 // ======================================================================
 
-let _cbCases = [];         // All case definitions from server
-let _cbBattles = [];       // Live battles list
+let _cbCases = [];
+let _cbBattles = [];
 let _cbCreateCaseId = null;
 let _cbCreateRounds = 1;
 let _cbCreateMode = 'normal';
+let _cbBattleFormat = '1v1';
 let _cbCurrentBattleId = null;
 window._cbSpinning = false;
+window._cbSoundEnabled = true;
+
+// Battle format → player count + team count
+const CB_FORMAT_PLAYERS = { '1v1':2, '2v2':4, '3v3':6, '1v1v1':3, '1v1v1v1':4, '1v1v1v1v1':5 };
+const CB_FORMAT_TEAMS   = { '1v1':2, '2v2':2, '3v3':2, '1v1v1':3, '1v1v1v1':4, '1v1v1v1v1':5 };
+const CB_FORMAT_PER_TEAM= { '1v1':1, '2v2':2, '3v3':3, '1v1v1':1, '1v1v1v1':1, '1v1v1v1v1':1 };
+const CB_TEAM_COLORS    = ['#60a5fa','#fc6161','#34d399','#fbbf24','#a78bfa'];
 
 const RARITY_COLORS = {
     common:    '#9ca3af',
@@ -4869,6 +4877,141 @@ const RARITY_COLORS = {
     epic:      '#a855f7',
     legendary: '#f59e0b'
 };
+
+// ======================================================================
+// SOUND ENGINE — Web Audio API, fully procedural (no external files)
+// ======================================================================
+const cbSoundEngine = (() => {
+    let ctx = null;
+    let _enabled = true;
+    let _tickTimeout = null;
+    let _lastTickTime = 0;
+
+    function getCtx() {
+        if (!ctx) {
+            try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+        }
+        if (ctx && ctx.state === 'suspended') ctx.resume();
+        return ctx;
+    }
+
+    function playTone({ type='sine', freq=440, gain=0.3, duration=0.1, attack=0.005, release=0.05, detune=0 } = {}) {
+        if (!_enabled) return;
+        const c = getCtx(); if (!c) return;
+        const g = c.createGain();
+        const o = c.createOscillator();
+        o.type = type;
+        o.frequency.value = freq;
+        o.detune.value = detune;
+        g.gain.setValueAtTime(0, c.currentTime);
+        g.gain.linearRampToValueAtTime(gain, c.currentTime + attack);
+        g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration + release);
+        o.connect(g); g.connect(c.destination);
+        o.start(c.currentTime);
+        o.stop(c.currentTime + duration + release + 0.01);
+    }
+
+    function playNoise({ gain=0.2, duration=0.3, freq=800, q=1 } = {}) {
+        if (!_enabled) return;
+        const c = getCtx(); if (!c) return;
+        const bufLen = Math.floor(c.sampleRate * duration);
+        const buf = c.createBuffer(1, bufLen, c.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i=0; i<bufLen; i++) data[i] = Math.random()*2-1;
+        const src = c.createBufferSource();
+        src.buffer = buf;
+        const filter = c.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = freq;
+        filter.Q.value = q;
+        const g = c.createGain();
+        g.gain.setValueAtTime(gain, c.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
+        src.connect(filter); filter.connect(g); g.connect(c.destination);
+        src.start(); src.stop(c.currentTime + duration + 0.05);
+    }
+
+    return {
+        setEnabled(v) { _enabled = v; },
+        isEnabled() { return _enabled; },
+
+        whoosh() {
+            playNoise({ gain: 0.15, duration: 0.4, freq: 1200, q: 0.8 });
+            playTone({ type:'sine', freq:180, gain:0.08, duration:0.35, release:0.1 });
+        },
+
+        tick(velocity=1) {
+            // velocity 0-1: fast spin = higher pitch, slower = lower pitch
+            const now = Date.now();
+            const minGap = Math.max(20, 250 - velocity*220);
+            if (now - _lastTickTime < minGap) return;
+            _lastTickTime = now;
+            const baseFreq = 200 + velocity * 600;
+            const detune = (Math.random()-0.5)*120;
+            playTone({ type:'triangle', freq:baseFreq, gain:0.06+velocity*0.04, duration:0.04, attack:0.002, release:0.04, detune });
+        },
+
+        click() {
+            playTone({ type:'square', freq:380, gain:0.12, duration:0.02, attack:0.001, release:0.06 });
+            playTone({ type:'sine',   freq:220, gain:0.08, duration:0.04, attack:0.002, release:0.06 });
+        },
+
+        result(rarity) {
+            switch(rarity) {
+                case 'common':
+                    playTone({ type:'triangle', freq:160, gain:0.12, duration:0.15, attack:0.01, release:0.15 });
+                    break;
+                case 'uncommon':
+                    playTone({ type:'sine', freq:320, gain:0.14, duration:0.2, attack:0.01, release:0.2 });
+                    playTone({ type:'sine', freq:480, gain:0.08, duration:0.15, attack:0.02, release:0.2 });
+                    break;
+                case 'rare':
+                    playTone({ type:'sine', freq:520, gain:0.16, duration:0.25, attack:0.01, release:0.3 });
+                    playTone({ type:'sine', freq:780, gain:0.1,  duration:0.2,  attack:0.02, release:0.35 });
+                    playNoise({ gain:0.04, duration:0.15, freq:3000, q:2 });
+                    break;
+                case 'epic':
+                    playTone({ type:'sine', freq:440, gain:0.18, duration:0.3, attack:0.01, release:0.4 });
+                    playTone({ type:'sine', freq:660, gain:0.14, duration:0.25, attack:0.015, release:0.4 });
+                    playTone({ type:'sine', freq:880, gain:0.1,  duration:0.2,  attack:0.02,  release:0.45 });
+                    playNoise({ gain:0.06, duration:0.2, freq:4000, q:3 });
+                    break;
+                case 'legendary':
+                    // Layered jackpot with 0.25s pre-delay hit
+                    setTimeout(() => {
+                        playTone({ type:'sine', freq:110, gain:0.25, duration:0.5, attack:0.01, release:0.6 });
+                        playNoise({ gain:0.15, duration:0.3, freq:800, q:1.5 });
+                    }, 0);
+                    setTimeout(() => {
+                        playTone({ type:'sine', freq:523, gain:0.2, duration:0.6, attack:0.01, release:0.7 });
+                        playTone({ type:'sine', freq:659, gain:0.15, duration:0.5, attack:0.02, release:0.7 });
+                        playTone({ type:'sine', freq:784, gain:0.12, duration:0.4, attack:0.03, release:0.8 });
+                        playNoise({ gain:0.08, duration:0.4, freq:5000, q:4 });
+                    }, 250);
+                    // Choir synth
+                    setTimeout(() => {
+                        [261, 329, 392, 523].forEach((f, i) => {
+                            setTimeout(() => playTone({ type:'sine', freq:f, gain:0.06, duration:0.8, attack:0.1, release:0.5, detune:(Math.random()-0.5)*20 }), i*60);
+                        });
+                    }, 350);
+                    break;
+            }
+        }
+    };
+})();
+
+// Sound toggle
+function cbToggleSound() {
+    window._cbSoundEnabled = !window._cbSoundEnabled;
+    cbSoundEngine.setEnabled(window._cbSoundEnabled);
+    // Update all sound toggle buttons
+    document.querySelectorAll('.cb-sound-toggle').forEach(btn => {
+        const icon = btn.querySelector('i');
+        if (icon) icon.className = window._cbSoundEnabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
+        btn.classList.toggle('muted', !window._cbSoundEnabled);
+    });
+}
+
 
 // --- Init ---
 async function cbInit() {
@@ -4974,20 +5117,51 @@ function cbSwitchTab(tab, btn) {
 function cbOpenCreateModal() {
     document.getElementById('cb-create-modal').style.display = 'flex';
     cbRenderCreateCases();
+    cbRenderLobbySlots();
+}
+
+function cbSelectFormat(fmt, btn) {
+    _cbBattleFormat = fmt;
+    document.querySelectorAll('.cb-format-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    cbRenderLobbySlots();
+    cbUpdateCreateCost();
+}
+
+function cbRenderLobbySlots() {
+    const el = document.getElementById('cb-lobby-preview');
+    if (!el) return;
+    const numTeams   = CB_FORMAT_TEAMS[_cbBattleFormat] || 2;
+    const perTeam    = CB_FORMAT_PER_TEAM[_cbBattleFormat] || 1;
+    const teamColors = CB_TEAM_COLORS;
+    const teamLabels = { 2:['Team A','Team B'], 3:['Team 1','Team 2','Team 3'], 4:['P1','P2','P3','P4'], 5:['P1','P2','P3','P4','P5'] };
+    const labels = teamLabels[numTeams] || Array.from({length:numTeams},(_,i)=>`Team ${i+1}`);
+    const teamsHtml = Array.from({length:numTeams}, (_, t) => {
+        const slotsHtml = Array.from({length:perTeam}, (_, s) =>
+            `<div class="cb-lobby-slot">${s===0?`<i class="fa-solid fa-user-plus" style="font-size:14px;color:${teamColors[t]}44;"></i>`:''}
+            <span class="slot-waiting">Waiting</span></div>`
+        ).join('');
+        return `
+            <div class="cb-lobby-team">
+                <div class="cb-lobby-team-label" style="color:${teamColors[t]}">${labels[t]}</div>
+                <div class="cb-lobby-slots-row">${slotsHtml}</div>
+            </div>`;
+    }).join('');
+    el.innerHTML = `<div class="cb-lobby-teams">${teamsHtml}</div>`;
 }
 
 function cbRenderCreateCases() {
     const el = document.getElementById('cb-create-cases');
     if (!el || !_cbCases.length) return;
-    // Select first by default
-    if (!_cbCreateCaseId && _cbCases.length) _cbCreateCaseId = _cbCases[0].id;
+    if (!_cbCreateCaseId) _cbCreateCaseId = _cbCases[0].id;
     el.innerHTML = _cbCases.map(c => `
         <div class="cb-create-case-option${_cbCreateCaseId===c.id?' selected':''}" style="--case-color:${c.color}" onclick="cbSelectCase('${c.id}',this)">
             <img src="${c.image}" alt="${c.name}" onerror="this.style.display='none'">
             <div class="cc-name">${c.name}</div>
-            <div class="cc-price">${c.price} ZR$</div>
+            <div class="cc-price">${c.price.toLocaleString()} ZR$</div>
         </div>
     `).join('');
+    cbRenderPreviewReel();
     cbUpdateCreateCost();
 }
 
@@ -4995,7 +5169,40 @@ function cbSelectCase(id, el) {
     _cbCreateCaseId = id;
     document.querySelectorAll('.cb-create-case-option').forEach(e => e.classList.remove('selected'));
     el.classList.add('selected');
+    cbRenderPreviewReel();
     cbUpdateCreateCost();
+}
+
+function cbRenderPreviewReel() {
+    const wrap = document.getElementById('cb-preview-reel-wrap');
+    const reel = document.getElementById('cb-preview-reel');
+    if (!reel || !wrap) return;
+    const c = _cbCases.find(x => x.id === _cbCreateCaseId);
+    if (!c || !c.items || !c.items.length) { wrap.style.display = 'none'; return; }
+    // Sort items by value descending so reel feels like a quality showcase
+    const sorted = [...c.items].sort((a,b) => (b.value||0)-(a.value||0));
+    reel.innerHTML = sorted.map(item => `
+        <div class="cb-preview-item rarity-${item.rarity}">
+            <img src="${item.icon||''}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 rx=%228%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2232%22 text-anchor=%22middle%22>🎁</text></svg>'">
+            <div class="pi-name">${item.name}</div>
+            <div class="pi-val" style="color:${RARITY_COLORS[item.rarity]||'#fff'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
+            <div class="pi-tooltip">${item.name}${item.value?' · '+item.value.toLocaleString()+' ZR$':''}</div>
+        </div>
+    `).join('');
+    wrap.style.display = 'block';
+    // Enable drag-to-scroll
+    cbInitReelDrag(reel);
+}
+
+function cbInitReelDrag(el) {
+    let isDown = false, startX, scrollLeft;
+    el.addEventListener('mousedown', e => { isDown=true; el.classList.add('active'); startX=e.pageX-el.offsetLeft; scrollLeft=el.scrollLeft; });
+    el.addEventListener('mouseleave',()=>{ isDown=false; el.classList.remove('active'); });
+    el.addEventListener('mouseup',  ()=>{ isDown=false; el.classList.remove('active'); });
+    el.addEventListener('mousemove', e => {
+        if(!isDown) return; e.preventDefault();
+        const x=e.pageX-el.offsetLeft; el.scrollLeft=scrollLeft-(x-startX)*1.2;
+    });
 }
 
 function cbSelectRounds(n, btn) {
@@ -5013,9 +5220,10 @@ function cbSelectMode(m, btn) {
 
 function cbUpdateCreateCost() {
     const c = _cbCases.find(x => x.id === _cbCreateCaseId);
+    const maxPlayers = CB_FORMAT_PLAYERS[_cbBattleFormat] || 2;
     const cost = c ? c.price * _cbCreateRounds : 0;
     const el = document.getElementById('cb-create-cost');
-    if (el) el.textContent = cost.toLocaleString() + ' ZR$';
+    if (el) el.textContent = cost.toLocaleString() + ' ZR$ (your entry)';
 }
 
 async function cbConfirmCreate() {
@@ -5024,18 +5232,19 @@ async function cbConfirmCreate() {
     const btn = document.getElementById('cb-create-confirm');
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating...';
+    const maxPlayers = CB_FORMAT_PLAYERS[_cbBattleFormat] || 2;
     const { ok, data } = await cbApiFetch('/api/battles/create', {
         method: 'POST',
-        body: JSON.stringify({ userId: robloxUserId, caseId: _cbCreateCaseId, rounds: _cbCreateRounds, mode: _cbCreateMode })
+        body: JSON.stringify({ userId: robloxUserId, caseId: _cbCreateCaseId, rounds: _cbCreateRounds, mode: _cbCreateMode, maxPlayers })
     });
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-swords"></i> Create Battle';
     if (!ok) return alert(data.error || 'Failed to create battle.');
     document.getElementById('cb-create-modal').style.display = 'none';
-    // Switch to battles tab and open the room
     cbSwitchTab('battles', document.querySelector('.cb-tab[data-tab="battles"]'));
     cbOpenBattleRoom(data.battle.id, data.battle);
 }
+
 
 // --- Solo case open ---
 async function cbOpenCaseModal(caseId) {
@@ -5043,20 +5252,22 @@ async function cbOpenCaseModal(caseId) {
     const caseData = _cbCases.find(c => c.id === caseId);
     if (!caseData) return;
 
-    const modal = document.getElementById('cb-open-modal');
-    const title = document.getElementById('cb-open-modal-title');
-    const result = document.getElementById('cb-open-result');
-    const track = document.getElementById('cb-spinner-track');
+    const modal    = document.getElementById('cb-open-modal');
+    const modalInner = document.getElementById('cb-open-modal-inner');
+    const title    = document.getElementById('cb-open-modal-title');
+    const result   = document.getElementById('cb-open-result');
+    const track    = document.getElementById('cb-spinner-track');
 
-    title.textContent = `Opening: ${caseData.name}`;
+    title.innerHTML = `<i class="fa-solid fa-box-open" style="color:#a78bfa;"></i> Opening: ${caseData.name}`;
     result.style.display = 'none';
     track.style.transition = 'none';
     track.style.transform = 'translateX(0)';
     track.innerHTML = '';
+    track.classList.remove('is-spinning','is-spinning-fast');
     modal.style.display = 'flex';
     window._cbSpinning = true;
 
-    // Request the roll from server FIRST
+    // Request roll from server first
     const { ok, data } = await cbApiFetch('/api/cases/open', {
         method: 'POST',
         body: JSON.stringify({ userId: robloxUserId, caseId })
@@ -5074,69 +5285,114 @@ async function cbOpenCaseModal(caseId) {
         updateBalanceDisplay();
     }
 
-    // Build spinner track (50 random items + winning item near end)
-    const ITEM_COUNT = 52;
-    const WIN_POS = 45; // winning item goes here
-    const ITEM_WIDTH = 118; // item width + margin
+    // Build spinner track
+    const ITEM_COUNT = 56;
+    const WIN_POS    = 47; // winning item position
+    const ITEM_WIDTH = 164; // item width (154) + margin (5+5)
 
+    // Guarantee at least 1 item per rarity tier for visual distribution
+    const rarityOrder = ['legendary','epic','rare','uncommon','common'];
     const items = [];
+    const byRarity = {};
+    rarityOrder.forEach(r => {
+        byRarity[r] = caseData.items.filter(i => i.rarity === r);
+    });
+    // Fill with random items
     for (let i = 0; i < ITEM_COUNT; i++) {
-        const idx = Math.floor(Math.random() * caseData.items.length);
-        items.push(caseData.items[idx]);
+        items.push(caseData.items[Math.floor(Math.random() * caseData.items.length)]);
     }
-    items[WIN_POS] = winningItem; // override with actual result
+    // Seed at least one of each rarity that exists
+    let seedIdx = 2;
+    rarityOrder.forEach(r => {
+        if (byRarity[r].length && seedIdx < WIN_POS - 3) {
+            items[seedIdx] = byRarity[r][Math.floor(Math.random()*byRarity[r].length)];
+            seedIdx += Math.max(2, Math.floor((WIN_POS - 3) / rarityOrder.length));
+        }
+    });
+    items[WIN_POS] = winningItem;
 
     track.innerHTML = items.map((item, i) => `
         <div class="cb-spin-item rarity-${item.rarity}" data-idx="${i}">
-            <img src="${item.icon}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>%F0%9F%8E%81</text></svg>'">
+            <img src="${item.icon||''}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>🎁</text></svg>'">
             <span class="si-name">${item.name}</span>
             <span class="si-val" style="color:${RARITY_COLORS[item.rarity]||'#fff'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</span>
         </div>
     `).join('');
 
-    // Animate: scroll to winning item
-    await new Promise(r => setTimeout(r, 80)); // allow DOM paint
+    await new Promise(r => setTimeout(r, 80));
 
     const wrapWidth = track.parentElement.offsetWidth;
-    const targetX = WIN_POS * ITEM_WIDTH - (wrapWidth / 2) + (ITEM_WIDTH / 2) - 20;
+    const targetX   = WIN_POS * ITEM_WIDTH - (wrapWidth / 2) + (ITEM_WIDTH / 2);
 
-    // Ease-out cubic animation using JS
-    await cbAnimateSpin(track, targetX, 4000);
+    // Play whoosh + start motion blur
+    cbSoundEngine.whoosh();
+    track.classList.add('is-spinning-fast');
+    setTimeout(() => { track.classList.remove('is-spinning-fast'); track.classList.add('is-spinning'); }, 1800);
+    setTimeout(() => { track.classList.remove('is-spinning'); }, 3400);
+
+    await cbAnimateSpin(track, targetX, 4200);
+
+    // Click + remove blur
+    cbSoundEngine.click();
+    track.classList.remove('is-spinning', 'is-spinning-fast');
 
     // Highlight winning item
-    track.children[WIN_POS]?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    track.children[WIN_POS]?.style.setProperty('border-color', RARITY_COLORS[winningItem.rarity] || '#fff');
-    track.children[WIN_POS]?.style.setProperty('box-shadow', `0 0 20px ${RARITY_COLORS[winningItem.rarity]}66`);
+    const winEl = track.children[WIN_POS];
+    if (winEl) {
+        winEl.classList.add('cb-spin-item--win');
+    }
 
-    // Show result
-    await new Promise(r => setTimeout(r, 600));
+    // Screen shake on jackpot/legendary
+    if (winningItem.rarity === 'legendary' && modalInner) {
+        modalInner.classList.remove('jackpot-shake');
+        void modalInner.offsetWidth;
+        modalInner.classList.add('jackpot-shake');
+        setTimeout(() => modalInner.classList.remove('jackpot-shake'), 600);
+    }
+
+    // Play result sound
+    await new Promise(r => setTimeout(r, 350));
+    cbSoundEngine.result(winningItem.rarity);
+
+    // Show result panel
+    await new Promise(r => setTimeout(r, 350));
     result.style.display = 'block';
     document.getElementById('cb-result-item-img-wrap').innerHTML =
-        `<img src="${winningItem.icon}" alt="${winningItem.name}" style="filter:drop-shadow(0 0 16px ${RARITY_COLORS[winningItem.rarity]})">`;
+        `<img src="${winningItem.icon}" alt="${winningItem.name}" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 0 20px ${RARITY_COLORS[winningItem.rarity]||'#fff'})">`;
     document.getElementById('cb-result-item-name').textContent = winningItem.name;
-    document.getElementById('cb-result-item-value').textContent =
-        winningItem.value ? winningItem.value.toLocaleString() + ' ZR$' : 'No value';
-    document.getElementById('cb-result-item-value').style.color = RARITY_COLORS[winningItem.rarity] || '#fff';
+    const valEl = document.getElementById('cb-result-item-value');
+    valEl.textContent = winningItem.value ? winningItem.value.toLocaleString() + ' ZR$' : 'No value';
+    valEl.style.color = RARITY_COLORS[winningItem.rarity] || '#fff';
 
     window._cbSpinning = false;
 }
 
 function cbAnimateSpin(track, targetX, duration) {
     return new Promise(resolve => {
-        const start = performance.now();
-        const startX = parseFloat(track.style.transform.replace('translateX(', '').replace('px)', '')) || 0;
+        const start  = performance.now();
+        const startX = 0;
+        let prevEased = 0;
 
         function easeOut(t) {
-            return 1 - Math.pow(1 - t, 4); // quartic ease-out
+            // Quintic ease-out for dramatic deceleration
+            return 1 - Math.pow(1 - t, 5);
         }
 
         function step(now) {
-            const elapsed = now - start;
+            const elapsed  = now - start;
             const progress = Math.min(elapsed / duration, 1);
-            const eased = easeOut(progress);
+            const eased    = easeOut(progress);
             const currentX = startX + (targetX - startX) * eased;
+
             track.style.transition = 'none';
-            track.style.transform = `translateX(-${currentX}px)`;
+            track.style.transform  = `translateX(-${currentX}px)`;
+
+            // Tick sound proportional to velocity
+            const velocity = (eased - prevEased) / (1 / 60); // approx velocity
+            const normVel  = Math.min(1, velocity * 50);
+            if (normVel > 0.005) cbSoundEngine.tick(normVel);
+            prevEased = eased;
+
             if (progress < 1) {
                 requestAnimationFrame(step);
             } else {
@@ -5164,44 +5420,62 @@ function cbCloseBattleModal() {
 }
 
 function cbRenderBattleRoom(b) {
-    document.getElementById('cb-battle-title').textContent = `${b.caseName} — ${CBModeLabel(b.mode)}`;
+    document.getElementById('cb-battle-title').innerHTML = `<i class="fa-solid fa-swords" style="color:#a78bfa;"></i> ${b.caseName} — ${CBModeLabel(b.mode)}`;
     // Meta
     const meta = document.getElementById('cb-battle-meta');
     meta.innerHTML = `<span>${b.rounds} round${b.rounds>1?'s':''}</span><span>${CBModeLabel(b.mode)}</span><span>${b.status==='waiting'?'⏳ Waiting for players':b.status==='active'?'🔴 Live':'✅ Done'}</span>`;
 
     // Players area
     const playersEl = document.getElementById('cb-battle-players');
-    playersEl.innerHTML = b.players.map(p => `
-        <div class="cb-battle-player-col${b.winner&&b.winner.userId===String(p.userId)?' winner':''}" id="bcol-${p.userId}">
-            <div class="cb-player-col-header">
-                <i class="fa-solid fa-${p.isBot?'robot':'user'}" style="color:${p.isBot?'#a78bfa':'#60a5fa'}"></i>
-                <span class="cb-player-col-name${p.isBot?' bot-name':''}">${p.username}</span>
-                <span class="cb-player-col-total" id="btotal-${p.userId}">${p.total.toLocaleString()} ZR$</span>
-            </div>
-            <div class="cb-battle-spinner-box" id="bspinnerbox-${p.userId}" style="display: ${b.status==='active'?'block':'none'}">
-                <div class="cb-spinner-arrow-left"></div>
-                <div class="cb-spinner-arrow-right"></div>
-                <div class="cb-battle-spinner-track" id="bspinner-${p.userId}"></div>
-            </div>
-            <div class="cb-player-rolls" id="brolls-${p.userId}">
-                ${p.rolls.map(r => cbRollCardHTML(r.item)).join('')}
-            </div>
-        </div>
-    `).join('');
+    let format = '1v1';
+    for (const [k, v] of Object.entries(CB_FORMAT_PLAYERS)) { if (v === b.maxPlayers) { format = k; break; } }
+    const numTeams = CB_FORMAT_TEAMS[format] || 2;
+    const perTeam = CB_FORMAT_PER_TEAM[format] || 1;
+    const teamColors = CB_TEAM_COLORS;
+    const teamLabels = { 2:['Team A','Team B'], 3:['Team 1','Team 2','Team 3'], 4:['P1','P2','P3','P4'], 5:['P1','P2','P3','P4','P5'] };
+    const labels = teamLabels[numTeams] || Array.from({length:numTeams},(_,i)=>`Team ${i+1}`);
 
-    // Empty player slots
-    const needed = b.maxPlayers - b.players.length;
-    for (let i = 0; i < needed; i++) {
-        playersEl.innerHTML += `
-            <div class="cb-battle-player-col" style="opacity:.4;">
-                <div class="cb-player-col-header">
-                    <i class="fa-solid fa-user-plus" style="color:var(--text-secondary)"></i>
-                    <span class="cb-player-col-name">Waiting...</span>
-                </div>
-                <div class="cb-player-rolls"></div>
-            </div>
-        `;
+    const allSlots = Array(b.maxPlayers).fill(null);
+    b.players.forEach((p, i) => allSlots[i] = p);
+
+    let html = '';
+    let slotIdx = 0;
+    for (let t = 0; t < numTeams; t++) {
+        html += `<div class="cb-team-group">
+            <div class="cb-team-group-label" style="color:${teamColors[t]}">${labels[t]}</div>
+            <div class="cb-team-players">`;
+        for (let s = 0; s < perTeam; s++) {
+            const p = allSlots[slotIdx++];
+            if (p) {
+                html += `
+                    <div class="cb-battle-player-col${b.winner&&b.winner.userId===String(p.userId)?' winner':''}" id="bcol-${p.userId}">
+                        <div class="cb-player-col-header">
+                            <span class="cb-player-col-name${p.isBot?' bot-name':''}">${p.username}</span>
+                            ${p.isBot ? '<span class="cb-bot-badge">BOT</span>' : ''}
+                            <span class="cb-player-col-total" id="btotal-${p.userId}">${p.total.toLocaleString()} ZR$</span>
+                        </div>
+                        <div class="cb-battle-spinner-box" id="bspinnerbox-${p.userId}" style="display: ${b.status==='active'?'block':'none'}">
+                            <div class="cb-spinner-arrow-left"></div>
+                            <div class="cb-spinner-arrow-right"></div>
+                            <div class="cb-battle-spinner-track" id="bspinner-${p.userId}"></div>
+                        </div>
+                        <div class="cb-player-rolls" id="brolls-${p.userId}">
+                            ${p.rolls.map(r => cbRollCardHTML(r.item)).join('')}
+                        </div>
+                    </div>`;
+            } else {
+                html += `
+                    <div class="cb-battle-player-col" style="border-style:dashed;">
+                        <div class="cb-slot-waiting">
+                            <i class="fa-solid fa-user-plus"></i>
+                            <span>Waiting...</span>
+                        </div>
+                    </div>`;
+            }
+        }
+        html += `</div></div>`;
     }
+    playersEl.innerHTML = html;
 
     // Actions
     const myId = String(robloxUserId);
@@ -5251,6 +5525,7 @@ async function cbJoinBattle(battleId) {
         body: JSON.stringify({ userId: robloxUserId })
     });
     if (!ok) return alert(data.error || 'Could not join.');
+    cbSoundEngine.click();
     // Let socket events handle rendering to prevent interrupting animation
 }
 
@@ -5262,6 +5537,7 @@ async function cbCallBot(battleId) {
         body: JSON.stringify({ userId: robloxUserId })
     });
     if (!ok) return alert(data.error || 'Could not call bot.');
+    cbSoundEngine.click();
     // Let socket events handle rendering to prevent interrupting animation
 }
 
@@ -5309,20 +5585,33 @@ function cbBindSockets() {
                 track.style.transform = 'translateY(0)';
                 track.innerHTML = fakeItems.map(item => `
                     <div class="cb-spin-ver-item rarity-${item.rarity}">
-                        <img src="${item.icon}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>%F0%9F%8E%81</text></svg>'">
+                        <img src="${item.icon}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>🎁</text></svg>'">
                         <span class="si-name">${item.name}</span>
                         <span class="si-val" style="color:${RARITY_COLORS[item.rarity]||'#fff'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</span>
                     </div>
                 `).join('');
                 
                 // wait slight random delay so they don't look perfectly synced
-                await new Promise(res => setTimeout(res, 50 + Math.random()*150));
+                await new Promise(res => setTimeout(res, 50 + Math.random()*200));
                 
                 const itemHeight = 131; // height + border
                 const wrapHeight = track.parentElement.offsetHeight;
                 const targetY = (30 * itemHeight) - (wrapHeight/2) + (itemHeight/2);
                 
-                return cbAnimateSpinVert(track, targetY, 3500).then(() => {
+                cbSoundEngine.whoosh();
+                track.classList.add('is-spinning-fast');
+                setTimeout(() => { track.classList.remove('is-spinning-fast'); track.classList.add('is-spinning'); }, 1500);
+                setTimeout(() => { track.classList.remove('is-spinning'); }, 3000);
+
+                return cbAnimateSpinVert(track, targetY, 3800).then(async () => {
+                    cbSoundEngine.click();
+                    track.classList.remove('is-spinning', 'is-spinning-fast');
+                    
+                    track.children[30]?.classList.add('cb-spin-item--win-ver');
+
+                    await new Promise(res => setTimeout(res, 200));
+                    cbSoundEngine.result(r.item.rarity);
+
                     const card = document.createElement('div');
                     card.className = 'cb-roll-card';
                     card.innerHTML = `
@@ -5332,7 +5621,7 @@ function cbBindSockets() {
                             <div class="cb-roll-card-val" style="color:${RARITY_COLORS[r.item.rarity]||'#a78bfa'}">${r.item.value?r.item.value.toLocaleString()+' ZR$':'—'}</div>
                         </div>
                     `;
-                    card.style.animation = 'cbRollIn .35s cubic-bezier(.34,1.56,.64,1)';
+                    card.style.animation = 'cbRollIn .4s cubic-bezier(.34,1.56,.64,1)';
                     document.getElementById(`brolls-${r.userId}`)?.appendChild(card);
                     
                     const totalEl = document.getElementById(`btotal-${r.userId}`);
@@ -5346,12 +5635,22 @@ function cbBindSockets() {
         function cbAnimateSpinVert(track, targetY, duration) {
             return new Promise(resolve => {
                 const start = performance.now();
-                function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
+                let prevEased = 0;
+                function easeOut(t) { return 1 - Math.pow(1 - t, 5); }
                 function step(now) {
-                    const progress = Math.min((now - start) / duration, 1);
-                    const currentY = targetY * easeOut(progress);
+                    const elapsed = now - start;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const eased = easeOut(progress);
+                    const currentY = targetY * eased;
+
                     track.style.transition = 'none';
                     track.style.transform = `translateY(-${currentY}px)`;
+
+                    const velocity = (eased - prevEased) / (1 / 60);
+                    const normVel = Math.min(1, velocity * 50);
+                    if (normVel > 0.005) cbSoundEngine.tick(normVel);
+                    prevEased = eased;
+
                     if (progress < 1) requestAnimationFrame(step);
                     else resolve();
                 }

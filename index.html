@@ -1645,15 +1645,41 @@
     </div><!-- /.app-shell -->
     <!-- ====== CASE CREATE MODAL ====== -->
     <div id="cb-create-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
-      <div class="cb-modal">
+      <div class="cb-modal" style="max-width:700px;">
         <div class="cb-modal-header">
           <h2><i class="fa-solid fa-swords"></i> Create Battle</h2>
           <button class="cb-modal-close" onclick="document.getElementById('cb-create-modal').style.display='none'">&times;</button>
         </div>
         <div class="cb-modal-body">
+
+          <!-- Battle Format Selection -->
+          <label class="cb-label">Battle Format</label>
+          <div class="cb-format-pills" id="cb-format-pills">
+            <button class="cb-format-pill active" data-fmt="1v1"       onclick="cbSelectFormat('1v1',this)">1v1</button>
+            <button class="cb-format-pill"        data-fmt="2v2"       onclick="cbSelectFormat('2v2',this)">2v2</button>
+            <button class="cb-format-pill"        data-fmt="3v3"       onclick="cbSelectFormat('3v3',this)">3v3</button>
+            <button class="cb-format-pill"        data-fmt="1v1v1"     onclick="cbSelectFormat('1v1v1',this)">1v1v1</button>
+            <button class="cb-format-pill"        data-fmt="1v1v1v1"   onclick="cbSelectFormat('1v1v1v1',this)">1v1v1v1</button>
+            <button class="cb-format-pill"        data-fmt="1v1v1v1v1" onclick="cbSelectFormat('1v1v1v1v1',this)">1v1v1v1v1</button>
+          </div>
+
+          <!-- Lobby Slots Preview -->
+          <div class="cb-lobby-preview" id="cb-lobby-preview"></div>
+
+          <!-- Case Selection -->
           <label class="cb-label">Select Case</label>
           <div id="cb-create-cases" class="cb-create-cases-grid"></div>
 
+          <!-- Item Preview Reel -->
+          <div class="cb-preview-reel-wrap" id="cb-preview-reel-wrap" style="display:none;">
+            <div class="cb-preview-reel-label">
+              Items in this case
+              <span>— scroll to inspect</span>
+            </div>
+            <div class="cb-preview-reel" id="cb-preview-reel"></div>
+          </div>
+
+          <!-- Rounds & Mode -->
           <div class="cb-create-row">
             <div class="cb-create-field">
               <label class="cb-label">Rounds</label>
@@ -1665,17 +1691,16 @@
               </div>
             </div>
             <div class="cb-create-field">
-              <label class="cb-label">Mode</label>
+              <label class="cb-label">Win Condition</label>
               <div class="cb-mode-btns">
                 <button class="cb-mode-btn active" data-mode="normal" onclick="cbSelectMode('normal',this)" title="Highest total wins">Normal</button>
                 <button class="cb-mode-btn" data-mode="crazy" onclick="cbSelectMode('crazy',this)" title="Lowest total wins">Crazy</button>
-                <button class="cb-mode-btn" data-mode="group" onclick="cbSelectMode('group',this)" title="Free-for-all">Group</button>
               </div>
             </div>
           </div>
 
           <div class="cb-cost-preview">
-            Total Cost: <strong id="cb-create-cost">100 ZR$</strong>
+            Total Cost: <strong id="cb-create-cost">0 ZR$</strong>
           </div>
         </div>
         <div class="cb-modal-footer">
@@ -1688,12 +1713,18 @@
 
     <!-- ====== CASE OPEN MODAL (spinner) ====== -->
     <div id="cb-open-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this&&!window._cbSpinning)this.style.display='none'">
-      <div class="cb-modal cb-open-modal-inner">
-        <div class="cb-modal-header">
-          <h2 id="cb-open-modal-title">Opening Case...</h2>
-          <button class="cb-modal-close" onclick="if(!window._cbSpinning)document.getElementById('cb-open-modal').style.display='none'">&times;</button>
+      <div class="cb-modal cb-open-modal-inner" id="cb-open-modal-inner">
+        <div class="cb-modal-header" style="padding-bottom:16px;">
+          <h2 id="cb-open-modal-title"><i class="fa-solid fa-box-open" style="color:#a78bfa;"></i> Opening Case...</h2>
+          <div class="cb-modal-header-controls">
+            <button class="cb-sound-toggle" id="cb-sound-toggle-btn" onclick="cbToggleSound()" title="Toggle sound">
+              <i class="fa-solid fa-volume-high"></i>
+            </button>
+            <button class="cb-modal-close" onclick="if(!window._cbSpinning)document.getElementById('cb-open-modal').style.display='none'">&times;</button>
+          </div>
         </div>
-        <div class="cb-spinner-wrap">
+        <!-- Full-width spinner -->
+        <div class="cb-spinner-wrap" id="cb-spinner-wrap" style="margin:0 20px 10px;">
           <div class="cb-spinner-arrow"></div>
           <div class="cb-spinner-track" id="cb-spinner-track"></div>
         </div>
@@ -1701,7 +1732,7 @@
           <div id="cb-result-item-img-wrap" class="cb-result-item-img"></div>
           <div id="cb-result-item-name" class="cb-result-name"></div>
           <div id="cb-result-item-value" class="cb-result-value"></div>
-          <button class="cb-btn cb-btn-create" style="margin-top:16px;" onclick="document.getElementById('cb-open-modal').style.display='none'">Done</button>
+          <button class="cb-btn cb-btn-create" style="margin-top:20px;" onclick="document.getElementById('cb-open-modal').style.display='none'"><i class="fa-solid fa-check"></i> Done</button>
         </div>
       </div>
     </div>
@@ -1709,11 +1740,20 @@
     <!-- ====== BATTLE ROOM MODAL ====== -->
     <div id="cb-battle-modal" class="cb-modal-backdrop" style="display:none;">
       <div class="cb-modal cb-battle-modal-inner">
-        <div class="cb-modal-header">
-          <h2 id="cb-battle-title">Battle</h2>
-          <div class="cb-battle-meta" id="cb-battle-meta"></div>
-          <button class="cb-modal-close" onclick="cbCloseBattleModal()">&times;</button>
+        <!-- Header row 1: title + close -->
+        <div class="cb-modal-header" style="align-items:flex-start; padding-bottom:10px;">
+          <div style="min-width:0;">
+            <h2 id="cb-battle-title"><i class="fa-solid fa-swords" style="color:#a78bfa;"></i> Battle</h2>
+            <div class="cb-battle-meta" id="cb-battle-meta" style="margin-top:6px;"></div>
+          </div>
+          <div class="cb-modal-header-controls">
+            <button class="cb-sound-toggle" id="cb-battle-sound-btn" onclick="cbToggleSound()" title="Toggle sound">
+              <i class="fa-solid fa-volume-high"></i>
+            </button>
+            <button class="cb-modal-close" onclick="cbCloseBattleModal()">&times;</button>
+          </div>
         </div>
+        <!-- Team-grouped players area (filled by JS) -->
         <div id="cb-battle-players" class="cb-battle-players"></div>
         <div id="cb-battle-actions" class="cb-battle-actions"></div>
         <div id="cb-battle-winner" class="cb-battle-winner" style="display:none;"></div>

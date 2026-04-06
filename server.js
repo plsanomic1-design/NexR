@@ -3666,7 +3666,7 @@ app.post('/api/cases/open', express.json(), async (req, res) => {
 
 // POST /api/battles/create
 app.post('/api/battles/create', express.json(), async (req, res) => {
-    const { userId, caseId, rounds, mode } = req.body || {};
+    const { userId, caseId, rounds, mode, maxPlayers: clientMaxPlayers } = req.body || {};
     const uid = parseRobloxUserIdStrict(userId);
     if (!uid || !caseId) return res.status(400).json({ error: 'Invalid request.' });
 
@@ -3707,7 +3707,7 @@ app.post('/api/battles/create', express.json(), async (req, res) => {
         mode: battleMode,
         status: 'waiting', // waiting | active | done
         currentRound: 0,
-        maxPlayers: battleMode === 'team' ? 4 : 2,
+        maxPlayers: (Number.isInteger(clientMaxPlayers) && clientMaxPlayers >= 2 && clientMaxPlayers <= 10) ? clientMaxPlayers : (battleMode === 'team' ? 4 : 2),
         players: [{
             userId: uid,
             username: creatorName,

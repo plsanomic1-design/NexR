@@ -4070,7 +4070,7 @@ select optgroup {
 .cb-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
 .cb-header-title { display: flex; align-items: center; gap: 14px; }
 .cb-header-title i { font-size: 32px; color: var(--accent, #6c63ff); filter: drop-shadow(0 0 8px #6c63ff88); margin-top: -2px; }
-.cb-header-title h1 { font-size: 28px; font-weight: 800; margin: 0; line-height: 1; background: linear-gradient(135deg, #a78bfa, #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.cb-header-title h1 { font-size: 28px; font-weight: 800; margin: 0; line-height: 1; background: linear-gradient(135deg, #a78bfa, #60a5fa); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .cb-subtitle { font-size: 13px; color: var(--text-secondary); margin-left: 4px; align-self: flex-end; margin-bottom: 2px; }
 .cb-tabs { display: flex; gap: 4px; border-bottom: 2px solid rgba(255,255,255,0.07); margin-bottom: 24px; }
 .cb-tab { background: none; border: none; color: var(--text-secondary); padding: 10px 22px; font-size: 14px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .2s; }
@@ -4172,16 +4172,3 @@ select optgroup {
 .cb-roll-card-name { font-size: 11px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cb-roll-card-val { font-size: 12px; font-weight: 800; color: #a78bfa; }
 .cb-battle-actions { display: flex; gap: 10px; padding: 0 24px 16px; flex-wrap: wrap; }
-.cb-battle-winner { margin: 16px 24px 24px; background: linear-gradient(135deg, rgba(245,158,11,.15), rgba(168,85,247,.15)); border: 1px solid rgba(245,158,11,.3); border-radius: 14px; padding: 20px; text-align: center; }
-.cb-battle-winner h3 { font-size: 22px; font-weight: 900; color: #f59e0b; margin: 0 0 6px; }
-.cb-battle-winner p { font-size: 15px; color: var(--text-secondary); margin: 0; }
-.cb-battle-meta { font-size: 12px; color: var(--text-secondary); display: flex; gap: 10px; flex-wrap: wrap; }
-.cb-battle-meta span { background: rgba(255,255,255,.06); padding: 3px 10px; border-radius: 100px; }
-.cb-battle-spinner-box { height: 130px; position: relative; overflow: hidden; border-bottom: 1px solid rgba(255,255,255,.07); background: rgba(0,0,0,.15); display: none; }
-.cb-battle-spinner-track { display: flex; flex-direction: column; transition: transform cubic-bezier(0.1, 1, 0.2, 1); }
-.cb-spin-ver-item { height: 130px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; border-bottom: 1px solid rgba(255,255,255,.05); }
-.cb-spin-ver-item img { width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(255,255,255,.2)); }
-.cb-spin-ver-item .si-name { font-size: 11px; font-weight: 700; color: #fff; }
-.cb-spin-ver-item .si-val { font-size: 12px; font-weight: 800; }
-.cb-spinner-arrow-left { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 8px solid #fff; z-index: 10; }
-.cb-spinner-arrow-right { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-right: 8px solid #fff; z-index: 10; }
