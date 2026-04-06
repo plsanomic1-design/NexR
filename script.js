@@ -5288,7 +5288,7 @@ async function cbOpenCaseModal(caseId) {
     // Build spinner track
     const ITEM_COUNT = 56;
     const WIN_POS    = 47; // winning item position
-    const ITEM_WIDTH = 164; // item width (154) + margin (5+5)
+    const ITEM_WIDTH = 134; // item width (130) + margin (2+2)
 
     // Guarantee at least 1 item per rarity tier for visual distribution
     const rarityOrder = ['legendary','epic','rare','uncommon','common'];
@@ -5312,10 +5312,9 @@ async function cbOpenCaseModal(caseId) {
     items[WIN_POS] = winningItem;
 
     track.innerHTML = items.map((item, i) => `
-        <div class="cb-spin-item rarity-${item.rarity}" data-idx="${i}">
-            <img src="${item.icon||''}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>🎁</text></svg>'">
-            <span class="si-name">${item.name}</span>
-            <span class="si-val" style="color:${RARITY_COLORS[item.rarity]||'#fff'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</span>
+        <div class="cb-horiz-item cb-item-rarity-${item.rarity}" data-idx="${i}">
+            <div class="cb-horiz-item-name">${item.name}</div>
+            <div class="cb-horiz-item-val">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
         </div>
     `).join('');
 
@@ -5601,17 +5600,18 @@ function cbBindSockets() {
                 track.style.transition = 'none';
                 track.style.transform = 'translate3d(0, 0, 0)';
                 
-                // UNIVERSAL HORIZONTAL track items
+                // UNIVERSAL HORIZONTAL track items (color blocks with names/values)
                 track.innerHTML = fakeItems.map(item => `
-                    <div class="cb-spin-ver-item cb-item-rarity-${item.rarity}" style="width:106px; flex-direction:row; border:none; border-left:1px solid rgba(255,255,255,.02); border-right:1px solid rgba(255,255,255,.02);">
-                        <img src="${item.icon}" alt="${item.name}" style="width:40px; height:40px;" onerror="this.style.display='none'">
+                    <div class="cb-horiz-item cb-item-rarity-${item.rarity}">
+                        <div class="cb-horiz-item-name">${item.name}</div>
+                        <div class="cb-horiz-item-val">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
                     </div>
                 `).join('');
                 
                 // wait slight random delay so they don't look perfectly synced
                 await new Promise(res => setTimeout(res, 50 + Math.random()*200));
                 
-                const itemWidth = 106;
+                const itemWidth = 134;
                 const wrapWidth = track.parentElement.offsetWidth;
                 const targetVal = (30 * itemWidth) - (wrapWidth/2) + (itemWidth/2);
                 
