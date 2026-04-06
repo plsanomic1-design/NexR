@@ -5498,10 +5498,14 @@ function cbRenderBattleRoom(b) {
 
     // Winner banner
     const winnerEl = document.getElementById('cb-battle-winner');
-    if (b.status === 'done' && b.winner) {
+    if (b.status === 'done' && (b.winner || b.isTie)) {
         winnerEl.style.display = 'block';
-        const pot = b.players.reduce((s, p) => s + p.paid, 0);
-        winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won!</h3><p>Took the entire pot of ${pot.toLocaleString()} ZR$</p>`;
+        if (b.isTie) {
+            winnerEl.innerHTML = `<h3>🤝 It's a Tie!</h3><p>All players have been refunded their original case costs.</p>`;
+        } else {
+            const winAmount = b.players.find(p => p.userId === b.winner.userId)?.total || 0;
+            winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${winAmount.toLocaleString()} ZR$</h3>`;
+        }
     } else {
         winnerEl.style.display = 'none';
     }
@@ -5509,8 +5513,9 @@ function cbRenderBattleRoom(b) {
 
 function cbRollCardHTML(item) {
     return `
-        <div class="cb-roll-card micro rarity-${item.rarity}" title="${item.name} (${item.value?item.value.toLocaleString()+' ZR$':'—'})">
-            <img src="${item.icon}" alt="${item.name}" onerror="this.style.display='none'">
+        <div class="cb-horiz-item cb-item-rarity-${item.rarity}" style="animation: cbRollIn .3s cubic-bezier(.34,1.56,.64,1); width:110px; height:60px; margin-right:4px;">
+            <div class="cb-horiz-item-name" style="font-size:10px;">${item.name}</div>
+            <div class="cb-horiz-item-val" style="font-size:10px;">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
         </div>
     `;
 }

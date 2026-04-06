@@ -4158,6 +4158,33 @@ select optgroup {
 .cb-result-name { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 6px; }
 .cb-result-value { font-size: 28px; font-weight: 900; color: #a78bfa; }
 .cb-battle-players { display: flex; gap: 12px; padding: 20px 24px; overflow-x: auto; }
+
+/* Battle Format Selectors */
+.cb-format-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.cb-format-pill { 
+    background: rgba(255, 255, 255, 0.05); 
+    color: rgba(255, 255, 255, 0.8); 
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    padding: 6px 14px; 
+    border-radius: 6px; 
+    font-weight: 700; 
+    font-size: 13px;
+    cursor: pointer; 
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+}
+.cb-format-pill:hover { 
+    background: rgba(255, 255, 255, 0.1); 
+    border-color: rgba(255, 255, 255, 0.25); 
+    transform: translateY(-1px);
+    color: #fff;
+}
+.cb-format-pill.active { 
+    background: rgba(56, 189, 248, 0.2); 
+    border-color: #38bdf8; 
+    color: #fff; 
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.3); 
+    transform: scale(1.05);
+}
 .cb-battle-player-col { flex: 1; min-width: 180px; background: rgba(255,255,255,.04); border-radius: 14px; overflow: hidden; border: 2px solid rgba(255,255,255,.07); transition: border-color .3s; }
 .cb-battle-player-col.winner { border-color: #f59e0b; box-shadow: 0 0 24px rgba(245,158,11,.25); }
 .cb-player-col-header { padding: 12px 14px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,255,255,.07); }
