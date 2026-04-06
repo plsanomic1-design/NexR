@@ -324,8 +324,8 @@ async function updateUserBalance(userId, balanceZr, legacyBalanceZh = 0) {
                 method: 'PATCH',
                 headers: { Prefer: 'return=minimal' },
                 body: JSON.stringify({
-                    balance_zr: balanceZr,
-                    balance_zh: balanceZh,
+                    balance_zr: row.balance_zr,
+                    balance_zh: 0,
                     updated_at: row.updated_at
                 })
             });
@@ -547,6 +547,14 @@ async function loadAccountFromSupabase(userId) {
     const bal = await getUserBalance(userId);
     if (!bal) return null;
 
+    // Build a minimal save we can always return if transactions fail
+    const baseSave = {
+        robloxUserId: userId,
+        balance: bal.balance_zr + (bal.balance_zh || 0),
+        transactions: [],
+        savedAt: Date.now()
+    };
+
     let txRes;
     try {
         txRes = await supabaseFetch(
@@ -554,22 +562,22 @@ async function loadAccountFromSupabase(userId) {
         );
     } catch (e) {
         console.error('loadAccountFromSupabase txs network error:', e && e.message);
-        return null;
+        return baseSave; // ← fallback: balance is known, just no tx history
     }
     if (!txRes.ok) {
         try {
             console.error('loadAccountFromSupabase txs failed:', txRes.status, await txRes.text());
         } catch (_) {}
-        return null;
+        return baseSave; // ← fallback: balance is known, just no tx history
     }
 
     let all;
     try {
         all = await txRes.json();
     } catch (e) {
-        return null;
+        return baseSave;
     }
-    if (!Array.isArray(all)) return null;
+    if (!Array.isArray(all)) return baseSave;
 
     let profile = {};
     const clientTxs = [];
@@ -1519,6 +1527,22 @@ app.get('/api/account-sync', async (req, res) => {
     }
 });
 
+// TEMP DEBUG — see exactly what Supabase holds for a user's balance
+app.get('/api/debug/balance', async (req, res) => {
+    const id = parseInt(String(req.query.userId || ''), 10);
+    if (!id) return res.status(400).json({ error: 'missing userId' });
+    const rawBal = await getUserBalance(id);
+    const fullLoad = await loadAccountFromSupabase(id);
+    res.json({
+        supabase_enabled: supabaseEnabled(),
+        userId: id,
+        raw_supabase_row: rawBal,
+        computed_balance: fullLoad ? fullLoad.balance : null,
+        full_load_ok: !!fullLoad
+    });
+});
+
+
 app.post('/api/account-sync', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const body = req.body || {};
@@ -1966,18 +1990,26 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
     userId = parseRobloxUserIdStrict(userId);
     zhAmount = parseInt(zhAmount, 10);
     
-    if (!userId || !coin || !address || isNaN(zhAmount) || zhAmount < 500) {
-        return res.status(400).json({ error: 'Invalid request. Minimum is 500 ZH$.' });
+    if (!userId || !coin || !address || isNaN(zhAmount) || zhAmount < 1800) {
+        return res.status(400).json({ error: 'Invalid request. Minimum is 1800 ZR$.' });
     }
     
-    const saveData = await readAccountJson(userId);
-    if (!saveData || saveData.balance < zhAmount) {
-        return res.status(400).json({ error: 'Insufficient balance.' });
+    // Use the dedicated fast balance read so we always get the live number from Supabase
+    const bal = await getUserBalance(userId);
+    const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
+    if (!bal || currentBalance < zhAmount) {
+        return res.status(400).json({ error: `Insufficient balance. You have ${Math.floor(currentBalance)} ZR$.` });
     }
-    
-    // Deduct locally (active save) + queue sync
-    saveData.balance -= zhAmount;
-    await persistAccountSave(userId, saveData);
+
+    // Deduct directly via updateUserBalance (the single source of truth)
+    const newBalance = Math.round((currentBalance - zhAmount) * 100) / 100;
+    const updateResult = await updateUserBalance(userId, newBalance, 0);
+    if (!updateResult.ok) {
+        return res.status(500).json({ error: 'Could not process withdrawal. Try again.' });
+    }
+    // Push balance update to any open tabs for this user
+    emitBalanceRemoteSync(io, userId, { balance: newBalance, stats: {} });
+
     
     // Fiat value estimation (500 ZH$ = 3.50 EUR) -> 1 ZH$ = 0.007 EUR
     const fiatValue = parseFloat((zhAmount * 0.007).toFixed(2));
