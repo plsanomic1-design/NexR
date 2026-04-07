@@ -3911,13 +3911,15 @@ async function runBattle(battle) {
                 }
             }
         }
-    } else if (winner && !winner.isBot) {
+    } else if (winner) {
         // Winner is still decided by rolled item totals.
-        // Cash payout is based on winner's rolled value strength:
-        // low strength => around +25% over entry, high strength => up to +50%.
+        // Payout display is based on winner's rolled strength.
+        // If winner is a bot (paid=0), use base entry for display so it is never shown as 0.
         const winnerObj = battle.players.find(p => String(p.userId) === String(winner.userId));
         const winnerPaid = winnerObj ? (Number(winnerObj.paid) || 0) : 0;
         const winnerTotal = winnerObj ? (Number(winnerObj.total) || 0) : 0;
+        const baseEntryCost = caseData.price * battle.rounds;
+        const effectivePaidForPayout = winnerPaid > 0 ? winnerPaid : baseEntryCost;
 
         // Build an expected score range from this case + number of rounds.
         // This keeps payout scaling relative to the actual case being played.
@@ -3930,16 +3932,19 @@ async function runBattle(battle) {
         const strength = Math.min(1, Math.max(0, (winnerTotal - expectedMinTotal) / span));
 
         const bonusPct = BATTLE_MIN_BONUS_PCT + ((BATTLE_MAX_BONUS_PCT - BATTLE_MIN_BONUS_PCT) * strength);
-        const winnerPayout = Math.round((winnerPaid * (1 + bonusPct)) * 100) / 100;
+        const winnerPayout = Math.round((effectivePaidForPayout * (1 + bonusPct)) * 100) / 100;
 
-        if (winnerPayout > 0) {
+        // Always expose payout in battle payload (used by winner banner),
+        // even if winner is a bot.
+        battle.payoutAmount = winnerPayout;
+
+        if (!winner.isBot && winnerPayout > 0) {
             const winnerBal = await getUserBalance(winner.userId);
             if (winnerBal) {
                 const winnerCurrent = winnerBal.balance_zr + (winnerBal.balance_zh || 0);
                 const winnerNew = Math.round((winnerCurrent + winnerPayout) * 100) / 100;
                 await updateUserBalance(winner.userId, winnerNew, 0);
                 emitBalanceRemoteSync(io, winner.userId, { balance: winnerNew, stats: {} });
-                battle.payoutAmount = winnerPayout;
             }
         }
     }
