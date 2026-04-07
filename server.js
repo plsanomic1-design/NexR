@@ -3576,8 +3576,8 @@ const activeBattles = new Map(); // battleId -> battle object
 const BOT_NAMES = ['ZephBot', 'NovaSpin', 'VoidRoller', 'LuckyBot', 'AceBot', 'RushBot', 'StarBot', 'GlitchBot'];
 const BATTLE_DONE_RETENTION_MS = 30 * 60 * 1000; // keep finished battles visible for 30 mins
 const BATTLES_LIST_LIMIT = 80; // show 60+ in live battles tab
-const BATTLE_MIN_BONUS_PCT = 0.25; // low roll winner => +25% on their paid entry
-const BATTLE_MAX_BONUS_PCT = 0.50; // strong roll winner => up to +50% on their paid entry
+const BATTLE_MIN_BONUS_PCT = 0.0833; // low roll winner => about +8.3% on entry
+const BATTLE_MAX_BONUS_PCT = 0.1417; // strong roll winner => about +14.2% on entry
 
 function hasActiveOrWaitingBattleForUser(userId) {
     if (!userId) return false;
