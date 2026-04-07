@@ -1203,6 +1203,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 crashCountdownInterval = null;
             }
         };
+
+        const setCrashPendingCashoutButton = () => {
+            crashPlayBtn.textContent = `Cashout (${cMulti.toFixed(2)} x)`;
+            if (!crashPlayBtn.classList.contains('custom-cashout-btn')) {
+                crashPlayBtn.classList.add('custom-cashout-btn');
+            }
+            // Waiting for round start: show cashout label, but keep disabled/greyed.
+            crashPlayBtn.style.background = 'var(--bg-panel-light)';
+            crashPlayBtn.disabled = true;
+        };
         
         const resizeCanvas = () => {
             const area = document.querySelector('.crash-area');
@@ -1460,6 +1470,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 display.style.color = 'white';
                 statusText.textContent = 'Next round starting…';
                 statusText.style.color = 'var(--text-secondary)';
+                if (cBet > 0 && !hasCashedOut) {
+                    cMulti = 1.0;
+                    setCrashPendingCashoutButton();
+                }
             }
 
             playersList.innerHTML = '';
@@ -1536,6 +1550,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         socket?.on('crash:playerJoined', (data) => {
             appendPlayer(data.userId, data.username, data.bet, false, 0, 0);
+            if (String(data.userId) === String(robloxUserId)) {
+                cBet = Number(data.bet) || cBet;
+                hasCashedOut = false;
+                cMulti = 1.0;
+                setCrashPendingCashoutButton();
+            }
         });
 
         socket?.on('crash:playerCashedOut', (data) => {
@@ -1571,12 +1591,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 cAuto = parseFloat(autoInp.value) || 0;
                 cBet = bet;
+                cMulti = 1.0;
                 
                 // Do NOT manually deduct from UI, wait for the socket to 'balance:update' and confirm the bet!
                 socket?.emit('crash:join', { userId: robloxUserId, username: currentUsername, bet, auto: cAuto });
-                
-                crashPlayBtn.textContent = 'Joining...';
-                crashPlayBtn.style.background = 'var(--bg-panel-light)';
+                setCrashPendingCashoutButton();
                 
             } else if(cState === 'running') {
                 doCashout();
