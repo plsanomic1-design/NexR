@@ -1610,6 +1610,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
+function adjustBetInput(inputId, mode) {
+    const inp = document.getElementById(inputId);
+    if (!inp) return;
+    const raw = parseFloat(inp.value);
+    const current = Number.isFinite(raw) ? raw : 0;
+    let next = mode === 'double' ? current * 2 : current / 2;
+    next = Math.max(0.1, next);
+    // Keep bet amounts clean and predictable: 1 decimal place max.
+    next = Math.round(next * 10) / 10;
+    inp.value = Number.isInteger(next) ? String(next) : next.toFixed(1);
+}
+
+window.halfBetInput = function(inputId) {
+    adjustBetInput(inputId, 'half');
+};
+
+window.doubleBetInput = function(inputId) {
+    adjustBetInput(inputId, 'double');
+};
+
 // ===== GLOBAL BALANCE SYSTEM =====
 let roBalance = 0.00;    // ZR$ (main currency)
 // roBalanceZh removed completely
