@@ -1180,6 +1180,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let crashCountdownInterval = null;
         let hasCashedOut = false;
 
+        const normalizeCrashStartTime = (serverStartTime) => {
+            const now = Date.now();
+            const parsed = Number(serverStartTime);
+            if (!Number.isFinite(parsed) || parsed <= 0) return now;
+            // If clocks are skewed and server time appears in the future,
+            // use local now so multiplier doesn't freeze at 1.00x.
+            if (parsed > now) return now;
+            return parsed;
+        };
+
         const stopCrashAnimLoop = () => {
             if (animFrame != null) {
                 cancelAnimationFrame(animFrame);
@@ -1420,7 +1430,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         socket?.on('crash:sync_state', (data) => {
             cState = data.state;
-            startTime = data.startTime;
+            startTime = normalizeCrashStartTime(data.startTime);
             cCrashPoint = data.target || 1.0;
 
             const myPlayer = data.players.find((p) => String(p.userId) === String(robloxUserId));
@@ -1469,7 +1479,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearCrashCountdown();
             stopCrashAnimLoop();
             cState = 'running';
-            startTime = data.startTime;
+            startTime = normalizeCrashStartTime(data.startTime);
             display.style.color = 'white';
             statusText.textContent = 'Current payout';
             statusText.style.color = 'var(--text-secondary)';
