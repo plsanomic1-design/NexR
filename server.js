@@ -3576,6 +3576,8 @@ const activeBattles = new Map(); // battleId -> battle object
 const BOT_NAMES = ['ZephBot', 'NovaSpin', 'VoidRoller', 'LuckyBot', 'AceBot', 'RushBot', 'StarBot', 'GlitchBot'];
 const BATTLE_DONE_RETENTION_MS = 30 * 60 * 1000; // keep finished battles visible for 30 mins
 const BATTLES_LIST_LIMIT = 80; // show 60+ in live battles tab
+const BATTLE_MIN_BONUS_PCT = 0.25; // low roll winner => +25% on their paid entry
+const BATTLE_MAX_BONUS_PCT = 0.50; // strong roll winner => up to +50% on their paid entry
 
 function hasActiveOrWaitingBattleForUser(userId) {
     if (!userId) return false;
@@ -3909,15 +3911,31 @@ async function runBattle(battle) {
             }
         }
     } else if (winner && !winner.isBot) {
-        // Award winner their own unboxed total value
-        const winnerObj = battle.players.find(p => p.userId === winner.userId);
-        const winnerItemsValue = winnerObj ? winnerObj.total : 0;
-        
-        if (winnerItemsValue > 0) {
+        // Winner is still decided by rolled item totals.
+        // Cash payout is based on winner's rolled value strength:
+        // low strength => around +25% over entry, high strength => up to +50%.
+        const winnerObj = battle.players.find(p => String(p.userId) === String(winner.userId));
+        const winnerPaid = winnerObj ? (Number(winnerObj.paid) || 0) : 0;
+        const winnerTotal = winnerObj ? (Number(winnerObj.total) || 0) : 0;
+
+        // Build an expected score range from this case + number of rounds.
+        // This keeps payout scaling relative to the actual case being played.
+        const itemValues = (caseData.items || []).map(i => Number(i.value) || 0);
+        const minItemValue = itemValues.length ? Math.min(...itemValues) : 0;
+        const maxItemValue = itemValues.length ? Math.max(...itemValues) : 0;
+        const expectedMinTotal = minItemValue * battle.rounds;
+        const expectedMaxTotal = maxItemValue * battle.rounds;
+        const span = Math.max(1, expectedMaxTotal - expectedMinTotal);
+        const strength = Math.min(1, Math.max(0, (winnerTotal - expectedMinTotal) / span));
+
+        const bonusPct = BATTLE_MIN_BONUS_PCT + ((BATTLE_MAX_BONUS_PCT - BATTLE_MIN_BONUS_PCT) * strength);
+        const winnerPayout = Math.round((winnerPaid * (1 + bonusPct)) * 100) / 100;
+
+        if (winnerPayout > 0) {
             const winnerBal = await getUserBalance(winner.userId);
             if (winnerBal) {
                 const winnerCurrent = winnerBal.balance_zr + (winnerBal.balance_zh || 0);
-                const winnerNew = Math.round((winnerCurrent + winnerItemsValue) * 100) / 100;
+                const winnerNew = Math.round((winnerCurrent + winnerPayout) * 100) / 100;
                 await updateUserBalance(winner.userId, winnerNew, 0);
                 emitBalanceRemoteSync(io, winner.userId, { balance: winnerNew, stats: {} });
             }
