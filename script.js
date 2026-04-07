@@ -4861,7 +4861,9 @@ let _cbCreateRounds = 1;
 let _cbCreateMode = 'normal';
 let _cbBattleFormat = '1v1';
 let _cbCurrentBattleId = null;
+const CB_ACTIVE_BATTLE_KEY = 'cb_active_battle_id';
 window._cbSpinning = false;
+window._cbBattleSpinning = false;
 window._cbSoundEnabled = true;
 
 // Battle format → player count + team count
@@ -5018,6 +5020,7 @@ async function cbInit() {
     await cbLoadCases();
     await cbLoadBattles();
     cbBindSockets();
+    await cbRestoreBattleSession();
 }
 
 // Called whenever the view becomes active
@@ -5068,6 +5071,37 @@ async function cbLoadBattles() {
     if (!ok) return;
     _cbBattles = data.battles || [];
     cbRenderBattlesList();
+}
+
+async function cbRestoreBattleSession() {
+    if (!robloxUserId) return;
+    const myId = String(robloxUserId);
+    let preferredId = null;
+    try { preferredId = localStorage.getItem(CB_ACTIVE_BATTLE_KEY); } catch (e) {}
+
+    let battleToRestore = null;
+    if (preferredId) {
+        battleToRestore = _cbBattles.find(b => b.id === preferredId && b.players.some(p => String(p.userId) === myId));
+    }
+    if (!battleToRestore) {
+        battleToRestore = _cbBattles.find(b =>
+            (b.status === 'waiting' || b.status === 'active') &&
+            b.players.some(p => String(p.userId) === myId)
+        );
+    }
+    if (!battleToRestore) return;
+
+    cbOpenBattleRoom(battleToRestore.id, battleToRestore);
+}
+
+function cbSetBattleSpinLock(isSpinning) {
+    window._cbBattleSpinning = !!isSpinning;
+    const closeBtn = document.getElementById('cb-battle-close-btn');
+    if (!closeBtn) return;
+    closeBtn.disabled = !!isSpinning;
+    closeBtn.style.opacity = isSpinning ? '0.45' : '';
+    closeBtn.style.cursor = isSpinning ? 'not-allowed' : '';
+    closeBtn.title = isSpinning ? 'Wait for the spin to finish' : 'Close';
 }
 
 function cbRenderBattlesList() {
@@ -5388,17 +5422,21 @@ function cbAnimateSpin(track, targetX, duration) {
 // --- Battle room ---
 function cbOpenBattleRoom(battleId, battleData) {
     _cbCurrentBattleId = battleId;
+    try { localStorage.setItem(CB_ACTIVE_BATTLE_KEY, battleId); } catch (e) {}
     cbBindSockets(); // Re-bind sockets now that we have a specific battle ID
     const modal = document.getElementById('cb-battle-modal');
     modal.style.display = 'flex';
+    cbSetBattleSpinLock(false);
     // Find battle in list or use passed data
     const b = battleData || _cbBattles.find(x => x.id === battleId);
     if (b) cbRenderBattleRoom(b);
 }
 
 function cbCloseBattleModal() {
+    if (window._cbBattleSpinning) return;
     document.getElementById('cb-battle-modal').style.display = 'none';
     _cbCurrentBattleId = null;
+    cbSetBattleSpinLock(false);
 }
 
 function cbRenderBattleRoom(b) {
@@ -5569,71 +5607,76 @@ function cbBindSockets() {
         socket.on(`battle:${bid}:started`, (b) => cbRenderBattleRoom(b));
 
         socket.on(`battle:${bid}:round`, async ({ round, results }) => {
-            const b = _cbBattles.find(x => x.id === bid);
-            const caseData = b ? _cbCases.find(c => c.id === b.caseId) : null;
-            
-            // Build and spin each player's track concurrently
-            const spinPromises = results.map(async (r) => {
-                const track = document.getElementById(`bspinner-${r.userId}`);
-                if (!track) return;
+            cbSetBattleSpinLock(true);
+            try {
+                const b = _cbBattles.find(x => x.id === bid);
+                const caseData = b ? _cbCases.find(c => c.id === b.caseId) : null;
                 
-                let fakeItems = [];
-                if (caseData) {
-                    for(let i=0; i<30; i++) {
-                        fakeItems.push(caseData.items[Math.floor(Math.random() * caseData.items.length)]);
-                    }
-                }
-                fakeItems.push(r.item);
-                
-                // Add trailing items so the spinner loops smoothly and isn't empty post-winner
-                if (caseData) {
-                    for(let i=0; i<12; i++) {
-                        fakeItems.push(caseData.items[Math.floor(Math.random() * caseData.items.length)]);
-                    }
-                }
-                
-                track.style.transition = 'none';
-                track.style.transform = 'translate3d(0, 0, 0)';
-                
-                // UNIVERSAL HORIZONTAL track items (color blocks with names/values)
-                track.innerHTML = fakeItems.map(item => `
-                    <div class="cb-horiz-item cb-item-rarity-${item.rarity}">
-                        <div class="cb-horiz-item-name">${item.name}</div>
-                        <div class="cb-horiz-item-val">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
-                    </div>
-                `).join('');
-                
-                // wait slight random delay so they don't look perfectly synced
-                await new Promise(res => setTimeout(res, 50 + Math.random()*200));
-                
-                const itemWidth = 134;
-                const targetVal = 30 * itemWidth;
-                
-                cbSoundEngine.whoosh();
-                track.classList.add('is-spinning-fast');
-                setTimeout(() => { track.classList.remove('is-spinning-fast'); track.classList.add('is-spinning'); }, 1500);
-                setTimeout(() => { track.classList.remove('is-spinning'); }, 3000);
-
-                return cbAnimateSpinDirection(track, targetVal, 3800, 'X').then(async () => {
-                    cbSoundEngine.click();
-                    track.classList.remove('is-spinning', 'is-spinning-fast');
+                // Build and spin each player's track concurrently
+                const spinPromises = results.map(async (r) => {
+                    const track = document.getElementById(`bspinner-${r.userId}`);
+                    if (!track) return;
                     
-                    track.children[30]?.classList.add('cb-spin-item--win-ver');
-
-                    await new Promise(res => setTimeout(res, 200));
-                    cbSoundEngine.result(r.item.rarity);
-
-                    const tmpDiv = document.createElement('div');
-                    tmpDiv.innerHTML = cbRollCardHTML(r.item);
-                    const card = tmpDiv.firstElementChild;
-                    document.getElementById(`brolls-${r.userId}`)?.appendChild(card);
+                    let fakeItems = [];
+                    if (caseData) {
+                        for(let i=0; i<30; i++) {
+                            fakeItems.push(caseData.items[Math.floor(Math.random() * caseData.items.length)]);
+                        }
+                    }
+                    fakeItems.push(r.item);
                     
-                    const totalEl = document.getElementById(`btotal-${r.userId}`);
-                    if (totalEl) totalEl.textContent = r.total.toLocaleString() + ' ZR$';
+                    // Add trailing items so the spinner loops smoothly and isn't empty post-winner
+                    if (caseData) {
+                        for(let i=0; i<12; i++) {
+                            fakeItems.push(caseData.items[Math.floor(Math.random() * caseData.items.length)]);
+                        }
+                    }
+                    
+                    track.style.transition = 'none';
+                    track.style.transform = 'translate3d(0, 0, 0)';
+                    
+                    // UNIVERSAL HORIZONTAL track items (color blocks with names/values)
+                    track.innerHTML = fakeItems.map(item => `
+                        <div class="cb-horiz-item cb-item-rarity-${item.rarity}">
+                            <div class="cb-horiz-item-name">${item.name}</div>
+                            <div class="cb-horiz-item-val">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
+                        </div>
+                    `).join('');
+                    
+                    // wait slight random delay so they don't look perfectly synced
+                    await new Promise(res => setTimeout(res, 50 + Math.random()*200));
+                    
+                    const itemWidth = 134;
+                    const targetVal = 30 * itemWidth;
+                    
+                    cbSoundEngine.whoosh();
+                    track.classList.add('is-spinning-fast');
+                    setTimeout(() => { track.classList.remove('is-spinning-fast'); track.classList.add('is-spinning'); }, 1500);
+                    setTimeout(() => { track.classList.remove('is-spinning'); }, 3000);
+
+                    return cbAnimateSpinDirection(track, targetVal, 3800, 'X').then(async () => {
+                        cbSoundEngine.click();
+                        track.classList.remove('is-spinning', 'is-spinning-fast');
+                        
+                        track.children[30]?.classList.add('cb-spin-item--win-ver');
+
+                        await new Promise(res => setTimeout(res, 200));
+                        cbSoundEngine.result(r.item.rarity);
+
+                        const tmpDiv = document.createElement('div');
+                        tmpDiv.innerHTML = cbRollCardHTML(r.item);
+                        const card = tmpDiv.firstElementChild;
+                        document.getElementById(`brolls-${r.userId}`)?.appendChild(card);
+                        
+                        const totalEl = document.getElementById(`btotal-${r.userId}`);
+                        if (totalEl) totalEl.textContent = r.total.toLocaleString() + ' ZR$';
+                    });
                 });
-            });
-            
-            await Promise.all(spinPromises);
+                
+                await Promise.all(spinPromises);
+            } finally {
+                cbSetBattleSpinLock(false);
+            }
         });
 
         function cbAnimateSpinDirection(track, targetVal, duration, dir) {
@@ -5667,6 +5710,7 @@ function cbBindSockets() {
         }
 
         socket.on(`battle:${bid}:done`, (b) => {
+            cbSetBattleSpinLock(false);
             // Highlight winner column
             if (b.winner) {
                 const col = document.getElementById(`bcol-${b.winner.userId}`);
@@ -5688,6 +5732,7 @@ function cbBindSockets() {
             // Update meta
             const meta = document.getElementById('cb-battle-meta');
             if (meta) meta.innerHTML = `<span>${b.rounds} round${b.rounds>1?'s':''}</span><span>${CBModeLabel(b.mode)}</span><span>✅ Done</span>`;
+            try { localStorage.removeItem(CB_ACTIVE_BATTLE_KEY); } catch (e) {}
         });
     }
 }

@@ -3574,6 +3574,20 @@ const CASES_DATA = [
 
 const activeBattles = new Map(); // battleId -> battle object
 const BOT_NAMES = ['ZephBot', 'NovaSpin', 'VoidRoller', 'LuckyBot', 'AceBot', 'RushBot', 'StarBot', 'GlitchBot'];
+const BATTLE_DONE_RETENTION_MS = 30 * 60 * 1000; // keep finished battles visible for 30 mins
+const BATTLES_LIST_LIMIT = 80; // show 60+ in live battles tab
+
+function hasActiveOrWaitingBattleForUser(userId) {
+    if (!userId) return false;
+    const uid = String(userId);
+    for (const battle of activeBattles.values()) {
+        if ((battle.status === 'waiting' || battle.status === 'active') &&
+            battle.players.some(p => !p.isBot && String(p.userId) === uid)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 function rollCaseItem(caseData, userId, isBot = false) {
     const items = caseData.items;
@@ -3670,6 +3684,10 @@ app.post('/api/battles/create', express.json(), async (req, res) => {
     const uid = parseRobloxUserIdStrict(userId);
     if (!uid || !caseId) return res.status(400).json({ error: 'Invalid request.' });
 
+    if (hasActiveOrWaitingBattleForUser(uid)) {
+        return res.status(400).json({ error: 'Finish your current case battle before creating another one.' });
+    }
+
     const caseData = CASES_DATA.find(c => c.id === caseId);
     if (!caseData) return res.status(404).json({ error: 'Case not found.' });
 
@@ -3730,10 +3748,21 @@ app.get('/api/battles', (req, res) => {
 });
 
 function getBattlesList() {
+    const now = Date.now();
+    // purge stale finished battles so memory does not grow forever
+    for (const [battleId, battle] of activeBattles.entries()) {
+        if (battle.status === 'done') {
+            const doneAt = battle.doneAt || battle.createdAt || 0;
+            if (now - doneAt > BATTLE_DONE_RETENTION_MS) {
+                activeBattles.delete(battleId);
+            }
+        }
+    }
+
     return Array.from(activeBattles.values())
-        .filter(b => b.status !== 'done' || Date.now() - b.createdAt < 60000)
+        .filter(b => b.status !== 'done' || (now - (b.doneAt || b.createdAt || 0)) < BATTLE_DONE_RETENTION_MS)
         .sort((a, b) => b.createdAt - a.createdAt)
-        .slice(0, 30);
+        .slice(0, BATTLES_LIST_LIMIT);
 }
 
 // POST /api/battles/:id/join
@@ -3745,6 +3774,9 @@ app.post('/api/battles/:id/join', express.json(), async (req, res) => {
     if (battle.status !== 'waiting') return res.status(400).json({ error: 'Battle already started.' });
     if (battle.players.find(p => String(p.userId) === String(uid))) {
         return res.status(400).json({ error: 'Already in this battle.' });
+    }
+    if (hasActiveOrWaitingBattleForUser(uid)) {
+        return res.status(400).json({ error: 'Finish your current case battle before joining another one.' });
     }
     if (battle.players.length >= battle.maxPlayers) return res.status(400).json({ error: 'Battle is full.' });
 
@@ -3807,6 +3839,7 @@ async function runBattle(battle) {
 
     // Roll all items for all rounds before we animate anything
     for (let round = 1; round <= battle.rounds; round++) {
+        battle.currentRound = round;
         for (const player of battle.players) {
             const item = rollCaseItem(caseData, player.isBot ? null : player.userId, player.isBot);
             player.rolls.push({ round, item });
@@ -3860,6 +3893,7 @@ async function runBattle(battle) {
     battle.winner = winner ? { userId: winner.userId, username: winner.username } : null;
     battle.isTie = isTie;
     battle.status = 'done';
+    battle.doneAt = Date.now();
 
     if (isTie) {
         const refundAmount = (caseData.price * battle.rounds);
