@@ -1455,6 +1455,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 display.style.color = 'white';
                 statusText.textContent = 'Current payout';
                 statusText.style.color = 'var(--text-secondary)';
+                if (cBet > 0 && !hasCashedOut) {
+                    crashPlayBtn.disabled = false;
+                    crashPlayBtn.style.background = 'var(--green)';
+                }
                 animFrame = requestAnimationFrame(updateCrash);
             } else if (cState === 'crashed') {
                 clearCrashCountdown();
@@ -1500,6 +1504,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (cBet > 0) {
                 crashPlayBtn.textContent = 'Cashout';
                 crashPlayBtn.style.background = 'var(--green)';
+                crashPlayBtn.disabled = false;
             }
             let elapsed = Date.now() - startTime;
             cMulti = 1.0 * Math.pow(Math.E, Math.max(0, elapsed) * 0.00006);
