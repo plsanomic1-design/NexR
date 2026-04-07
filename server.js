@@ -1559,10 +1559,25 @@ app.post('/api/account-sync', async (req, res) => {
     if (typeof save.balanceZh !== 'number' || save.balanceZh < 0) {
         save.balanceZh = 0;
     }
+    if (!save.stats || typeof save.stats !== 'object') {
+        save.stats = {};
+    }
     if (!supabaseEnabled()) {
         return res.status(200).json({ ok: true, _isDisabled: true });
     }
     try {
+        // Protect server-managed access controls from client-side sync overwrites.
+        // Otherwise older/stale browser saves can silently re-enable revoked access.
+        const current = await readAccountJson(userId);
+        if (current && current.stats && typeof current.stats === 'object') {
+            const managedFlags = ['withdrawAccessRevoked', 'rainAccessRevoked', 'tipAccessRevoked'];
+            for (const flag of managedFlags) {
+                if (typeof current.stats[flag] === 'boolean') {
+                    save.stats[flag] = current.stats[flag];
+                }
+            }
+        }
+
         const result = await persistAccountSave(userId, save);
         if (!result.ok) {
             return res.status(503).json({
