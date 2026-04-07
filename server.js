@@ -2763,6 +2763,9 @@ io.on('connection', (socket) => {
         
         try {
             const senderSave = await readAccountJson(fromUserId);
+            if (senderSave && senderSave.stats && senderSave.stats.tipAccessRevoked === true) {
+                return socket.emit('notification', { type: 'error', text: 'Tip access has been revoked for this account.' });
+            }
             if (!senderSave || senderSave.balance < amount) {
                 return socket.emit('notification', { type: 'error', text: 'Not enough balance for tip!' });
             }
@@ -2826,6 +2829,9 @@ io.on('connection', (socket) => {
 
         try {
             const save = await readAccountJson(creatorId);
+            if (save && save.stats && save.stats.rainAccessRevoked === true) {
+                return socket.emit('notification', { type: 'error', text: 'Rain access has been revoked for this account.' });
+            }
             if (!save || save.balance < amount) {
                 return socket.emit('notification', { type: 'error', text: 'Not enough balance for rain!' });
             }
@@ -3189,6 +3195,8 @@ io.on('connection', (socket) => {
             wdCooldownEndsAt: hasWdCooldown ? wdCooldownEndsAt : 0,
             withdrawCooldownMinutes,
             withdrawAccessRevoked: Boolean(save.stats && save.stats.withdrawAccessRevoked),
+            rainAccessRevoked: Boolean(save.stats && save.stats.rainAccessRevoked),
+            tipAccessRevoked: Boolean(save.stats && save.stats.tipAccessRevoked),
             isLocalOnly: Boolean(save.isLocalOnly)
         });
     });
@@ -3216,6 +3224,58 @@ io.on('connection', (socket) => {
             console.log(`[Admin] ${adminUserId} set withdrawAccessRevoked=${wantRevoke} for ${targetUserId}`);
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating withdrawal access.' });
+        }
+    });
+
+    socket.on('admin:set_rain_access', async ({ adminUserId, targetUserId, revoked }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        const wantRevoke = Boolean(revoked);
+
+        try {
+            const save = await readAccountJson(targetUserId);
+            if (!save) return socket.emit('admin:action_result', { ok: false, msg: 'User not found.' });
+            if (!save.stats) save.stats = {};
+            save.stats.rainAccessRevoked = wantRevoke;
+            await persistAccountSave(targetUserId, save);
+            emitBalanceRemoteSync(io, targetUserId, save);
+            socket.emit('admin:action_result', {
+                ok: true,
+                msg: wantRevoke
+                    ? `Rain access revoked for user ${targetUserId}.`
+                    : `Rain access restored for user ${targetUserId}.`,
+                rainAccessRevoked: wantRevoke,
+                targetUserId: String(targetUserId),
+                skipAdminLookup: true
+            });
+            console.log(`[Admin] ${adminUserId} set rainAccessRevoked=${wantRevoke} for ${targetUserId}`);
+        } catch (e) {
+            socket.emit('admin:action_result', { ok: false, msg: 'Error updating rain access.' });
+        }
+    });
+
+    socket.on('admin:set_tip_access', async ({ adminUserId, targetUserId, revoked }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        const wantRevoke = Boolean(revoked);
+
+        try {
+            const save = await readAccountJson(targetUserId);
+            if (!save) return socket.emit('admin:action_result', { ok: false, msg: 'User not found.' });
+            if (!save.stats) save.stats = {};
+            save.stats.tipAccessRevoked = wantRevoke;
+            await persistAccountSave(targetUserId, save);
+            emitBalanceRemoteSync(io, targetUserId, save);
+            socket.emit('admin:action_result', {
+                ok: true,
+                msg: wantRevoke
+                    ? `Tip access revoked for user ${targetUserId}.`
+                    : `Tip access restored for user ${targetUserId}.`,
+                tipAccessRevoked: wantRevoke,
+                targetUserId: String(targetUserId),
+                skipAdminLookup: true
+            });
+            console.log(`[Admin] ${adminUserId} set tipAccessRevoked=${wantRevoke} for ${targetUserId}`);
+        } catch (e) {
+            socket.emit('admin:action_result', { ok: false, msg: 'Error updating tip access.' });
         }
     });
 

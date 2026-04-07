@@ -4103,6 +4103,8 @@ if (socket) {
         }
 
         updateAdminWithdrawAccessUI(data.withdrawAccessRevoked === true);
+        updateAdminRainAccessUI(data.rainAccessRevoked === true);
+        updateAdminTipAccessUI(data.tipAccessRevoked === true);
 
         // Store active user ID for actions
         window._activeAdminUserId = data.userId;
@@ -4134,6 +4136,12 @@ if (socket) {
                 }
                 if (typeof data.withdrawAccessRevoked === 'boolean') {
                     updateAdminWithdrawAccessUI(data.withdrawAccessRevoked);
+                }
+                if (typeof data.rainAccessRevoked === 'boolean') {
+                    updateAdminRainAccessUI(data.rainAccessRevoked);
+                }
+                if (typeof data.tipAccessRevoked === 'boolean') {
+                    updateAdminTipAccessUI(data.tipAccessRevoked);
                 }
             }
             if (!data.skipAdminLookup && window._activeAdminUserId) {
@@ -4570,6 +4578,24 @@ window.adminSetWithdrawAccess = function(revoked) {
     });
 };
 
+window.adminSetRainAccess = function(revoked) {
+    if (!window._activeAdminUserId) return;
+    socket?.emit('admin:set_rain_access', {
+        adminUserId: robloxUserId,
+        targetUserId: window._activeAdminUserId,
+        revoked: Boolean(revoked)
+    });
+};
+
+window.adminSetTipAccess = function(revoked) {
+    if (!window._activeAdminUserId) return;
+    socket?.emit('admin:set_tip_access', {
+        adminUserId: robloxUserId,
+        targetUserId: window._activeAdminUserId,
+        revoked: Boolean(revoked)
+    });
+};
+
 window.adminSetWdCooldown = function(action) {
     if (!window._activeAdminUserId) return;
     const minEl = document.getElementById('admin-wd-cooldown-minutes');
@@ -4625,6 +4651,30 @@ function updateAdminWithdrawAccessUI(revoked) {
         el.className = 'admin-wd-status active';
     } else {
         el.textContent = 'WITHDRAWAL ACCESS: ALLOWED';
+        el.className = 'admin-wd-status clear';
+    }
+}
+
+function updateAdminRainAccessUI(revoked) {
+    const el = document.getElementById('admin-rain-access-status');
+    if (!el) return;
+    if (revoked) {
+        el.textContent = 'RAIN ACCESS: REVOKED';
+        el.className = 'admin-wd-status active';
+    } else {
+        el.textContent = 'RAIN ACCESS: ALLOWED';
+        el.className = 'admin-wd-status clear';
+    }
+}
+
+function updateAdminTipAccessUI(revoked) {
+    const el = document.getElementById('admin-tip-access-status');
+    if (!el) return;
+    if (revoked) {
+        el.textContent = 'TIP ACCESS: REVOKED';
+        el.className = 'admin-wd-status active';
+    } else {
+        el.textContent = 'TIP ACCESS: ALLOWED';
         el.className = 'admin-wd-status clear';
     }
 }
