@@ -892,7 +892,7 @@
             <div style="margin-top:25px; padding-top:20px; border-top:1px solid var(--border-color);">
                 <div style="display:flex; align-items:flex-start; gap:12px;">
                     <div style="min-width:32px; height:32px; background:#c0392b; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:10px; color:white; flex-shrink:0;">18+</div>
-                    <p style="font-size:11px; color:var(--text-secondary); line-height:1.6;">By logging in you acknowledge that you are at least +18 years of age, that any items you wager are not stolen, and that you agree with our <span style="color:var(--accent);">Terms of conditions</span> and our <span style="color:var(--accent);">Privacy policy</span>. ZephR$ is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Roblox.</p>
+                    <p style="font-size:11px; color:var(--text-secondary); line-height:1.6;">By logging in you acknowledge that you are at least +18 years of age, that any items you wager are not stolen, and that you agree with our <a href="terms.html" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">Terms of Service</a> and our <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">Privacy Policy</a>. ZephR$ is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Roblox.</p>
                 </div>
             </div>
         </div>
@@ -1668,11 +1668,7 @@
                         </div>
                     </div>
                 </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div><!-- /.app-shell -->
+            </div> <!-- /#view-profile -->
     <!-- ====== CASE CREATE MODAL ====== -->
     <div id="cb-create-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
       <div class="cb-modal" style="max-width:700px;">
@@ -1783,6 +1779,73 @@
         <div id="cb-battle-winner" class="cb-battle-winner" style="display:none;"></div>
       </div>
     </div>
+
+    <!-- ===== SITE FOOTER (Legal / Links) ===== -->
+    <footer class="zr-footer" aria-label="Site footer">
+      <div class="zr-footer__inner">
+        <div class="zr-footer__brand">
+          <div class="zr-footer__logo">
+            <span class="brand-mark" aria-hidden="true">
+              <svg width="34" height="34" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                <defs>
+                  <linearGradient id="brandGradFoot" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#38bdf8"/>
+                    <stop offset="1" stop-color="#818cf8"/>
+                  </linearGradient>
+                </defs>
+                <rect x="2" y="2" width="36" height="36" rx="10" fill="#161b22" stroke="rgba(59,130,246,0.4)" stroke-width="1.5"/>
+                <path d="M10 9h18v2.8H13.8L28.2 28H30v2.8H10V28h14.4L10 11.8V9z" fill="url(#brandGradFoot)"/>
+              </svg>
+            </span>
+            <div class="zr-footer__name">Zeph<span class="logo-highlight">R$</span></div>
+          </div>
+          <p class="zr-footer__desc">
+            ZephR$ is an entertainment platform with internal virtual credits (<strong>ZR$</strong>). No real‑money gambling.
+            Use at your own risk and only where permitted by your local laws.
+          </p>
+          <div class="zr-footer__social">
+            <a class="zr-footer__socialBtn" href="https://discord.gg/anQhq89Xty" target="_blank" rel="noopener" aria-label="Discord">
+              <i class="fa-brands fa-discord"></i>
+            </a>
+          </div>
+        </div>
+
+        <div class="zr-footer__cols">
+          <div class="zr-footer__col">
+            <div class="zr-footer__colTitle">About</div>
+            <a class="zr-footer__link" href="terms.html" target="_blank" rel="noopener">Terms of Service</a>
+            <a class="zr-footer__link" href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+          </div>
+          <div class="zr-footer__col">
+            <div class="zr-footer__colTitle">Help</div>
+            <a class="zr-footer__link" href="https://discord.gg/anQhq89Xty" target="_blank" rel="noopener">Support (Discord)</a>
+            <a class="zr-footer__link" href="privacy.html#cookies" target="_blank" rel="noopener">Cookies</a>
+          </div>
+          <div class="zr-footer__col zr-footer__col--wide">
+            <div class="zr-footer__colTitle">Disclaimer</div>
+            <p class="zr-footer__fine">
+              ZephR$ is <strong>not affiliated</strong> with, endorsed by, or sponsored by Roblox Corporation.
+              “Roblox” and “Robux” are trademarks of Roblox Corporation and are used only for identification.
+              All third‑party marks belong to their respective owners.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="zr-footer__bottom">
+        <span>© <span id="zr-footer-year"></span> ZephR$</span>
+        <span class="zr-footer__bottomSep">·</span>
+        <a class="zr-footer__bottomLink" href="terms.html" target="_blank" rel="noopener">Terms</a>
+        <span class="zr-footer__bottomSep">·</span>
+        <a class="zr-footer__bottomLink" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
+      </div>
+    </footer>
+
+    <!-- Small bottom spacer so footer isn't cramped -->
+    <div class="zr-footer-bottom-spacer"></div>
+
+        </div> <!-- /#page-content -->
+    </div> <!-- /.main-wrapper -->
+    </div> <!-- /.app-shell -->
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>

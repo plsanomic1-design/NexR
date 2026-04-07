@@ -66,6 +66,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (typeof initLiveFeed === 'function') initLiveFeed();
 
+    // Set footer year
+    const footerYear = document.getElementById('zr-footer-year');
+    if (footerYear) {
+        footerYear.textContent = new Date().getFullYear();
+    }
+
     // Blackjack Logic
     const bjPlayBtn = document.getElementById('bj-play-btn');
     if (bjPlayBtn) {
@@ -1608,6 +1614,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+});
+
+// Footer year (safe no-op if footer not present)
+document.addEventListener('DOMContentLoaded', () => {
+    const y = document.getElementById('zr-footer-year');
+    if (y) y.textContent = String(new Date().getFullYear());
 });
 
 function adjustBetInput(inputId, mode) {
