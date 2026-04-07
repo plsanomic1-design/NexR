@@ -5541,8 +5541,8 @@ function cbRenderBattleRoom(b) {
         if (b.isTie) {
             winnerEl.innerHTML = `<h3>🤝 It's a Tie!</h3><p>All players have been refunded their original case costs.</p>`;
         } else {
-            const winAmount = b.players.find(p => p.userId === b.winner.userId)?.total || 0;
-            winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${winAmount.toLocaleString()} ZR$</h3>`;
+            const payoutAmount = Number(b.payoutAmount || 0);
+            winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${payoutAmount.toLocaleString()} ZR$</h3>`;
         }
     } else {
         winnerEl.style.display = 'none';
@@ -5723,8 +5723,8 @@ function cbBindSockets() {
                 if (b.isTie) {
                     winnerEl.innerHTML = `<h3>🤝 It's a Tie!</h3><p>All players have been refunded their original case costs.</p>`;
                 } else if (b.winner) {
-                    const winAmount = b.players.find(p => p.userId === b.winner.userId)?.total || 0;
-                    winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${winAmount.toLocaleString()} ZR$</h3>`;
+                    const payoutAmount = Number(b.payoutAmount || 0);
+                    winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${payoutAmount.toLocaleString()} ZR$</h3>`;
                 }
             }
             // Clear action buttons

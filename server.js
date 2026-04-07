@@ -3894,6 +3894,7 @@ async function runBattle(battle) {
 
     battle.winner = winner ? { userId: winner.userId, username: winner.username } : null;
     battle.isTie = isTie;
+    battle.payoutAmount = 0;
     battle.status = 'done';
     battle.doneAt = Date.now();
 
@@ -3938,6 +3939,7 @@ async function runBattle(battle) {
                 const winnerNew = Math.round((winnerCurrent + winnerPayout) * 100) / 100;
                 await updateUserBalance(winner.userId, winnerNew, 0);
                 emitBalanceRemoteSync(io, winner.userId, { balance: winnerNew, stats: {} });
+                battle.payoutAmount = winnerPayout;
             }
         }
     }
