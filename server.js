@@ -29,6 +29,14 @@ const app = express();
 /** Render, Fly, Heroku, etc. sit behind a reverse proxy — required for correct req.ip and WebSocket upgrades */
 app.set('trust proxy', 1);
 
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+});
+
 /** Create the HTTP server to attach Socket.io */
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -2626,22 +2634,51 @@ function saveCryptoWd() {
 const BANS_FILE = path.join(__dirname, 'data', 'bans.json');
 let bansState = { accounts: [], ips: [] };
 
-function loadBansSync() {
+async function loadBansSync() {
+    if (!supabaseEnabled()) return;
     try {
-        if (fs.existsSync(BANS_FILE)) {
-            const raw = fs.readFileSync(BANS_FILE, 'utf8');
-            bansState = JSON.parse(raw);
+        const res = await supabaseFetch('transactions?type=eq.system_config&select=game_name&reference_id=eq.bans_v1&limit=1');
+        if (res.ok) {
+            const rows = await res.json();
+            if (rows && rows.length > 0 && rows[0].game_name) {
+                const parsed = JSON.parse(rows[0].game_name);
+                if (parsed.accounts && parsed.ips) bansState = parsed;
+            }
         }
     } catch (e) {
-        console.error('Error loading bans:', e.message);
+        console.error('Error loading bans from Supabase:', e.message);
     }
 }
-function saveBansSync() {
+async function saveBansSync() {
+    if (!supabaseEnabled()) return;
     try {
-        fs.mkdirSync(path.dirname(BANS_FILE), { recursive: true });
-        fs.writeFileSync(BANS_FILE, JSON.stringify(bansState, null, 2), 'utf8');
+        const payload = JSON.stringify(bansState);
+        const row = {
+            user_id: '0',
+            amount: 0,
+            currency: 'zr',
+            type: 'system_config',
+            status: 'ok',
+            game_name: payload,
+            reference_id: 'bans_v1'
+        };
+        const getRes = await supabaseFetch('transactions?type=eq.system_config&reference_id=eq.bans_v1&select=id&limit=1');
+        const rows = getRes.ok ? await getRes.json() : [];
+        if (rows && rows.length > 0) {
+            await supabaseFetch('transactions?type=eq.system_config&reference_id=eq.bans_v1', {
+                method: 'PATCH',
+                headers: { Prefer: 'return=minimal' },
+                body: JSON.stringify(row)
+            });
+        } else {
+            await supabaseFetch('transactions', {
+                method: 'POST',
+                headers: { Prefer: 'return=minimal' },
+                body: JSON.stringify(row)
+            });
+        }
     } catch (e) {
-        console.error('Error saving bans:', e.message);
+        console.error('Error saving bans to Supabase:', e.message);
     }
 }
 
@@ -4519,6 +4556,61 @@ async function runBattle(battle) {
 }
 
 // ======================================================================
+// OBFUSCATOR ANTI-REVERSE-ENGINEERING
+// ======================================================================
+const JavaScriptObfuscator = require('javascript-obfuscator');
+
+let obfCache = {};
+
+function getObfuscated(filename) {
+    if (!obfCache[filename]) {
+        try {
+            const raw = fs.readFileSync(path.join(ROOT, filename), 'utf8');
+            // High-performance obfuscation to completely scramble logic and strings
+            const obf = JavaScriptObfuscator.obfuscate(raw, {
+                compact: true,
+                controlFlowFlattening: false,
+                deadCodeInjection: false,
+                debugProtection: true,
+                debugProtectionInterval: 4000,
+                disableConsoleOutput: true,
+                stringArray: true,
+                stringArrayEncoding: ['base64'],
+                stringArrayThreshold: 0.75
+            });
+            obfCache[filename] = obf.getObfuscatedCode();
+        } catch (e) {
+            console.error('Error obfuscating ' + filename, e);
+            return '';
+        }
+    }
+    return obfCache[filename];
+}
+
+app.get('/script.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.send(getObfuscated('script.js'));
+});
+
+app.get('/voice.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.send(getObfuscated('voice.js'));
+});
+
+app.get('/style.css', (req, res) => {
+    res.setHeader('Content-Type', 'text/css');
+    if (!obfCache['style.css']) {
+        try {
+            let raw = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+            obfCache['style.css'] = raw.replace(/\/\*[\s\S]*?\*\//g, '');
+        } catch (e) {
+            console.error('Error minifying CSS', e);
+            return res.send('');
+        }
+    }
+    res.send(obfCache['style.css']);
+});
+
 app.use(express.static(ROOT));
 
 

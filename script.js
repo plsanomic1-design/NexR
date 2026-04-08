@@ -1678,7 +1678,12 @@ window.doubleBetInput = function(inputId) {
 };
 
 // ===== GLOBAL BALANCE SYSTEM =====
-let roBalance = 0.00;    // ZR$ (main currency)
+let _roBalance = 0.00;    // ZR$ (main currency)
+Object.defineProperty(window, 'roBalance', {
+    get: () => _roBalance,
+    set: () => { /* silently block console manipulation */ },
+    configurable: false
+});
 // roBalanceZh removed completely
 let referralEarned = 0;
 let referredCount = 0;
@@ -2748,7 +2753,7 @@ async function confirmWithdraw() {
         }
 
         // SUCCESS - now deduct balance locally and persist
-        roBalance -= coins;
+        _roBalance -= coins;
         userStats.withdrawn += coins;
         userStats.lastWithdrawAt = Date.now();
         addTransaction('Withdrawal (' + afterTax + ' R$ received)', -coins, 'withdraw');
@@ -3074,7 +3079,7 @@ function confirmBuyXp() {
         return;
     }
 
-    roBalance -= amt;
+    _roBalance -= amt;
     userStats.xp += received;
     updateBalanceDisplay();
     updateProfViews();
@@ -3143,9 +3148,9 @@ function applySavePayload(data) {
     if(typeof data.robloxAvatarUrl === 'string' && /^https?:\/\//.test(data.robloxAvatarUrl)) {
         robloxAvatarUrl = data.robloxAvatarUrl;
     } else if(data.robloxAvatarUrl === null || data.robloxAvatarUrl === '') robloxAvatarUrl = null;
-    if(typeof data.balance === 'number' && data.balance >= 0) roBalance = data.balance;
+    if(typeof data.balance === 'number' && data.balance >= 0) _roBalance = data.balance;
     // legacy balanceZh sync removed
-    if(typeof data.flipBalance === 'number' && data.flipBalance > 0) roBalance += data.flipBalance;
+    if(typeof data.flipBalance === 'number' && data.flipBalance > 0) _roBalance += data.flipBalance;
     if(typeof data.referralEarned === 'number' && data.referralEarned >= 0) referralEarned = data.referralEarned;
     if(typeof data.referredCount === 'number' && data.referredCount >= 0) referredCount = data.referredCount;
     if(data.stats && typeof data.stats === 'object') {
@@ -3218,8 +3223,8 @@ function loadFromStorage() {
         } else robloxUserId = null;
         if(typeof data.robloxAvatarUrl === 'string' && /^https?:\/\//.test(data.robloxAvatarUrl)) robloxAvatarUrl = data.robloxAvatarUrl;
         else robloxAvatarUrl = null;
-        if(typeof data.balance === 'number' && data.balance >= 0) roBalance = data.balance;
-        if(typeof data.flipBalance === 'number' && data.flipBalance > 0) roBalance += data.flipBalance;
+        if(typeof data.balance === 'number' && data.balance >= 0) _roBalance = data.balance;
+        if(typeof data.flipBalance === 'number' && data.flipBalance > 0) _roBalance += data.flipBalance;
         if(typeof data.referralEarned === 'number' && data.referralEarned >= 0) referralEarned = data.referralEarned;
         if(typeof data.referredCount === 'number' && data.referredCount >= 0) referredCount = data.referredCount;
         if(data.stats && typeof data.stats === 'object') {
@@ -3399,7 +3404,7 @@ function performLogout() {
     currentUsername = '';
     robloxUserId = null;
     robloxAvatarUrl = null;
-    roBalance = 0;
+    _roBalance = 0;
     referralEarned = 0;
     referredCount = 0;
     userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0, depositedPassIds: [], withdrawAccessRevoked: false };
@@ -3696,7 +3701,7 @@ function initWelcomeModal() {
                 }
             } catch(e) {}
             if(!restoredLocal) {
-                roBalance = 0;
+                _roBalance = 0;
                 referralEarned = 0;
                 referredCount = 0;
                 userStats = { rainWinnings: 0, deposited: 0, withdrawn: 0, wagered: 0, xp: 0, depositedPassIds: [], withdrawAccessRevoked: false };
@@ -3992,7 +3997,7 @@ if (socket) {
     });
 
     socket.on('balance:update', ({ balance, balanceZh }) => {
-        if (typeof balance === 'number' && balance >= 0) roBalance = balance;
+        if (typeof balance === 'number' && balance >= 0) _roBalance = balance;
         // legacy balanceZh socket sync removed
         updateBalanceDisplay();
         updateProfViews();
@@ -4001,7 +4006,7 @@ if (socket) {
 
     socket.on('balance:remote_sync', ({ userId, balance, balanceZh, stats }) => {
         if (!robloxUserId || !accountsMatchServerLocal(userId, robloxUserId)) return;
-        if (typeof balance === 'number' && balance >= 0) roBalance = balance;
+        if (typeof balance === 'number' && balance >= 0) _roBalance = balance;
         // legacy balanceZh socket sync removed
         if (stats && typeof stats === 'object') {
             userStats = { ...userStats, ...stats };
@@ -4019,7 +4024,7 @@ if (socket) {
 
     socket.on('tip:received', (data) => {
         if (robloxUserId && data.recipientId === robloxUserId) {
-            roBalance += data.amount;
+            _roBalance += data.amount;
             updateBalanceDisplay();
             
             // Pop up a toast or alert so they know immediately
@@ -5527,7 +5532,7 @@ async function cbOpenCaseModal(caseId) {
 
     const winningItem = data.item;
     if (typeof data.newBalance === 'number') {
-        roBalance = data.newBalance;
+        _roBalance = data.newBalance;
         updateBalanceDisplay();
     }
 
