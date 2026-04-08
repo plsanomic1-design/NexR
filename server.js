@@ -2883,13 +2883,6 @@ async function finalizeTournamentById(tournamentId) {
     return { ok: true, winners: paid, topScore: maxScore };
 }
 
-// Simulated base player count system
-let baseFakeCount = 11;
-setInterval(() => {
-    // Fluctuates slightly every 3 minutes
-    baseFakeCount = 10 + Math.floor(Math.random() * 3);
-    io.emit('online:count', io.engine.clientsCount + baseFakeCount);
-}, 3 * 60 * 1000);
 
 let globalAnnouncement = { active: false, text: '', expiresAt: 0 };
 
@@ -2901,8 +2894,8 @@ io.on('connection', (socket) => {
     socket.emit('rain:active', activeRains);
     socket.emit('coinflip:list', activeFlips);
     socket.emit('tournaments:update', getPublicTournamentsSnapshot());
-    socket.emit('announcement:sync', globalAnnouncement);
-    io.emit('online:count', io.engine.clientsCount + baseFakeCount);
+    socket.emit('announcement:sync', { ...globalAnnouncement, msLeft: globalAnnouncement.expiresAt - Date.now() });
+    io.emit('online:count', io.engine.clientsCount);
 
     socket.on('player:identify', (data) => {
         if (!data || data.userId == null) return;
@@ -3256,14 +3249,14 @@ io.on('connection', (socket) => {
             text: String(text || '').trim(),
             expiresAt: Date.now() + parseInt(durationMs || 0)
         };
-        io.emit('announcement:sync', globalAnnouncement);
+        io.emit('announcement:sync', { ...globalAnnouncement, msLeft: globalAnnouncement.expiresAt - Date.now() });
         adminActionLog(adminUserId, 'Global Announcement', `Started: ${globalAnnouncement.text}`);
     });
 
     socket.on('admin:stop_announcement', ({ adminUserId }) => {
         if (!ADMIN_IDS.has(String(adminUserId))) return;
         globalAnnouncement = { active: false, text: '', expiresAt: 0 };
-        io.emit('announcement:sync', globalAnnouncement);
+        io.emit('announcement:sync', { ...globalAnnouncement, msLeft: 0 });
         adminActionLog(adminUserId, 'Global Announcement', `Stopped announcement`);
     });
 
@@ -3687,7 +3680,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         onlinePlayers.delete(socket.id);
-        io.emit('online:count', io.engine.clientsCount + baseFakeCount);
+        io.emit('online:count', io.engine.clientsCount);
         console.log(`[Socket] Client disconnected: ${socket.id}`);
     });
 
@@ -3814,7 +3807,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         onlinePlayers.delete(socket.id);
-        io.emit('online:count', io.engine.clientsCount + baseFakeCount);
+        io.emit('online:count', io.engine.clientsCount);
         console.log(`[Socket] Client disconnected: ${socket.id}`);
     });
 
@@ -4562,6 +4555,17 @@ function getObfuscated(filename) {
     }
     return obfCache[filename];
 }
+
+app.get(['/', '/index.html'], (req, res) => {
+    try {
+        let htmlCtx = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+        htmlCtx = htmlCtx.replace(/<!--[\s\S]*?-->/g, '');
+        res.setHeader('Content-Type', 'text/html');
+        res.send(htmlCtx);
+    } catch (e) {
+        res.status(500).send('');
+    }
+});
 
 app.get('/script.js', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');

@@ -4025,7 +4025,11 @@ if (socket) {
         
         clearTimeout(announcementTimer);
         
-        if (!data.active || Date.now() >= data.expiresAt) {
+        let msLeft = data.expiresAt - Date.now();
+        // Fallback: server may provide exact msLeft to prevent client clock sync issues
+        if (data.msLeft !== undefined) msLeft = data.msLeft;
+        
+        if (!data.active || msLeft <= 0) {
             banner.classList.remove('active');
             return;
         }
@@ -4033,7 +4037,6 @@ if (socket) {
         textEl.innerText = data.text;
         banner.classList.add('active');
         
-        const msLeft = data.expiresAt - Date.now();
         announcementTimer = setTimeout(() => {
             banner.classList.remove('active');
         }, msLeft);
