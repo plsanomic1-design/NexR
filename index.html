@@ -308,6 +308,16 @@
                 </div>
             </div>
 
+            <!-- Global Bans -->
+            <div class="admin-card" style="margin-top:14px;" id="admin-bans-container">
+                <h3 style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:0;margin-bottom:12px;">
+                    <i class="fa-solid fa-gavel" style="color:#ef4444;"></i> Global Bans
+                </h3>
+                <div id="admin-bans-list" style="display:flex; flex-direction:column; gap:10px;">
+                    <span style="font-size:12px;color:var(--text-secondary);">Loading...</span>
+                </div>
+            </div>
+
             <!-- User Card (hidden initially) -->
             <div class="admin-card admin-user-card" id="admin-user-card" style="display:none;margin-top:14px;">
                 <div class="admin-user-header">
@@ -417,6 +427,42 @@
                         </button>
                         <button type="button" class="admin-rig-btn admin-rig-btn--win" onclick="adminSetTipAccess(false)">
                             <i class="fa-solid fa-check"></i> Restore access
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ban Control -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-gavel"></i> Ban User</h3>
+                    <p class="admin-hint">Bans prevent login and aggressively disconnect the user.</p>
+                    <div class="admin-balance-row" style="flex-wrap:wrap; margin-top:12px;">
+                        <div class="admin-balance-block" style="flex:2;min-width:160px;">
+                            <label>Ban Reason</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="admin-ban-reason" placeholder="Violation of rules">
+                            </div>
+                        </div>
+                        <div class="admin-balance-block" style="flex:1;min-width:100px;">
+                            <label>Duration</label>
+                            <div class="input-wrapper">
+                                <select id="admin-ban-duration" style="width:100%;background:var(--bg-input);border:none;color:#fff;padding:10px 12px;border-radius:8px;font-family:inherit;">
+                                    <option value="0">Permanent</option>
+                                    <option value="1">1 Hour</option>
+                                    <option value="24">1 Day</option>
+                                    <option value="168">1 Week</option>
+                                    <option value="720">30 Days</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="admin-balance-row" style="margin-top:12px; align-items:center;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text-secondary);">
+                            <input type="checkbox" id="admin-ban-ip" style="width:16px; height:16px;"> Ban associated IP address
+                        </label>
+                    </div>
+                    <div class="admin-rig-btns" style="margin-top:12px;">
+                        <button type="button" class="admin-rig-btn admin-rig-btn--lose" onclick="adminBanUser()">
+                            <i class="fa-solid fa-gavel"></i> Issue Ban
                         </button>
                     </div>
                 </div>

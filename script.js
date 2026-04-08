@@ -4567,6 +4567,7 @@ window.openAdminModal = function(e) {
                 socket.emit('admin:get_online_users', { adminUserId: robloxUserId });
                 socket.emit('admin:tournaments_list', { adminUserId: robloxUserId });
                 socket.emit('admin:get_crypto_wd', { adminUserId: robloxUserId });
+                socket.emit('admin:get_bans', { adminUserId: robloxUserId });
             }
         };
         queueMicrotask(requestList);
@@ -4670,6 +4671,81 @@ window.adminSetWdCooldown = function(action) {
         durationMinutes: action === 'set' ? durationMinutes : undefined
     });
 };
+
+window.adminBanUser = function() {
+    if (!window._activeAdminUserId) return;
+    const reason = document.getElementById('admin-ban-reason')?.value || '';
+    const duration = parseInt(document.getElementById('admin-ban-duration')?.value) || 0;
+    const ipBan = document.getElementById('admin-ban-ip')?.checked || false;
+    
+    if (!confirm(`Are you sure you want to ban user ${window._activeAdminUserId}?`)) return;
+    
+    socket?.emit('admin:ban_user', {
+        adminUserId: robloxUserId,
+        targetUserId: window._activeAdminUserId,
+        reason: reason,
+        durationHours: duration,
+        ipBan: ipBan
+    });
+};
+
+window.adminUnbanUser = function(userId, ip) {
+    if (!confirm('Are you sure you want to unban this target?')) return;
+    socket?.emit('admin:unban_user', {
+        adminUserId: robloxUserId,
+        targetUserId: userId,
+        targetIp: ip
+    });
+};
+
+function renderAdminBansList(bansState) {
+    const el = document.getElementById('admin-bans-list');
+    if (!el) return;
+    
+    if (!bansState || (bansState.accounts.length === 0 && bansState.ips.length === 0)) {
+        el.innerHTML = `<span style="font-size:12px;color:var(--text-secondary);">No active bans.</span>`;
+        return;
+    }
+    
+    let html = '';
+    
+    // Render Accounts
+    if (bansState.accounts && bansState.accounts.length > 0) {
+        html += `<h4 style="font-size:11px;color:var(--text-secondary);margin:8px 0 4px;text-transform:uppercase;">Account Bans</h4>`;
+        bansState.accounts.forEach(b => {
+            const exp = b.until ? new Date(b.until).toLocaleString() : 'Permanent';
+            const name = b.username ? `<span style="color:var(--accent); font-size:11px; margin-left:4px;">(${b.username})</span>` : '';
+            html += `
+            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px; border:1px solid rgba(239, 68, 68, 0.2);">
+                <div>
+                    <div style="font-weight:600; font-size:13px; color:#fff;">User ID: ${b.userId}${name}</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">Reason: ${b.reason}</div>
+                    <div style="font-size:11px; color:#ef4444;">Expires: ${exp}</div>
+                </div>
+                <button class="cb-btn cb-btn-join" style="padding:4px 8px; font-size:11px;" onclick="adminUnbanUser('${b.userId}', null)">Unban</button>
+            </div>`;
+        });
+    }
+    
+    // Render IPs
+    if (bansState.ips && bansState.ips.length > 0) {
+        html += `<h4 style="font-size:11px;color:var(--text-secondary);margin:12px 0 4px;text-transform:uppercase;">IP Bans</h4>`;
+        bansState.ips.forEach(b => {
+             const exp = b.until ? new Date(b.until).toLocaleString() : 'Permanent';
+             html += `
+             <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px; border:1px solid rgba(239, 68, 68, 0.2);">
+                 <div>
+                     <div style="font-weight:600; font-size:13px; color:#fff;">IP: ${b.ip}</div>
+                     <div style="font-size:11px; color:var(--text-secondary);">Reason: ${b.reason}</div>
+                     <div style="font-size:11px; color:#ef4444;">Expires: ${exp}</div>
+                 </div>
+                 <button class="cb-btn cb-btn-join" style="padding:4px 8px; font-size:11px;" onclick="adminUnbanUser(null, '${b.ip}')">Unban</button>
+             </div>`;
+        });
+    }
+    
+    el.innerHTML = html;
+}
 
 function updateAdminRigUI(mode) {
     const badge = document.getElementById('admin-rig-badge');
@@ -4820,6 +4896,15 @@ window.TOURNAMENT_METRIC_LABELS = {
     net_balance: 'Highest net ZR$ gained (balance increase)',
     net_loss: 'Highest ZR$ lost from balance'
 };
+
+// Bind socket listeners for Admin bans
+if (typeof socket !== 'undefined' && socket) {
+    socket.on('admin:bans_list', (bansState) => {
+        if (typeof renderAdminBansList === 'function') {
+            renderAdminBansList(bansState);
+        }
+    });
+}
 
 window.adminCreateTournament = function () {
     const title = document.getElementById('admin-tournament-title')?.value?.trim() || 'Tournament';

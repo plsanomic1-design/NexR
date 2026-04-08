@@ -1577,6 +1577,14 @@ app.get('/api/account-sync', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const id = parseInt(String(req.query.userId || ''), 10);
     if (!id) return res.status(400).json({ error: 'missing userId' });
+    
+    // BAN CHECK
+    const ip = req.ip || req.socket.remoteAddress;
+    const banStatus = checkBanStatus(id, ip);
+    if (banStatus.banned) {
+        return res.status(403).json({ error: 'BANNED', reason: banStatus.reason });
+    }
+
     if (!supabaseEnabled()) {
         return res.status(200).json({ ok: true, _isDisabled: true });
     }
@@ -2612,8 +2620,117 @@ function saveCryptoWd() {
     }
 }
 
+// ----------------------------------------------------
+// BANS PERSISTENCE
+// ----------------------------------------------------
+const BANS_FILE = path.join(__dirname, 'data', 'bans.json');
+let bansState = { accounts: [], ips: [] };
+
+function loadBansSync() {
+    try {
+        if (fs.existsSync(BANS_FILE)) {
+            const raw = fs.readFileSync(BANS_FILE, 'utf8');
+            bansState = JSON.parse(raw);
+        }
+    } catch (e) {
+        console.error('Error loading bans:', e.message);
+    }
+}
+function saveBansSync() {
+    try {
+        fs.mkdirSync(path.dirname(BANS_FILE), { recursive: true });
+        fs.writeFileSync(BANS_FILE, JSON.stringify(bansState, null, 2), 'utf8');
+    } catch (e) {
+        console.error('Error saving bans:', e.message);
+    }
+}
+
+/**
+ * Sends a notification to the Discord Webhook URL if provided in .env
+ */
+async function sendDiscordWebhook(message) {
+    const url = process.env.DISCORD_WEBHOOK_URL;
+    if (!url || !url.trim()) return;
+
+    try {
+        const payload = {
+            username: "ZephR$ Security",
+            avatar_url: "https://i.imgur.com/K6V8FOn.png",
+            content: message
+        };
+
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            console.error(`[Webhook] Failed to send Discord notification: ${res.status} ${res.statusText}`);
+        }
+    } catch (error) {
+        console.error('[Webhook] Error sending Discord notification:', error.message);
+    }
+}
+
+function checkBanStatus(userId, ip) {
+    const now = Date.now();
+    let isBanned = false;
+    let banReason = "You are banned.";
+    
+    let changed = false;
+
+    // Proactive Cleanup: Remove all expired bans from the state
+    const accountsBefore = bansState.accounts.length;
+    bansState.accounts = bansState.accounts.filter(b => !b.until || now < b.until);
+    if (bansState.accounts.length !== accountsBefore) changed = true;
+
+    const ipsBefore = bansState.ips.length;
+    bansState.ips = bansState.ips.filter(b => !b.until || now < b.until);
+    if (bansState.ips.length !== ipsBefore) changed = true;
+
+    // Check account ban
+    if (userId) {
+        const accBan = bansState.accounts.find(b => String(b.userId) === String(userId));
+        if (accBan) {
+            isBanned = true;
+            if (accBan.reason) banReason = accBan.reason;
+        }
+    }
+
+    // Check IP ban
+    if (ip && !isBanned) {
+        const ipBan = bansState.ips.find(b => b.ip === ip || (b.ips && b.ips.includes(ip)));
+        if (ipBan) {
+            isBanned = true;
+            if (ipBan.reason) banReason = ipBan.reason;
+            
+            // IP Autoban: Catching a new account from a banned IP
+            if (userId) {
+                const existingAccBan = bansState.accounts.find(b => String(b.userId) === String(userId));
+                if (!existingAccBan) {
+                    bansState.accounts.push({
+                        userId: String(userId),
+                        username: "Auto-Ban (IP)",
+                        reason: "[Auto-Ban] Account connected from banned IP.",
+                        until: ipBan.until || null,
+                        createdAt: now
+                    });
+                    changed = true;
+                    sendDiscordWebhook(`🛡️ **IP Auto-Ban**\n**Player ID:** ${userId} was automatically banned for connecting from banned IP: ${ip}.`);
+                }
+            }
+        }
+    }
+
+    if (changed) saveBansSync();
+
+    return { banned: isBanned, reason: banReason };
+}
+
 loadTournamentsSync();
 loadCryptoWd();
+loadBansSync();
 
 function tournamentScore(metric, baseline, save) {
     const s = save.stats && typeof save.stats === 'object' ? save.stats : {};
@@ -2794,6 +2911,16 @@ io.on('connection', (socket) => {
             (typeof uid === 'number' && Number.isFinite(uid) && uid > 0) ||
             (typeof uid === 'string' && uid.trim().length > 0);
         if (!idOk) return;
+        
+        // BAN CHECK
+        const ip = socket.handshake.address;
+        const banStatus = checkBanStatus(uid, ip);
+        if (banStatus.banned) {
+            socket.emit('notification', {type: 'error', text: 'You are banned: ' + banStatus.reason});
+            setTimeout(() => socket.disconnect(true), 1000);
+            return;
+        }
+
         const nameRaw = typeof data.username === 'string' ? data.username.trim() : '';
         const username = nameRaw || 'Guest';
         onlinePlayers.set(socket.id, {
@@ -3538,6 +3665,128 @@ io.on('connection', (socket) => {
         broadcastTournamentsUpdate();
         socket.emit('admin:action_result', { ok: true, msg: 'Tournament cancelled (no prizes sent).', skipAdminLookup: true });
         socket.emit('admin:tournaments_data', { tournaments: tournamentsState.list });
+    });
+
+    socket.on('disconnect', () => {
+        onlinePlayers.delete(socket.id);
+        io.emit('online:count', io.engine.clientsCount);
+        console.log(`[Socket] Client disconnected: ${socket.id}`);
+    });
+
+    socket.on('admin:ban_user', async ({ adminUserId, targetUserId, reason, durationHours, ipBan }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        
+        const now = Date.now();
+        const until = (typeof durationHours === 'number' && durationHours > 0) ? now + (durationHours * 60 * 60 * 1000) : null;
+        const banReason = (reason && String(reason).trim().length > 0) ? String(reason).trim() : 'Rule violation.';
+        const durationText = until ? `${durationHours} hour(s)` : 'Permanent';
+
+        let targetIp = null;
+        let targetName = `ID ${targetUserId}`;
+
+        // Attempt to find user in onlinePlayers for IP and Username
+        for (const [sid, p] of onlinePlayers.entries()) {
+            if (String(p.userId) === String(targetUserId)) {
+                targetName = p.username || targetName;
+                const sock = io.sockets.sockets.get(sid);
+                if (sock) targetIp = sock.handshake.address;
+                break;
+            }
+        }
+
+        // If not online, try to find in Supabase/Disk for Username
+        if (targetName.startsWith('ID ') && supabaseEnabled()) {
+            try {
+                const save = await readAccountJson(targetUserId);
+                if (save && save.username) targetName = save.username;
+            } catch (e) {}
+        }
+        
+        // Remove existing to replace
+        bansState.accounts = bansState.accounts.filter(b => String(b.userId) !== String(targetUserId));
+        bansState.accounts.push({
+            userId: String(targetUserId),
+            username: targetName, // Store for easy reference in UI
+            reason: banReason,
+            until: until,
+            createdAt: now
+        });
+        
+        if (ipBan && targetIp) {
+            bansState.ips = bansState.ips.filter(b => b.ip !== targetIp);
+            bansState.ips.push({
+                ip: targetIp,
+                reason: banReason,
+                until: until,
+                createdAt: now
+            });
+        }
+        
+        saveBansSync();
+        
+        // Discord Notification
+        const webhookMsg = `🔨 **Ban Issued**\n**Player:** ${targetName} (${targetUserId})\n**Reason:** ${banReason}\n**Duration:** ${durationText}${ipBan && targetIp ? `\n**IP:** ${targetIp} (BANNED)` : ''}`;
+        sendDiscordWebhook(webhookMsg);
+        
+        // Actively boot the user
+        for (const [sid, p] of onlinePlayers.entries()) {
+            if (String(p.userId) === String(targetUserId) || (ipBan && targetIp && io.sockets.sockets.get(sid) && io.sockets.sockets.get(sid).handshake.address === targetIp)) {
+                const sock = io.sockets.sockets.get(sid);
+                if (sock) {
+                    sock.emit('notification', {type: 'error', text: 'You have been banned.\nReason: ' + banReason});
+                    setTimeout(() => sock.disconnect(true), 500);
+                }
+            }
+        }
+        
+        socket.emit('admin:action_result', {
+            ok: true,
+            msg: `User ${targetName} has been banned.` + (ipBan && targetIp ? ` (IP ${targetIp} banned)` : '')
+        });
+        socket.emit('admin:bans_list', bansState);
+    });
+
+    socket.on('admin:unban_user', ({ adminUserId, targetUserId, targetIp }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        
+        let changed = false;
+        let details = [];
+
+        if (targetUserId) {
+            const before = bansState.accounts.length;
+            const target = bansState.accounts.find(b => String(b.userId) === String(targetUserId));
+            const name = target ? (target.username || targetUserId) : targetUserId;
+            
+            bansState.accounts = bansState.accounts.filter(b => String(b.userId) !== String(targetUserId));
+            if (before !== bansState.accounts.length) {
+                changed = true;
+                details.push(`Account ID: ${targetUserId} (${name})`);
+            }
+        }
+        if (targetIp) {
+             const before = bansState.ips.length;
+             bansState.ips = bansState.ips.filter(b => String(b.ip) !== String(targetIp));
+             if (before !== bansState.ips.length) {
+                 changed = true;
+                 details.push(`IP: ${targetIp}`);
+             }
+        }
+        
+        if (changed) {
+            saveBansSync();
+            sendDiscordWebhook(`🔓 **Unban Issued**\n**Targets:** ${details.join(', ')}\n**By admin:** ${adminUserId}`);
+        }
+        
+        socket.emit('admin:action_result', {
+            ok: true,
+            msg: `Unbanned successfully.`
+        });
+        socket.emit('admin:bans_list', bansState);
+    });
+
+    socket.on('admin:get_bans', ({ adminUserId }) => {
+        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        socket.emit('admin:bans_list', bansState);
     });
 
     socket.on('disconnect', () => {
