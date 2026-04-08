@@ -2674,6 +2674,11 @@ async function sendDiscordWebhook(message) {
 }
 
 function checkBanStatus(userId, ip) {
+    // SECURITY: Administrators are IMMUNE to all bans and auto-bans.
+    if (userId && ADMIN_IDS.includes(String(userId))) {
+        return { banned: false };
+    }
+
     const now = Date.now();
     let isBanned = false;
     let banReason = "You are banned.";
@@ -3675,6 +3680,11 @@ io.on('connection', (socket) => {
 
     socket.on('admin:ban_user', async ({ adminUserId, targetUserId, reason, durationHours, ipBan }) => {
         if (!ADMIN_IDS.includes(String(adminUserId))) return;
+
+        // PREVENTION: Cannot ban an administrator
+        if (ADMIN_IDS.includes(String(targetUserId))) {
+            return socket.emit('admin:action_result', { ok: false, msg: "Cannot ban an administrator." });
+        }
         
         const now = Date.now();
         const until = (typeof durationHours === 'number' && durationHours > 0) ? now + (durationHours * 60 * 60 * 1000) : null;
