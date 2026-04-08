@@ -43,6 +43,37 @@ body {
     overflow: hidden;
 }
 
+/* =============================================
+   GLOBAL ANNOUNCEMENT BANNER
+   ============================================= */
+.global-announcement-banner {
+    width: 100%;
+    background: #e3b341;
+    color: #000;
+    font-weight: 800;
+    font-size: 13px;
+    padding: 10px 0;
+    overflow: hidden;
+    position: relative;
+    display: none; /* hidden by default until socket syncs */
+    z-index: 9999;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(227, 179, 65, 0.2);
+}
+.global-announcement-banner.active {
+    display: block;
+}
+.marquee {
+    white-space: nowrap;
+    display: inline-block;
+    padding-left: 100%;
+    animation: marquee 20s linear infinite;
+}
+@keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
 .app-shell {
     display: flex;
     flex: 1;

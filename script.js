@@ -4017,6 +4017,28 @@ if (socket) {
         if (typeof saveToStorage === 'function') saveToStorage();
     });
 
+    let announcementTimer = null;
+    socket.on('announcement:sync', (data) => {
+        const banner = document.getElementById('global-announcement');
+        const textEl = document.getElementById('global-announcement-text');
+        if (!banner || !textEl) return;
+        
+        clearTimeout(announcementTimer);
+        
+        if (!data.active || Date.now() >= data.expiresAt) {
+            banner.classList.remove('active');
+            return;
+        }
+        
+        textEl.innerText = data.text;
+        banner.classList.add('active');
+        
+        const msLeft = data.expiresAt - Date.now();
+        announcementTimer = setTimeout(() => {
+            banner.classList.remove('active');
+        }, msLeft);
+    });
+
     socket.on('notification', ({ type, text }) => {
         // For now use alert, or we could add a toast system
         alert(text);
@@ -4675,6 +4697,48 @@ window.adminSetWdCooldown = function(action) {
         action,
         durationMinutes: action === 'set' ? durationMinutes : undefined
     });
+};
+
+window.adminSetAnnouncement = function() {
+    const textEl = document.getElementById('admin-announce-text');
+    const dEl = document.getElementById('admin-announce-d');
+    const hEl = document.getElementById('admin-announce-h');
+    const mEl = document.getElementById('admin-announce-m');
+    const sEl = document.getElementById('admin-announce-s');
+    
+    if (!textEl || !textEl.value.trim()) {
+        alert('Please enter announcement text.');
+        return;
+    }
+    
+    let days = parseInt(dEl ? dEl.value : '0') || 0;
+    let hours = parseInt(hEl ? hEl.value : '0') || 0;
+    let mins = parseInt(mEl ? mEl.value : '0') || 0;
+    let secs = parseInt(sEl ? sEl.value : '0') || 0;
+    
+    const durationMs = (days * 86400000) + (hours * 3600000) + (mins * 60000) + (secs * 1000);
+    
+    if (durationMs <= 0) {
+        alert('Please enter a valid time duration (at least 1 second).');
+        return;
+    }
+
+    socket?.emit('admin:set_announcement', {
+        adminUserId: robloxUserId,
+        text: textEl.value.trim(),
+        durationMs
+    });
+    
+    // reset UI
+    textEl.value = '';
+    if (dEl) dEl.value = '0';
+    if (hEl) hEl.value = '0';
+    if (mEl) mEl.value = '5';
+    if (sEl) sEl.value = '0';
+};
+
+window.adminStopAnnouncement = function() {
+    socket?.emit('admin:stop_announcement', { adminUserId: robloxUserId });
 };
 
 window.adminBanUser = function() {

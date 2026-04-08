@@ -1511,67 +1511,14 @@ app.options('/api/live-feed', (req, res) => {
 
 app.get('/api/live-feed', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
-    let fromDb = null;
-    try {
-        fromDb = await liveFeedListSupabase(Math.max(limit, 80));
-    } catch (e) {
-        console.error('GET /api/live-feed:', e);
-    }
-    if (fromDb === null) {
-        return res.json({ events: liveFeedMemory.slice(0, limit).map((e) => ({ ...e })) });
-    }
-    const mem = liveFeedMemory.map((e) => ({ ...e }));
-    const merged = [...fromDb, ...mem].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    const seen = new Set();
-    const out = [];
-    for (const e of merged) {
-        const k = String(e.id != null ? e.id : `${e.username}|${e.gameKey}|${e.createdAt}|${e.payout}`);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        out.push(e);
-        if (out.length >= limit) break;
-    }
-    res.json({ events: out });
+    // FEATURE DISABLED: Return empty feed until re-enabled
+    return res.json({ events: [] });
 });
 
 app.post('/api/live-feed', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    if (!liveFeedCheckRateLimit(ip)) {
-        return res.status(429).json({ error: 'Too many feed updates. Slow down.' });
-    }
-    const body = req.body || {};
-    const gameKey = String(body.gameKey || '')
-        .toLowerCase()
-        .replace(/[^a-z]/g, '');
-    if (!LIVE_FEED_GAME_KEYS.has(gameKey)) {
-        return res.status(400).json({ error: 'invalid gameKey' });
-    }
-    const username = sanitizeLiveFeedUsername(body.username);
-    const bet = num(body.bet, 0);
-    const multiplier = num(body.multiplier, 0);
-    const payout = num(body.payout, 0);
-    if (bet < 0 || bet > 1e9 || multiplier < 0 || multiplier > 1e6 || payout < -1e9 || payout > 1e9) {
-        return res.status(400).json({ error: 'invalid amounts' });
-    }
-    const ev = {
-        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        username,
-        gameKey,
-        bet,
-        multiplier,
-        payout,
-        createdAt: Date.now()
-    };
-    let persisted = false;
-    try {
-        persisted = await liveFeedInsertSupabase(ev);
-    } catch (e) {
-        persisted = false;
-    }
-    if (!persisted) liveFeedMemoryPush(ev);
-    res.json({ ok: true });
+    // FEATURE DISABLED
+    res.json({ ok: true, msg: 'Feed currently disabled' });
 });
 
 app.options('/api/account-sync', (req, res) => {
@@ -2936,6 +2883,16 @@ async function finalizeTournamentById(tournamentId) {
     return { ok: true, winners: paid, topScore: maxScore };
 }
 
+// Simulated base player count system
+let baseFakeCount = 11;
+setInterval(() => {
+    // Fluctuates slightly every 3 minutes
+    baseFakeCount = 10 + Math.floor(Math.random() * 3);
+    io.emit('online:count', io.engine.clientsCount + baseFakeCount);
+}, 3 * 60 * 1000);
+
+let globalAnnouncement = { active: false, text: '', expiresAt: 0 };
+
 io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
 
@@ -2944,7 +2901,8 @@ io.on('connection', (socket) => {
     socket.emit('rain:active', activeRains);
     socket.emit('coinflip:list', activeFlips);
     socket.emit('tournaments:update', getPublicTournamentsSnapshot());
-    io.emit('online:count', io.engine.clientsCount);
+    socket.emit('announcement:sync', globalAnnouncement);
+    io.emit('online:count', io.engine.clientsCount + baseFakeCount);
 
     socket.on('player:identify', (data) => {
         if (!data || data.userId == null) return;
@@ -3290,6 +3248,24 @@ io.on('connection', (socket) => {
     // ===================================
     // ADMIN ACTIONS
     // ===================================
+
+    socket.on('admin:set_announcement', ({ adminUserId, text, durationMs }) => {
+        if (!ADMIN_IDS.has(String(adminUserId))) return;
+        globalAnnouncement = {
+            active: true,
+            text: String(text || '').trim(),
+            expiresAt: Date.now() + parseInt(durationMs || 0)
+        };
+        io.emit('announcement:sync', globalAnnouncement);
+        adminActionLog(adminUserId, 'Global Announcement', `Started: ${globalAnnouncement.text}`);
+    });
+
+    socket.on('admin:stop_announcement', ({ adminUserId }) => {
+        if (!ADMIN_IDS.has(String(adminUserId))) return;
+        globalAnnouncement = { active: false, text: '', expiresAt: 0 };
+        io.emit('announcement:sync', globalAnnouncement);
+        adminActionLog(adminUserId, 'Global Announcement', `Stopped announcement`);
+    });
 
     socket.on('admin:get_crypto_wd', ({ adminUserId }) => {
         if (!socket.isAdminMod) return;
@@ -3711,7 +3687,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         onlinePlayers.delete(socket.id);
-        io.emit('online:count', io.engine.clientsCount);
+        io.emit('online:count', io.engine.clientsCount + baseFakeCount);
         console.log(`[Socket] Client disconnected: ${socket.id}`);
     });
 
@@ -3838,7 +3814,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         onlinePlayers.delete(socket.id);
-        io.emit('online:count', io.engine.clientsCount);
+        io.emit('online:count', io.engine.clientsCount + baseFakeCount);
         console.log(`[Socket] Client disconnected: ${socket.id}`);
     });
 
