@@ -20,6 +20,11 @@ const express = require('express');
 const noblox = require('noblox.js');
 const { Server } = require('socket.io');
 
+// Check Node.js fetch availability early
+if (typeof fetch === 'undefined') {
+    console.warn('[System] Global fetch is not available. Webhooks and Supabase may fail. Node 18+ is recommended.');
+}
+
 const app = express();
 /** Render, Fly, Heroku, etc. sit behind a reverse proxy — required for correct req.ip and WebSocket upgrades */
 app.set('trust proxy', 1);
@@ -167,15 +172,24 @@ function getOnlineUsernameByUserId(userId) {
 }
 
 async function postDiscordAudit(text) {
-    if (!DISCORD_AUDIT_WEBHOOK) return;
+    if (!DISCORD_AUDIT_WEBHOOK) {
+        console.warn('[Webhook] No webhook URL configured, skipping audit.');
+        return;
+    }
     try {
-        await fetch(DISCORD_AUDIT_WEBHOOK, {
+        const res = await fetch(DISCORD_AUDIT_WEBHOOK, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: text })
         });
+        if (res.ok) {
+            console.log(`[Webhook] Audit sent successfully: ${text.slice(0, 50)}...`);
+        } else {
+            const body = await res.text();
+            console.error(`[Webhook] Failed to send audit (HTTP ${res.status}):`, body);
+        }
     } catch (e) {
-        console.error('[Discord Webhook] send failed:', e && e.message);
+        console.error('[Webhook] Network error during send:', e && e.message);
     }
 }
 
@@ -4276,6 +4290,14 @@ hydrateCaseItemThumbnails()
                 );
             } else {
                 console.log('Account data: Local JSON only (save/load endpoints available)');
+            }
+            
+            // Webhook Diagnostic
+            if (process.env.DISCORD_WEBHOOK_URL) {
+                const wh = process.env.DISCORD_WEBHOOK_URL.trim();
+                console.log(`[Webhook] Active via .env: ${wh.slice(0, 35)}...${wh.slice(-8)}`);
+            } else {
+                console.log('[Webhook] Active via fallback logic.');
             }
         });
     });
