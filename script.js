@@ -2287,6 +2287,7 @@ const GAME_PASS_DEPOSIT_TIERS = [
     { id: 1784340755, robux: 50 },
     { id: 1784248824, robux: 60 },
     { id: 1783479386, robux: 70 },
+    { id: 1790780840, robux: 75 },
     { id: 1784464672, robux: 80 },
     { id: 1784464674, robux: 90 },
     { id: 1783918985, robux: 100 }
