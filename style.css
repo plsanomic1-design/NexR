@@ -4483,7 +4483,8 @@ select optgroup {
 /* Horizontal Block Items (Color Text Overlays) */
 .cb-horiz-item {
     width: 130px;
-    height: 70px;
+    min-height: 88px;
+    height: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -4493,6 +4494,8 @@ select optgroup {
     flex-shrink: 0;
     position: relative;
     overflow: hidden;
+    box-sizing: border-box;
+    padding: 4px 2px;
 }
 .cb-horiz-item.cb-item-rarity-common { background: linear-gradient(135deg, rgba(156,163,175,.3), rgba(156,163,175,.6)); border: 1px solid rgba(156,163,175,.8); box-shadow: inset 0 0 10px rgba(156,163,175,.4); }
 .cb-horiz-item.cb-item-rarity-uncommon { background: linear-gradient(135deg, rgba(52,211,153,.3), rgba(52,211,153,.6)); border: 1px solid rgba(52,211,153,.8); box-shadow: inset 0 0 10px rgba(52,211,153,.4); }

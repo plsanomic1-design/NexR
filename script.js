@@ -5447,7 +5447,7 @@ async function cbOpenCaseModal(caseId) {
 
     track.innerHTML = items.map((item, i) => `
         <div class="cb-horiz-item cb-item-rarity-${item.rarity}" data-idx="${i}">
-            ${item.icon ? `<img class="cb-horiz-item-img" src="${item.icon}" alt="" crossorigin="anonymous">` : ''}
+            ${item.icon ? `<img class="cb-horiz-item-img" src="${item.icon}" alt="">` : ''}
             <div class="cb-horiz-item-name">${item.name}</div>
             <div class="cb-horiz-item-val">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
         </div>
@@ -5616,7 +5616,7 @@ function cbRenderBattleRoom(b) {
 
         <div class="cb-1v1-spinners" style="display:${b.status==='active'?'block':'none'}">
             ${b.players.map(p => `
-            <div class="cb-1v1-spinner-line" id="bspinnerbox-${p.userId}" style="height:70px; margin-bottom:5px;">
+            <div class="cb-1v1-spinner-line" id="bspinnerbox-${p.userId}" style="margin-bottom:5px;">
                 <div class="win-tick"></div>
                 <div class="cb-battle-spinner-track" id="bspinner-${p.userId}" style="flex-direction:row; padding-left:calc(50% - 67px); padding-top:0;"></div>
             </div>`).join('')}
@@ -5668,7 +5668,7 @@ function cbRenderBattleRoom(b) {
 
 function cbRollCardHTML(item) {
     const img = item.icon
-        ? `<img class="cb-horiz-item-img cb-horiz-item-img--compact" src="${item.icon}" alt="" crossorigin="anonymous">`
+        ? `<img class="cb-horiz-item-img cb-horiz-item-img--compact" src="${item.icon}" alt="">`
         : '';
     return `
         <div class="cb-horiz-item cb-item-rarity-${item.rarity}" style="animation: cbRollIn .3s cubic-bezier(.34,1.56,.64,1); width:110px; min-height:72px; margin-right:4px;">
@@ -5757,10 +5757,11 @@ function cbBindSockets() {
                     track.style.transform = 'translate3d(0, 0, 0)';
                     
                     // UNIVERSAL HORIZONTAL track items (color blocks with names/values)
-                    track.innerHTML = fakeItems.map(item => `
+                    track.innerHTML = fakeItems.map((item) => `
                         <div class="cb-horiz-item cb-item-rarity-${item.rarity}">
+                            ${item.icon ? `<img class="cb-horiz-item-img" src="${item.icon}" alt="">` : ''}
                             <div class="cb-horiz-item-name">${item.name}</div>
-                            <div class="cb-horiz-item-val">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
+                            <div class="cb-horiz-item-val">${item.value ? item.value.toLocaleString() + ' ZR$' : '—'}</div>
                         </div>
                     `).join('');
                     
