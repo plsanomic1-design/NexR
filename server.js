@@ -1003,7 +1003,7 @@ function getCusState(userId) {
         },
         recordWin: function(isBigWin) {
             state.winStreak++;
-            if (isBigWin && Math.random() < 0.142) { 
+            if (isBigWin && Math.random() < 0.115) { 
                 state.forceLossNext = true;
             }
         },
