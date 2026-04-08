@@ -149,6 +149,36 @@ function formatAmountDisplay(n) {
     return x.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+const DISCORD_AUDIT_WEBHOOK = (
+    process.env.DISCORD_WEBHOOK_URL ||
+    'https://discord.com/api/webhooks/1491257150884941929/X1wZVYEQNIw1dfm9731rvRSIUyGm9rNIxJFtbcRNPKU_jkGa1oRqbMadTWfEA8k3Rghb'
+).trim();
+
+function getOnlineUsernameByUserId(userId) {
+    const needle = String(userId || '').trim();
+    if (!needle) return null;
+    for (const p of onlinePlayers.values()) {
+        if (String(p.userId) === needle) {
+            const u = typeof p.username === 'string' ? p.username.trim() : '';
+            return u || null;
+        }
+    }
+    return null;
+}
+
+async function postDiscordAudit(text) {
+    if (!DISCORD_AUDIT_WEBHOOK) return;
+    try {
+        await fetch(DISCORD_AUDIT_WEBHOOK, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text })
+        });
+    } catch (e) {
+        console.error('[Discord Webhook] send failed:', e && e.message);
+    }
+}
+
 /** Roblox user id from presence payloads (number or numeric string). Guest socket ids return null. */
 function parseRobloxNumericId(val) {
     if (typeof val === 'number' && Number.isFinite(val) && val > 0) return Math.floor(val);
@@ -1798,6 +1828,13 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                             if (result.ok) {
                                 emitBalanceRemoteSync(io, uid, { balance: newBal, stats: {} });
                                 console.log(`Credited ${depositAmount} ZR$ (crypto) to user ${uid}`);
+                                const who = getOnlineUsernameByUserId(uid) || `User ${uid}`;
+                                const paidCoin = String(paymentData.pay_currency || '').toUpperCase();
+                                const paidAmount = Number(paymentData.pay_amount || 0);
+                                const paidText = Number.isFinite(paidAmount) && paidAmount > 0
+                                    ? `${paidAmount} ${paidCoin || 'CRYPTO'}`
+                                    : `${depositAmount} ZR$ equivalent`;
+                                postDiscordAudit(`💰 ${who} deposited ${paidText}. Credited ${depositAmount.toLocaleString('en-US')} ZR$.`);
                             }
                         }
                     } catch (e) {
@@ -1987,6 +2024,10 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     lockDeposit(userId, gamePassId);
 
     console.log(`[Deposit] user=${userId} gp=${gamePassId} credited=${credit} newBal=${save.balance}`);
+    {
+        const who = getOnlineUsernameByUserId(userId) || `User ${userId}`;
+        postDiscordAudit(`💰 ${who} deposited ${credit.toLocaleString('en-US')} ZR$ (Game Pass).`);
+    }
     res.json({ ok: true, save, credited: credit });
 });
 
@@ -2050,6 +2091,15 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
     
     cryptoWdState.push(wdReq);
     saveCryptoWd();
+    const fiatLabel = `${fiatValue.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    })} ${String(wdReq.fiatCurrency || 'eur').toUpperCase()}`;
+    postDiscordAudit(
+        `📤 ${wdUsername || `User ${userId}`} requested withdraw ${zhAmount.toLocaleString(
+            'en-US'
+        )} ZR$ (~${fiatLabel}) to ${String(coin || '').toUpperCase()}.`
+    );
     
     res.json({ ok: true, request: wdReq });
     
@@ -2296,6 +2346,11 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
 
     if (!updateResult.ok) {
         console.error('[Withdraw] CRITICAL: Gamepass bought but balance update failed!', updateResult);
+    }
+
+    {
+        const who = getOnlineUsernameByUserId(userId) || `User ${userId}`;
+        postDiscordAudit(`📤 ${who} withdrew ${Number(zrCoins || 0).toLocaleString('en-US')} ZR$.`);
     }
 
     return res.json({
