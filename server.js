@@ -2710,6 +2710,16 @@ async function sendDiscordWebhook(message) {
     }
 }
 
+/**
+ * Utility to log administrative actions to console and Discord.
+ */
+function adminActionLog(adminId, action, detail) {
+    const msg = `[AdminAction] Admin ${adminId} performed ${action}: ${detail}`;
+    console.log(msg);
+    const discordMsg = `🛡️ **Admin Action**\n**Admin:** ${adminId}\n**Action:** ${action}\n**Detail:** ${detail}`;
+    sendDiscordWebhook(discordMsg).catch(err => console.error('[AdminAction] Webhook fail:', err.message));
+}
+
 function checkBanStatus(userId, ip) {
     // SECURITY: Administrators are IMMUNE to all bans and auto-bans.
     if (userId && ADMIN_IDS.includes(String(userId))) {
