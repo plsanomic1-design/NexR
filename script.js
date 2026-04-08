@@ -5447,6 +5447,7 @@ async function cbOpenCaseModal(caseId) {
 
     track.innerHTML = items.map((item, i) => `
         <div class="cb-horiz-item cb-item-rarity-${item.rarity}" data-idx="${i}">
+            ${item.icon ? `<img class="cb-horiz-item-img" src="${item.icon}" alt="" crossorigin="anonymous">` : ''}
             <div class="cb-horiz-item-name">${item.name}</div>
             <div class="cb-horiz-item-val">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
         </div>
@@ -5666,8 +5667,12 @@ function cbRenderBattleRoom(b) {
 }
 
 function cbRollCardHTML(item) {
+    const img = item.icon
+        ? `<img class="cb-horiz-item-img cb-horiz-item-img--compact" src="${item.icon}" alt="" crossorigin="anonymous">`
+        : '';
     return `
-        <div class="cb-horiz-item cb-item-rarity-${item.rarity}" style="animation: cbRollIn .3s cubic-bezier(.34,1.56,.64,1); width:110px; height:60px; margin-right:4px;">
+        <div class="cb-horiz-item cb-item-rarity-${item.rarity}" style="animation: cbRollIn .3s cubic-bezier(.34,1.56,.64,1); width:110px; min-height:72px; margin-right:4px;">
+            ${img}
             <div class="cb-horiz-item-name" style="font-size:10px;">${item.name}</div>
             <div class="cb-horiz-item-val" style="font-size:10px;">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
         </div>

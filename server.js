@@ -3501,7 +3501,73 @@ io.on('connection', (socket) => {
 // CASE BATTLES SYSTEM
 // ======================================================================
 
-const CASES_DATA = [
+/**
+ * All case prize rows (every item in every case), sorted by in-game value ascending
+ * (then case id, then item id), are mapped 1:1 onto this ladder. Names match Roblox
+ * catalog titles; images are filled from the thumbnails API at startup.
+ * Low ZR$ rewards use cheaper/free catalog items; high ZR$ rewards use famous limiteds.
+ */
+const CASE_ROBLOX_CATALOG_LADDER_ASC = [
+    { assetId: 48474313, name: 'Red Roblox Cap' },
+    { assetId: 63690008, name: 'Pal Hair' },
+    { assetId: 417457461, name: "ROBLOX 'R' Baseball Cap" },
+    { assetId: 376548738, name: 'Brown Charmer Hair' },
+    { assetId: 451221329, name: 'True Blue Hair' },
+    { assetId: 62234425, name: 'Brown Hair' },
+    { assetId: 451220849, name: 'Lavender Updo' },
+    { assetId: 376524487, name: 'Blonde Spiked Hair' },
+    { assetId: 376526673, name: 'Stylish Aviators' },
+    { assetId: 376527500, name: 'Orange Shades' },
+    { assetId: 6340227, name: 'Trim' },
+    { assetId: 1374269, name: 'Kitty Ears' },
+    { assetId: 1744068302, name: 'Distressed Jeans' },
+    { assetId: 7074764, name: 'Chill' },
+    { assetId: 583722751, name: '[+] Control' },
+    { assetId: 121946387, name: "Bombo's Survival Knife" },
+    { assetId: 11999247, name: 'Subspace Tripmine' },
+    { assetId: 122278207, name: 'Punk Wrist Cuff' },
+    { assetId: 30649735, name: 'Magnificent Magenta Paintball Gun' },
+    { assetId: 193769809, name: 'Boombox Gear 3.0' },
+    { assetId: 86498048, name: 'Man Head' },
+    { assetId: 1028606, name: 'Red Baseball Cap' },
+    { assetId: 1048037, name: 'Bighead' },
+    { assetId: 17450053, name: 'Sinister P.' },
+    { assetId: 86494893, name: 'Darksteel Katana of Ancient Illuminators' },
+    { assetId: 125013849, name: 'Taxi' },
+    { assetId: 67798397, name: 'Annoying Elf: Finsurf' },
+    { assetId: 9254254, name: 'Rubber Duckie' },
+    { assetId: 1081300, name: 'Golden Crown' },
+    { assetId: 151784320, name: 'Doge' },
+    { assetId: 139573061, name: 'Frost Guard General Helm' },
+    { assetId: 82665932, name: "Overseer's Eye" },
+    { assetId: 1365767, name: 'Valkyrie Helm' },
+    { assetId: 1029025, name: 'The Classic ROBLOX Fedora' },
+    { assetId: 4390891467, name: 'Ice Valkyrie' },
+    { assetId: 11748356, name: "Clockwork's Shades" },
+    { assetId: 74891470, name: 'Frozen Horns of the Frigid Planes' },
+    { assetId: 1285307, name: 'Sparkle Time Fedora' },
+    { assetId: 134082579, name: 'Headless Head' },
+    { assetId: 31101391, name: 'Dominus Infernus' },
+    { assetId: 48545806, name: 'Dominus Frigidus' },
+    { assetId: 21070012, name: 'Dominus Empyreus' },
+    { assetId: 1285307, name: 'Sparkle Time Fedora' },
+    { assetId: 134082579, name: 'Headless Head' },
+    { assetId: 31101391, name: 'Dominus Infernus' },
+    { assetId: 48545806, name: 'Dominus Frigidus' },
+    { assetId: 21070012, name: 'Dominus Empyreus' },
+    { assetId: 11748356, name: "Clockwork's Shades" },
+    { assetId: 74891470, name: 'Frozen Horns of the Frigid Planes' },
+    { assetId: 4390891467, name: 'Ice Valkyrie' },
+    { assetId: 1365767, name: 'Valkyrie Helm' },
+    { assetId: 1285307, name: 'Sparkle Time Fedora' },
+    { assetId: 134082579, name: 'Headless Head' },
+    { assetId: 31101391, name: 'Dominus Infernus' },
+    { assetId: 48545806, name: 'Dominus Frigidus' },
+    { assetId: 21070012, name: 'Dominus Empyreus' },
+    { assetId: 21070012, name: 'Dominus Empyreus' }
+];
+
+const CASES_DATA_BASE = [
     {
         id: 'starter',
         name: 'Starter Case',
@@ -3509,10 +3575,10 @@ const CASES_DATA = [
         image: '/case_starter.png',
         color: '#00d2ff',
         items: [
-            { id: 'blue_gem',    name: 'Blue Gem',      value: 30,   chance: 55, rarity: 'common',    icon: 'https://tr.rbxcdn.com/c4e72f0d3a3e73e37fc6db2c41df2e2d/420/420/Hat/Png' },
-            { id: 'gold_coin',   name: 'Gold Coin',     value: 80,   chance: 30, rarity: 'uncommon',  icon: 'https://tr.rbxcdn.com/cf9a9ffa928c54ef77a4ca20ba940793/420/420/Hat/Png' },
-            { id: 'crown',       name: 'Silver Crown',  value: 200,  chance: 12, rarity: 'rare',      icon: 'https://tr.rbxcdn.com/e9c4b27d34b0c773a5ac0b4b0c898b13/420/420/Hat/Png' },
-            { id: 'diamond',     name: 'Diamond',       value: 500,  chance: 3,  rarity: 'legendary', icon: 'https://tr.rbxcdn.com/d6e50c4e91218a6abff19c8278e7f0a5/420/420/Hat/Png' },
+            { id: 'blue_gem', value: 30, chance: 55, rarity: 'common' },
+            { id: 'gold_coin', value: 80, chance: 30, rarity: 'uncommon' },
+            { id: 'crown', value: 200, chance: 12, rarity: 'rare' },
+            { id: 'diamond', value: 500, chance: 3, rarity: 'legendary' }
         ]
     },
     {
@@ -3522,11 +3588,11 @@ const CASES_DATA = [
         image: '/case_standard.png',
         color: '#a855f7',
         items: [
-            { id: 'bronze_shield', name: 'Bronze Shield', value: 100,  chance: 40, rarity: 'common',    icon: 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/420/420/Hat/Png' },
-            { id: 'silver_sword',  name: 'Silver Sword',  value: 250,  chance: 30, rarity: 'uncommon',  icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
-            { id: 'hoverboard',    name: 'Hover Board',   value: 700,  chance: 20, rarity: 'rare',      icon: 'https://tr.rbxcdn.com/0e31d68e6bdf7e02c3ffed56af3c2c0c/420/420/Hat/Png' },
-            { id: 'dominus',       name: 'Dominus',       value: 1500, chance: 8,  rarity: 'epic',      icon: 'https://tr.rbxcdn.com/c6a0a51ebff1de9b4e780bf6a8ac34bc/420/420/Hat/Png' },
-            { id: 'headless',      name: 'Headless',      value: 3000, chance: 2,  rarity: 'legendary', icon: 'https://tr.rbxcdn.com/3a2d4d8bf2a5d02de0ad6e0c60dbf0c2/420/420/Hat/Png' },
+            { id: 'bronze_shield', value: 100, chance: 40, rarity: 'common' },
+            { id: 'silver_sword', value: 250, chance: 30, rarity: 'uncommon' },
+            { id: 'hoverboard', value: 700, chance: 20, rarity: 'rare' },
+            { id: 'dominus', value: 1500, chance: 8, rarity: 'epic' },
+            { id: 'headless', value: 3000, chance: 2, rarity: 'legendary' }
         ]
     },
     {
@@ -3536,11 +3602,11 @@ const CASES_DATA = [
         image: '/case_elite.png',
         color: '#ef4444',
         items: [
-            { id: 'rare_aura',      name: 'Rare Aura',      value: 500,   chance: 35, rarity: 'uncommon',  icon: 'https://tr.rbxcdn.com/c4e72f0d3a3e73e37fc6db2c41df2e2d/420/420/Hat/Png' },
-            { id: 'dragon_scale',   name: 'Dragon Scale',   value: 1200,  chance: 30, rarity: 'rare',      icon: 'https://tr.rbxcdn.com/cf9a9ffa928c54ef77a4ca20ba940793/420/420/Hat/Png' },
-            { id: 'void_sword',     name: 'Void Sword',     value: 2500,  chance: 20, rarity: 'epic',      icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
-            { id: 'elite_crown',    name: 'Elite Crown',    value: 5000,  chance: 12, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/e9c4b27d34b0c773a5ac0b4b0c898b13/420/420/Hat/Png' },
-            { id: 'eternal_diamond',name: 'Eternal Diamond',value: 10000, chance: 3,  rarity: 'legendary', icon: 'https://tr.rbxcdn.com/d6e50c4e91218a6abff19c8278e7f0a5/420/420/Hat/Png' },
+            { id: 'rare_aura', value: 500, chance: 35, rarity: 'uncommon' },
+            { id: 'dragon_scale', value: 1200, chance: 30, rarity: 'rare' },
+            { id: 'void_sword', value: 2500, chance: 20, rarity: 'epic' },
+            { id: 'elite_crown', value: 5000, chance: 12, rarity: 'legendary' },
+            { id: 'eternal_diamond', value: 10000, chance: 3, rarity: 'legendary' }
         ]
     },
     {
@@ -3550,102 +3616,209 @@ const CASES_DATA = [
         image: '/case_lucky.png',
         color: '#22c55e',
         items: [
-            { id: 'nothing',       name: 'Better Luck',    value: 0,    chance: 45, rarity: 'common',    icon: 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/420/420/Hat/Png' },
-            { id: 'lucky_charm',   name: 'Lucky Charm',    value: 200,  chance: 35, rarity: 'rare',      icon: 'https://tr.rbxcdn.com/0e31d68e6bdf7e02c3ffed56af3c2c0c/420/420/Hat/Png' },
-            { id: 'golden_ticket', name: 'Golden Ticket',  value: 750, chance: 20, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/c6a0a51ebff1de9b4e780bf6a8ac34bc/420/420/Hat/Png' },
+            { id: 'nothing', value: 0, chance: 45, rarity: 'common' },
+            { id: 'lucky_charm', value: 200, chance: 35, rarity: 'rare' },
+            { id: 'golden_ticket', value: 750, chance: 20, rarity: 'legendary' }
         ]
     },
     {
-        id: 'amethyst', name: 'Amethyst Case', price: 45, image: '/case_amethyst.png', color: '#a855f7',
+        id: 'amethyst',
+        name: 'Amethyst Case',
+        price: 45,
+        image: '/case_amethyst.png',
+        color: '#a855f7',
         items: [
-            { id: 'amethyst_shard', name: 'Amethyst Shard', value: 15, chance: 50, rarity: 'common', icon: 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/420/420/Hat/Png' },
-            { id: 'purple_band', name: 'Purple Band', value: 30, chance: 35, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
-            { id: 'amethyst_ring', name: 'Amethyst Ring', value: 90, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/0e31d68e6bdf7e02c3ffed56af3c2c0c/420/420/Hat/Png' },
-            { id: 'amethyst_crown', name: 'Amethyst Crown', value: 300, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/c6a0a51ebff1de9b4e780bf6a8ac34bc/420/420/Hat/Png' }
+            { id: 'amethyst_shard', value: 15, chance: 50, rarity: 'common' },
+            { id: 'purple_band', value: 30, chance: 35, rarity: 'uncommon' },
+            { id: 'amethyst_ring', value: 90, chance: 12, rarity: 'rare' },
+            { id: 'amethyst_crown', value: 300, chance: 3, rarity: 'legendary' }
         ]
     },
     {
-        id: 'ruby', name: 'Ruby Case', price: 150, image: '/case_ruby.png', color: '#ef4444',
+        id: 'ruby',
+        name: 'Ruby Case',
+        price: 150,
+        image: '/case_ruby.png',
+        color: '#ef4444',
         items: [
-            { id: 'ruby_shard', name: 'Ruby Shard', value: 40, chance: 55, rarity: 'common', icon: 'https://tr.rbxcdn.com/c4e72f0d3a3e73e37fc6db2c41df2e2d/420/420/Hat/Png' },
-            { id: 'red_hood', name: 'Red Hood', value: 120, chance: 30, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/cf9a9ffa928c54ef77a4ca20ba940793/420/420/Hat/Png' },
-            { id: 'ruby_sword', name: 'Ruby Sword', value: 350, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
-            { id: 'ruby_dragon', name: 'Ruby Dragon', value: 1200, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/e9c4b27d34b0c773a5ac0b4b0c898b13/420/420/Hat/Png' }
+            { id: 'ruby_shard', value: 40, chance: 55, rarity: 'common' },
+            { id: 'red_hood', value: 120, chance: 30, rarity: 'uncommon' },
+            { id: 'ruby_sword', value: 350, chance: 12, rarity: 'rare' },
+            { id: 'ruby_dragon', value: 1200, chance: 3, rarity: 'legendary' }
         ]
     },
     {
-        id: 'emerald', name: 'Emerald Case', price: 400, image: '/case_emerald.png', color: '#22c55e',
+        id: 'emerald',
+        name: 'Emerald Case',
+        price: 400,
+        image: '/case_emerald.png',
+        color: '#22c55e',
         items: [
-            { id: 'emerald_shard', name: 'Emerald Shard', value: 110, chance: 55, rarity: 'common', icon: 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/420/420/Hat/Png' },
-            { id: 'green_band', name: 'Green Band', value: 320, chance: 30, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/0e31d68e6bdf7e02c3ffed56af3c2c0c/420/420/Hat/Png' },
-            { id: 'emerald_blade', name: 'Emerald Blade', value: 1000, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/c6a0a51ebff1de9b4e780bf6a8ac34bc/420/420/Hat/Png' },
-            { id: 'emerald_dominus', name: 'Emerald Dominus', value: 3000, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/3a2d4d8bf2a5d02de0ad6e0c60dbf0c2/420/420/Hat/Png' }
+            { id: 'emerald_shard', value: 110, chance: 55, rarity: 'common' },
+            { id: 'green_band', value: 320, chance: 30, rarity: 'uncommon' },
+            { id: 'emerald_blade', value: 1000, chance: 12, rarity: 'rare' },
+            { id: 'emerald_dominus', value: 3000, chance: 3, rarity: 'legendary' }
         ]
     },
     {
-        id: 'sapphire', name: 'Sapphire Case', price: 850, image: '/case_sapphire.png', color: '#3b82f6',
+        id: 'sapphire',
+        name: 'Sapphire Case',
+        price: 850,
+        image: '/case_sapphire.png',
+        color: '#3b82f6',
         items: [
-            { id: 'sapphire_shard', name: 'Sapphire Shard', value: 250, chance: 50, rarity: 'common', icon: 'https://tr.rbxcdn.com/c4e72f0d3a3e73e37fc6db2c41df2e2d/420/420/Hat/Png' },
-            { id: 'blue_hood', name: 'Blue Hood', value: 600, chance: 35, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/cf9a9ffa928c54ef77a4ca20ba940793/420/420/Hat/Png' },
-            { id: 'sapphire_sword', name: 'Sapphire Sword', value: 2000, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
-            { id: 'sapphire_dragon', name: 'Sapphire Dragon', value: 6000, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/e9c4b27d34b0c773a5ac0b4b0c898b13/420/420/Hat/Png' }
+            { id: 'sapphire_shard', value: 250, chance: 50, rarity: 'common' },
+            { id: 'blue_hood', value: 600, chance: 35, rarity: 'uncommon' },
+            { id: 'sapphire_sword', value: 2000, chance: 12, rarity: 'rare' },
+            { id: 'sapphire_dragon', value: 6000, chance: 3, rarity: 'legendary' }
         ]
     },
     {
-        id: 'diamond', name: 'Diamond Case', price: 1500, image: '/case_diamond.png', color: '#e0f2fe',
+        id: 'diamond',
+        name: 'Diamond Case',
+        price: 1500,
+        image: '/case_diamond.png',
+        color: '#e0f2fe',
         items: [
-            { id: 'diamond_shard', name: 'Diamond Shard', value: 450, chance: 55, rarity: 'common', icon: 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/420/420/Hat/Png' },
-            { id: 'white_band', name: 'White Band', value: 1100, chance: 30, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/0e31d68e6bdf7e02c3ffed56af3c2c0c/420/420/Hat/Png' },
-            { id: 'diamond_blade', name: 'Diamond Blade', value: 3500, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/c6a0a51ebff1de9b4e780bf6a8ac34bc/420/420/Hat/Png' },
-            { id: 'diamond_dominus', name: 'Diamond Dominus', value: 12000, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/3a2d4d8bf2a5d02de0ad6e0c60dbf0c2/420/420/Hat/Png' }
+            { id: 'diamond_shard', value: 450, chance: 55, rarity: 'common' },
+            { id: 'white_band', value: 1100, chance: 30, rarity: 'uncommon' },
+            { id: 'diamond_blade', value: 3500, chance: 12, rarity: 'rare' },
+            { id: 'diamond_dominus', value: 12000, chance: 3, rarity: 'legendary' }
         ]
     },
     {
-        id: 'void', name: 'Void Case', price: 3000, image: '/case_void.png', color: '#111827',
+        id: 'void',
+        name: 'Void Case',
+        price: 3000,
+        image: '/case_void.png',
+        color: '#111827',
         items: [
-            { id: 'void_dust', name: 'Void Dust', value: 800, chance: 55, rarity: 'common', icon: 'https://tr.rbxcdn.com/c4e72f0d3a3e73e37fc6db2c41df2e2d/420/420/Hat/Png' },
-            { id: 'dark_hood', name: 'Dark Hood', value: 2200, chance: 30, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/cf9a9ffa928c54ef77a4ca20ba940793/420/420/Hat/Png' },
-            { id: 'void_scepter', name: 'Void Scepter', value: 7000, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
-            { id: 'void_dragon', name: 'Void Dragon', value: 20000, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/e9c4b27d34b0c773a5ac0b4b0c898b13/420/420/Hat/Png' }
+            { id: 'void_dust', value: 800, chance: 55, rarity: 'common' },
+            { id: 'dark_hood', value: 2200, chance: 30, rarity: 'uncommon' },
+            { id: 'void_scepter', value: 7000, chance: 12, rarity: 'rare' },
+            { id: 'void_dragon', value: 20000, chance: 3, rarity: 'legendary' }
         ]
     },
     {
-        id: 'galactic', name: 'Galactic Case', price: 6500, image: '/case_galactic.png', color: '#4c1d95',
+        id: 'galactic',
+        name: 'Galactic Case',
+        price: 6500,
+        image: '/case_galactic.png',
+        color: '#4c1d95',
         items: [
-            { id: 'star_dust', name: 'Star Dust', value: 1800, chance: 55, rarity: 'common', icon: 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/420/420/Hat/Png' },
-            { id: 'cosmic_band', name: 'Cosmic Band', value: 4800, chance: 30, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/0e31d68e6bdf7e02c3ffed56af3c2c0c/420/420/Hat/Png' },
-            { id: 'galactic_blade', name: 'Galactic Blade', value: 15000, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/c6a0a51ebff1de9b4e780bf6a8ac34bc/420/420/Hat/Png' },
-            { id: 'galactic_dominus', name: 'Galactic Dominus', value: 45000, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/3a2d4d8bf2a5d02de0ad6e0c60dbf0c2/420/420/Hat/Png' }
+            { id: 'star_dust', value: 1800, chance: 55, rarity: 'common' },
+            { id: 'cosmic_band', value: 4800, chance: 30, rarity: 'uncommon' },
+            { id: 'galactic_blade', value: 15000, chance: 12, rarity: 'rare' },
+            { id: 'galactic_dominus', value: 45000, chance: 3, rarity: 'legendary' }
         ]
     },
     {
-        id: 'inferno', name: 'Inferno Case', price: 12000, image: '/case_inferno.png', color: '#991b1b',
+        id: 'inferno',
+        name: 'Inferno Case',
+        price: 12000,
+        image: '/case_inferno.png',
+        color: '#991b1b',
         items: [
-            { id: 'ember', name: 'Ember', value: 3500, chance: 55, rarity: 'common', icon: 'https://tr.rbxcdn.com/c4e72f0d3a3e73e37fc6db2c41df2e2d/420/420/Hat/Png' },
-            { id: 'flame_hood', name: 'Flame Hood', value: 8500, chance: 30, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/cf9a9ffa928c54ef77a4ca20ba940793/420/420/Hat/Png' },
-            { id: 'inferno_sword', name: 'Inferno Sword', value: 28000, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
-            { id: 'inferno_dragon', name: 'Inferno Dragon', value: 80000, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/e9c4b27d34b0c773a5ac0b4b0c898b13/420/420/Hat/Png' }
+            { id: 'ember', value: 3500, chance: 55, rarity: 'common' },
+            { id: 'flame_hood', value: 8500, chance: 30, rarity: 'uncommon' },
+            { id: 'inferno_sword', value: 28000, chance: 12, rarity: 'rare' },
+            { id: 'inferno_dragon', value: 80000, chance: 3, rarity: 'legendary' }
         ]
     },
     {
-        id: 'divine', name: 'Divine Case', price: 25000, image: '/case_divine.png', color: '#fef08a',
+        id: 'divine',
+        name: 'Divine Case',
+        price: 25000,
+        image: '/case_divine.png',
+        color: '#fef08a',
         items: [
-            { id: 'holy_light', name: 'Holy Light', value: 7500, chance: 55, rarity: 'common', icon: 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/420/420/Hat/Png' },
-            { id: 'divine_band', name: 'Divine Band', value: 19000, chance: 30, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/0e31d68e6bdf7e02c3ffed56af3c2c0c/420/420/Hat/Png' },
-            { id: 'divine_blade', name: 'Divine Blade', value: 60000, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/c6a0a51ebff1de9b4e780bf6a8ac34bc/420/420/Hat/Png' },
-            { id: 'divine_dominus', name: 'Divine Dominus', value: 180000, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/3a2d4d8bf2a5d02de0ad6e0c60dbf0c2/420/420/Hat/Png' }
+            { id: 'holy_light', value: 7500, chance: 55, rarity: 'common' },
+            { id: 'divine_band', value: 19000, chance: 30, rarity: 'uncommon' },
+            { id: 'divine_blade', value: 60000, chance: 12, rarity: 'rare' },
+            { id: 'divine_dominus', value: 180000, chance: 3, rarity: 'legendary' }
         ]
     },
     {
-        id: 'supreme', name: 'ZephR$ Supreme', price: 50000, image: '/case_supreme.png', color: '#facc15',
+        id: 'supreme',
+        name: 'ZephR$ Supreme',
+        price: 50000,
+        image: '/case_supreme.png',
+        color: '#facc15',
         items: [
-            { id: 'pure_gold', name: 'Pure Gold', value: 15000, chance: 55, rarity: 'common', icon: 'https://tr.rbxcdn.com/c4e72f0d3a3e73e37fc6db2c41df2e2d/420/420/Hat/Png' },
-            { id: 'supreme_crown', name: 'Supreme Crown', value: 38000, chance: 30, rarity: 'uncommon', icon: 'https://tr.rbxcdn.com/cf9a9ffa928c54ef77a4ca20ba940793/420/420/Hat/Png' },
-            { id: 'zephrs_scepter', name: 'ZephR$ Scepter', value: 115000, chance: 12, rarity: 'rare', icon: 'https://tr.rbxcdn.com/47b66fb40b37c98f3e5c168a6a29a5df/420/420/Hat/Png' },
-            { id: 'creator_dominus', name: 'Creator Dominus', value: 300000, chance: 3, rarity: 'legendary', icon: 'https://tr.rbxcdn.com/e9c4b27d34b0c773a5ac0b4b0c898b13/420/420/Hat/Png' }
+            { id: 'pure_gold', value: 15000, chance: 55, rarity: 'common' },
+            { id: 'supreme_crown', value: 38000, chance: 30, rarity: 'uncommon' },
+            { id: 'zephrs_scepter', value: 115000, chance: 12, rarity: 'rare' },
+            { id: 'creator_dominus', value: 300000, chance: 3, rarity: 'legendary' }
         ]
     }
 ];
+
+function buildCasesDataSync() {
+    const base = JSON.parse(JSON.stringify(CASES_DATA_BASE));
+    const flat = [];
+    for (const c of base) {
+        for (const it of c.items) {
+            flat.push({ c, it, v: it.value, cid: c.id, sid: it.id });
+        }
+    }
+    flat.sort((a, b) => {
+        if (a.v !== b.v) return a.v - b.v;
+        if (a.cid !== b.cid) return a.cid.localeCompare(b.cid);
+        return a.sid.localeCompare(b.sid);
+    });
+    if (flat.length !== CASE_ROBLOX_CATALOG_LADDER_ASC.length) {
+        throw new Error(
+            `[Cases] Roblox ladder length ${CASE_ROBLOX_CATALOG_LADDER_ASC.length} !== sorted prizes ${flat.length}`
+        );
+    }
+    flat.forEach((row, i) => {
+        const L = CASE_ROBLOX_CATALOG_LADDER_ASC[i];
+        row.it.assetId = L.assetId;
+        row.it.name = L.name;
+        row.it.icon = '';
+    });
+    return base;
+}
+
+let CASES_DATA = buildCasesDataSync();
+
+async function fetchRobloxAssetThumbUrlMap(assetIds) {
+    const map = new Map();
+    const uniq = [...new Set(assetIds.filter((n) => Number.isFinite(n) && n > 0))];
+    const CHUNK = 100;
+    for (let i = 0; i < uniq.length; i += CHUNK) {
+        const chunk = uniq.slice(i, i + CHUNK);
+        const url = `https://thumbnails.roblox.com/v1/assets?assetIds=${chunk.join(
+            ','
+        )}&returnPolicy=PlaceHolder&size=420x420&format=Png&isCircular=false`;
+        try {
+            const res = await fetch(url);
+            const j = await res.json();
+            for (const row of j.data || []) {
+                if (row.imageUrl && row.targetId != null) map.set(row.targetId, row.imageUrl);
+            }
+        } catch (e) {
+            console.error('[Cases] Thumbnail batch failed:', e && e.message);
+        }
+    }
+    return map;
+}
+
+async function hydrateCaseItemThumbnails() {
+    const ids = [];
+    for (const c of CASES_DATA) {
+        for (const it of c.items) {
+            if (it.assetId) ids.push(it.assetId);
+        }
+    }
+    const thumbMap = await fetchRobloxAssetThumbUrlMap(ids);
+    for (const c of CASES_DATA) {
+        for (const it of c.items) {
+            const u = thumbMap.get(it.assetId);
+            if (u) it.icon = u;
+        }
+    }
+}
 
 const activeBattles = new Map(); // battleId -> battle object
 const BOT_NAMES = ['ZephBot', 'NovaSpin', 'VoidRoller', 'LuckyBot', 'AceBot', 'RushBot', 'StarBot', 'GlitchBot'];
@@ -4032,13 +4205,22 @@ async function runBattle(battle) {
 app.use(express.static(ROOT));
 
 
-server.listen(PORT, () => {
-    console.log(`Open http://localhost:${PORT}`);
-    if (supabaseEnabled()) {
-        console.log(
-            `Account data: Supabase (${SUPABASE_SERVICE_ROLE_KEY ? 'service_role (recommended on Render)' : 'anon key'} — user_balances + transactions)`
-        );
-    } else {
-        console.log('Account data: Local JSON only (save/load endpoints available)');
-    }
-});
+hydrateCaseItemThumbnails()
+    .then(() => {
+        console.log('[Cases] Roblox catalog thumbnails loaded for case items.');
+    })
+    .catch((e) => {
+        console.error('[Cases] Thumbnail hydrate failed (items may lack icons until restart):', e && e.message);
+    })
+    .finally(() => {
+        server.listen(PORT, () => {
+            console.log(`Open http://localhost:${PORT}`);
+            if (supabaseEnabled()) {
+                console.log(
+                    `Account data: Supabase (${SUPABASE_SERVICE_ROLE_KEY ? 'service_role (recommended on Render)' : 'anon key'} — user_balances + transactions)`
+                );
+            } else {
+                console.log('Account data: Local JSON only (save/load endpoints available)');
+            }
+        });
+    });

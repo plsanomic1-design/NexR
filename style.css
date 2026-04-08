@@ -4500,6 +4500,19 @@ select optgroup {
 .cb-horiz-item.cb-item-rarity-epic { background: linear-gradient(135deg, rgba(168,85,247,.3), rgba(168,85,247,.6)); border: 1px solid rgba(168,85,247,.8); box-shadow: inset 0 0 10px rgba(168,85,247,.4); }
 .cb-horiz-item.cb-item-rarity-legendary { background: linear-gradient(135deg, rgba(245,158,11,.4), rgba(245,158,11,.7)); border: 1px solid rgba(245,158,11,1); box-shadow: inset 0 0 15px rgba(245,158,11,.6); }
 
+.cb-horiz-item-img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto 4px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+}
+.cb-horiz-item-img--compact {
+    width: 28px;
+    height: 28px;
+    margin-bottom: 2px;
+}
 .cb-horiz-item-name { font-size: 11px; font-weight: 800; color: #fff; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.8); line-height: 1.1; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
 .cb-horiz-item-val { font-size: 11px; font-weight: 900; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,1); background: rgba(0,0,0,0.3); padding: 1px 6px; border-radius: 4px; }
 
