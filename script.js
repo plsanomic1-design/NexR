@@ -213,36 +213,68 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        bjHitBtn.addEventListener('click', () => {
+        bjHitBtn.addEventListener('click', async () => {
             if(!isPlaying) return;
-            pHand.push(cDeck.pop());
-            renderHands();
-            if(getScore(pHand) > 21) {
-                endGame('Bust! You Lose', 'var(--red)');
-                fetch('/api/game/blackjack/result', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: robloxUserId, outcome: 'bust' }) }).catch(()=>{});
+            bjHitBtn.disabled = true; // prevent double click
+            try {
+                const res = await fetch('/api/game/blackjack/hit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId })
+                });
+                const data = await res.json();
+                if(data.error) throw new Error(data.error);
+                
+                pHand.push(data.card);
+                renderHands();
+                GSM.update('blackjack', { pHand: pHand, dHand: dHand, deck: cDeck });
+                
+                if(data.bust) {
+                    endGame('Bust! You Lose', 'var(--red)');
+                } else {
+                    bjHitBtn.disabled = false;
+                }
+            } catch(e) {
+                console.error(e);
+                bjHitBtn.disabled = false;
             }
         });
 
-        bjStandBtn.addEventListener('click', () => {
+        bjStandBtn.addEventListener('click', async () => {
             if(!isPlaying) return;
-            while(getScore(dHand) < 17) {
-                dHand.push(cDeck.pop());
+            bjHitBtn.disabled = true;
+            bjStandBtn.disabled = true;
+            
+            try {
+                const res = await fetch('/api/game/blackjack/stand', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: robloxUserId })
+                });
+                const data = await res.json();
+                if(data.error) throw new Error(data.error);
+                
+                // Server reveals dealer hand and final outcome
+                dHand = data.dHand || dHand;
+                
+                let msg = 'Push'; let color = 'var(--text-secondary)';
+                if(data.outcome === 'blackjack') { msg = 'Blackjack! You Win'; color = 'var(--gold)'; }
+                else if(data.outcome === 'win') { msg = 'You Win!'; color = 'var(--green)'; }
+                else if(data.outcome === 'lose') { msg = 'Dealer Wins'; color = 'var(--red)'; }
+                
+                // Render true final hands before ending
+                pCardsEl.innerHTML = pHand.map(c => renderCard(c)).join('');
+                pScoreEl.style.display = 'block';
+                pScoreEl.textContent = data.pScore;
+                dCardsEl.innerHTML = dHand.map(c => renderCard(c)).join('');
+                dScoreEl.style.display = 'block';
+                dScoreEl.textContent = data.dScore;
+                
+                endGame(msg, color);
+            } catch(e) {
+                console.error(e);
+                endGame('Error connecting to server', 'var(--red)');
             }
-            const pScore = getScore(pHand);
-            const dScore = getScore(dHand);
-            
-            let outcome = 'lose';
-            if(dScore > 21) { outcome='win'; endGame('Dealer Busts! You Win', 'var(--green)'); }
-            else if(pScore > dScore) { outcome='win'; endGame('You Win!', 'var(--green)'); }
-            else if(dScore > pScore) { endGame('Dealer Wins', 'var(--red)'); }
-            else { outcome='push'; endGame('Push', 'var(--text-secondary)'); }
-            
-            // Server credits win and syncs balance to all tabs via balance:remote_sync
-            fetch('/api/game/blackjack/result', {
-                method:'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: robloxUserId, outcome })
-            }).catch(()=>{});
         });
     }
 
@@ -1094,19 +1126,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         bucketEl.classList.add('hit');
                         setTimeout(() => bucketEl.classList.remove('hit'), 150);
                         const multi = parseFloat(bucketEl.dataset.multi);
-                        awardWin(b.bet * multi);
+                        // Balance is updated via balance:remote_sync from server — no client-side awardWin
                         postLiveFeedRound('plinko', b.bet, multi, b.bet * multi);
                         if(multi >= 2) {
                             if(typeof soundWin === 'function') soundWin();
                         } else {
                             if(typeof soundLose === 'function') soundLose();
                         }
-                        
-                        fetch('/api/game/record-result', {
-                            method:'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ userId: robloxUserId, win: multi >= 1.0, bigWin: multi >= 3.0 })
-                        }).catch(()=>{});
                     }
                 }
             }
@@ -1134,14 +1160,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             try {
+                // Pass bet to server so it can atomically deduct + credit
                 const res = await fetch('/api/game/plinko', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, pRows, pDiff })
+                    body: JSON.stringify({ userId: robloxUserId, pRows, pDiff, bet })
                 });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    const warn = document.createElement('div');
+                    warn.textContent = err.error || 'Server error. Try again.';
+                    warn.style.cssText='position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2a1515;border:1px solid var(--red);color:var(--red);padding:12px 24px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;';
+                    document.body.appendChild(warn);
+                    setTimeout(()=>warn.remove(), 2500);
+                    return;
+                }
                 const data = await res.json();
-                
-                deductBet(bet);
+                // Balance updated via balance:remote_sync socket — no client-side deductBet needed
                 
                 balls.push({
                     x: 300 + (Math.random()-0.5)*2,
@@ -1759,21 +1794,12 @@ function soundClick() {
 }
 
 // ===== BALANCE HELPERS =====
-function deductBet(amount) {
-    roBalance = Math.max(0, roBalance - amount);
-    userStats.wagered += amount;
-    addTransaction('Game Play', -amount, 'game');
-    updateBalanceDisplay();
-    updateProfViews();
-    saveToStorage();
-}
-function awardWin(amount) {
-    roBalance += amount;
-    addTransaction('Game Win', amount, 'game');
-    updateBalanceDisplay();
-    updateProfViews();
-    saveToStorage();
-}
+// SECURITY: These are intentional NO-OPS.
+// Balance is ONLY changed by the server via 'balance:remote_sync' socket events.
+// Calling awardWin() or deductBet() from the browser console does NOTHING.
+function deductBet(amount) { /* server-authoritative — no client-side balance change */ }
+function awardWin(amount)  { /* server-authoritative — no client-side balance change */ }
+
 
 // ===== GAME SESSION MANAGER (refresh / disconnect protection) =====
 // Saves active game state to localStorage so the player can continue after a page refresh.

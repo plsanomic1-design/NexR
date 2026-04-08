@@ -280,6 +280,53 @@ function num(v, fallback = 0) {
     return Number.isFinite(n) ? n : fallback;
 }
 
+// =====================================================================
+// PER-USER ASYNC MUTEX — prevents race conditions / multi-tab dupes
+// =====================================================================
+const _userLocks = new Map();
+async function withUserLock(userId, fn) {
+    const key = String(userId || 'anon');
+    const prev = _userLocks.get(key) || Promise.resolve();
+    let resolveLock;
+    const current = new Promise(r => { resolveLock = r; });
+    _userLocks.set(key, current);
+    try {
+        await prev;
+        return await fn();
+    } finally {
+        resolveLock();
+        if (_userLocks.get(key) === current) _userLocks.delete(key);
+    }
+}
+
+// Server-side Blackjack score (mirrors client getScore)
+function serverBjScore(hand) {
+    if (!Array.isArray(hand)) return 0;
+    let score = 0, aces = 0;
+    for (const card of hand) {
+        score += (typeof card.score === 'number' ? card.score : 0);
+        if (card.value === 'A') aces++;
+    }
+    while (score > 21 && aces > 0) { score -= 10; aces--; }
+    return score;
+}
+
+// Server-side Plinko multiplier table (mirrors client getMultipliers)
+const SERVER_PLINKO_MULTIPLIERS = {
+    8:  { easy:[5.6,2.1,1.1,1.0,0.5,1.0,1.1,2.1,5.6], normal:[14,3,1.3,0.7,0.4,0.7,1.3,3,14], hard:[29,4,1.5,0.3,0.2,0.3,1.5,4,29] },
+    10: { easy:[8.9,3,1.4,1.1,1.0,0.5,1.0,1.1,1.4,3,8.9], normal:[22,5,2,1.4,0.6,0.4,0.6,1.4,2,5,22], hard:[76,10,3,0.9,0.3,0.2,0.3,0.9,3,10,76] },
+    12: { easy:[11,4,1.6,1.4,1.1,1.0,0.5,1.0,1.1,1.4,1.6,4,11], normal:[33,8.9,3,1.7,1.1,0.6,0.3,0.6,1.1,1.7,3,8.9,33], hard:[170,24,8.1,1.9,0.7,0.2,0.2,0.2,0.7,1.9,8.1,24,170] },
+    14: { easy:[15,7.1,2.1,1.6,1.3,1.1,1.0,0.5,1.0,1.1,1.3,1.6,2.1,7.1,15], normal:[58,15,6,2,1.3,1.1,0.3,0.2,0.3,1.1,1.3,2,6,15,58], hard:[420,56,18,5,1.9,0.3,0.2,0.2,0.2,0.3,1.9,5,18,56,420] },
+    16: { easy:[16,9,2.4,1.7,1.4,1.3,1.1,1.0,0.5,1.0,1.1,1.3,1.4,1.7,2.4,9,16], normal:[110,41,10,5,3,1.5,1.0,0.5,0.3,0.5,1.0,1.5,3,5,10,41,110], hard:[1000,130,26,9,2,0.5,0.2,0.2,0.2,0.2,0.2,0.5,2,9,26,130,1000] }
+};
+function getServerPlinkoMultiplier(rows, diff, idx) {
+    const r = parseInt(rows) || 16;
+    const table = SERVER_PLINKO_MULTIPLIERS[r];
+    if (!table) return 0;
+    const arr = table[String(diff)] || table['easy'];
+    return (arr && arr[idx] != null) ? arr[idx] : 0;
+}
+
 /** Legacy: fold flipBalance into balance and drop the field (single ZR$ balance). */
 function mergeFlipIntoBalance(save) {
     if (!save || typeof save !== 'object') return;
@@ -494,20 +541,23 @@ function buildProfilePayload(save) {
  * Replace all transaction rows for user with client txs + one profile row.
  * @returns {Promise<{ ok: true } | { ok: false, step: string, detail: string, status?: number }>}
  */
-async function persistAccountSave(userId, save) {
+async function persistAccountSave(userId, save, ignoreBalance = false) {
     if (!supabaseEnabled()) {
         return { ok: false, step: 'config', detail: 'Supabase not configured' };
     }
     const uid = encodeURIComponent(String(userId));
-    const balanceZr = typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0;
-    const balResult = await updateUserBalance(userId, balanceZr, 0);
-    if (!balResult.ok) {
-        return {
-            ok: false,
-            step: balResult.step || 'user_balances',
-            detail: balResult.detail || 'Balance update failed',
-            status: balResult.status
-        };
+
+    if (!ignoreBalance) {
+        const balanceZr = typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0;
+        const balResult = await updateUserBalance(userId, balanceZr, 0);
+        if (!balResult.ok) {
+            return {
+                ok: false,
+                step: balResult.step || 'user_balances',
+                detail: balResult.detail || 'Balance update failed',
+                status: balResult.status
+            };
+        }
     }
 
     let delRes;
@@ -1111,62 +1161,43 @@ app.post('/api/game/dice', express.json(), async (req, res) => {
     res.json({ roll, win });
 });
 
-app.post('/api/game/plinko', express.json(), (req, res) => {
+app.post('/api/game/plinko', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, pRows, pDiff } = req.body;
-    
-    // Controlled bucket weight tables (rows+1 weights per row count)
-    // Higher weight = more likely to land there
-    // Designed so low-value center buckets hit 70-80% of the time on hard
-    const weightTables = {
-        8: {
-            easy:   [0.5, 3, 8, 17, 25, 17, 8, 3, 0.5],
-            normal: [0.3, 2, 7, 16, 24, 16, 7, 2, 0.3],
-            hard:   [0.3, 2, 8, 18, 26, 18, 8, 2, 0.3]
-        },
-        10: {
-            easy:   [0.5, 2, 5, 10, 17, 23, 17, 10, 5, 2, 0.5],
-            normal: [0.3, 1.5, 4, 9, 16, 22, 16, 9, 4, 1.5, 0.3],
-            hard:   [0.3, 2, 5, 12, 20, 25, 20, 12, 5, 2, 0.3]
-        },
-        12: {
-            easy:   [0.5, 1.5, 3, 6, 10, 16, 20, 16, 10, 6, 3, 1.5, 0.5],
-            normal: [0.3, 1, 3, 6, 10, 17, 22, 17, 10, 6, 3, 1, 0.3],
-            hard:   [0.25, 1.5, 4, 6, 15, 20, 20, 20, 15, 6, 4, 1.5, 0.25]
-        },
-        14: {
-            easy:   [0.4, 1, 2, 4, 7, 12, 16, 17, 16, 12, 7, 4, 2, 1, 0.4],
-            normal: [0.3, 0.7, 2, 4, 7, 12, 17, 20, 17, 12, 7, 4, 2, 0.7, 0.3],
-            hard:   [0.25, 1.5, 3, 5, 5, 15, 15, 15, 15, 15, 5, 5, 3, 1.5, 0.25]
-        },
-        16: {
-            easy:   [0.3, 0.8, 1.5, 3, 5, 7, 10, 14, 18, 14, 10, 7, 5, 3, 1.5, 0.8, 0.3],
-            normal: [0.2, 0.5, 1.5, 3, 6, 10, 15, 20, 20, 20, 15, 10, 6, 3, 1.5, 0.5, 0.2],
-            // Hard 16: ~65% on 0.2x center, ~7% total on 0.5x, ~6% 2x, ~10% 9x, ~6.7% 26x, ~5% 130x, ~0.5% 1000x
-            hard:   [0.25, 1.25, 3.35, 5, 3, 5, 13, 13, 13, 13, 13, 5, 3, 5, 3.35, 1.25, 0.25]
-        }
-    };
-    
+    const { userId, pRows, pDiff, bet } = req.body;
+    const betVal = num(bet, 0);
+    const uid = parseRobloxNumericId(userId);
+
+    // STEP 1: Atomically deduct bet server-side before any outcome
+    if (betVal > 0 && uid && supabaseEnabled()) {
+        const deduct = await deductUserBet(userId, betVal);
+        if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+        emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+    }
+
     const rows = parseInt(pRows) || 16;
     const diff = String(pDiff || 'hard');
+
+    // STEP 2: Weighted bucket selection (same weights as client)
+    const weightTables = {
+        8:  { easy:[0.5,3,8,17,25,17,8,3,0.5], normal:[0.3,2,7,16,24,16,7,2,0.3], hard:[0.3,2,8,18,26,18,8,2,0.3] },
+        10: { easy:[0.5,2,5,10,17,23,17,10,5,2,0.5], normal:[0.3,1.5,4,9,16,22,16,9,4,1.5,0.3], hard:[0.3,2,5,12,20,25,20,12,5,2,0.3] },
+        12: { easy:[0.5,1.5,3,6,10,16,20,16,10,6,3,1.5,0.5], normal:[0.3,1,3,6,10,17,22,17,10,6,3,1,0.3], hard:[0.25,1.5,4,6,15,20,20,20,15,6,4,1.5,0.25] },
+        14: { easy:[0.4,1,2,4,7,12,16,17,16,12,7,4,2,1,0.4], normal:[0.3,0.7,2,4,7,12,17,20,17,12,7,4,2,0.7,0.3], hard:[0.25,1.5,3,5,5,15,15,15,15,15,5,5,3,1.5,0.25] },
+        16: { easy:[0.3,0.8,1.5,3,5,7,10,14,18,14,10,7,5,3,1.5,0.8,0.3], normal:[0.2,0.5,1.5,3,6,10,15,20,20,20,15,10,6,3,1.5,0.5,0.2], hard:[0.25,1.25,3.35,5,3,5,13,13,13,13,13,5,3,5,3.35,1.25,0.25] }
+    };
     const table = weightTables[rows];
     const weights = table ? (table[diff] || table['easy']) : null;
-    
     let idx;
     if (weights) {
-        // Weighted random selection
         const total = weights.reduce((s, w) => s + w, 0);
         let r = Math.random() * total;
-        idx = weights.length - 1; // default to last if rounding error
-        for (let i = 0; i < weights.length; i++) {
-            r -= weights[i];
-            if (r <= 0) { idx = i; break; }
-        }
+        idx = weights.length - 1;
+        for (let i = 0; i < weights.length; i++) { r -= weights[i]; if (r <= 0) { idx = i; break; } }
     } else {
-        idx = Math.floor((rows) / 2); // fallback: center bucket
+        idx = Math.floor(rows / 2);
     }
-    
-    // Still check cus state to potentially force a worse outcome
+
+    // STEP 3: Apply CUS bias
     const forceLoss = getCusState(userId).check();
     const forceWin = getCusState(userId).checkWin();
     if (forceWin) {
@@ -1174,25 +1205,33 @@ app.post('/api/game/plinko', express.json(), (req, res) => {
         idx = edges[Math.floor(Math.random() * edges.length)];
         getCusState(userId).recordWin(true);
     } else if (forceLoss) {
-        // Push towards center low-value buckets
-        const center = Math.floor((rows) / 2);
+        const center = Math.floor(rows / 2);
         idx = center + (Math.random() < 0.5 ? -1 : 1) * Math.floor(Math.random() * 2);
         if (idx < 0) idx = 0;
         if (idx > rows) idx = rows;
         getCusState(userId).recordLoss();
     }
-    
-    res.json({ customOutcome: true, idx });
+
+    // STEP 4: Credit win server-side
+    let newBalance = null;
+    if (betVal > 0 && uid && supabaseEnabled()) {
+        const multiplier = getServerPlinkoMultiplier(rows, diff, idx);
+        const winAmt = betVal * multiplier;
+        const credit = await creditUserWin(userId, winAmt);
+        if (credit.ok) newBalance = credit.newBalance;
+        const bigWin = multiplier >= 3.0;
+        if (!forceLoss && !forceWin) {
+            if (multiplier >= 1.0) getCusState(userId).recordWin(bigWin);
+            else getCusState(userId).recordLoss();
+        }
+    }
+
+    res.json({ customOutcome: true, idx, newBalance });
 });
 
 
-app.post('/api/game/record-result', express.json(), (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, win, bigWin } = req.body;
-    if (win) getCusState(userId).recordWin(bigWin);
-    else getCusState(userId).recordLoss();
-    res.json({ ok: true });
-});
+
+// REMOVED: /api/game/record-result was a public endpoint that allowed console manipulation of game outcomes.
 
 app.post('/api/game/towers/start', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -1442,33 +1481,16 @@ app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
         while(pScore>21 && aces>0) { pScore-=10; aces--; }
         if (pScore === 21) pHand[0] = {suitLetter: 'C', value: '5', score: 5, isRed: false};
     }
-    // Store bet for result endpoint to credit
-    activeBlackjackGames.set(String(userId), { bet: betVal });
+    // Store FULL hand + deck state so server can authoritatively compute outcomes
+    activeBlackjackGames.set(String(userId), {
+        bet: betVal,
+        pHand: [...pHand],
+        dHand: [...dHand],
+        deck: [...deck],
+        forceLoss,
+        forceWin
+    });
     res.json({ deck, pHand, dHand });
-});
-
-/** Called by client after determining BJ outcome; server credits the win authoritatively. */
-app.post('/api/game/blackjack/result', express.json(), async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, outcome } = req.body;
-    // outcome: 'blackjack' | 'win' | 'push' | 'lose' | 'bust'
-    const g = activeBlackjackGames.get(String(userId));
-    activeBlackjackGames.delete(String(userId));
-    if (!g || g.bet <= 0 || !supabaseEnabled()) return res.json({ ok: true });
-    let winAmount = 0;
-    if (outcome === 'blackjack') {
-        winAmount = g.bet * 2.5;
-        getCusState(userId).recordWin(true);
-    } else if (outcome === 'win') {
-        winAmount = g.bet * 2;
-        getCusState(userId).recordWin(false);
-    } else if (outcome === 'push') {
-        winAmount = g.bet; // return stake only
-    } else {
-        getCusState(userId).recordLoss(); // lose / bust
-    }
-    const result = await creditUserWin(userId, winAmount);
-    res.json({ ok: true, winAmount, newBalance: result.newBalance });
 });
 
 
@@ -1571,20 +1593,7 @@ app.get('/api/account-sync', async (req, res) => {
     }
 });
 
-// TEMP DEBUG — see exactly what Supabase holds for a user's balance
-app.get('/api/debug/balance', async (req, res) => {
-    const id = parseInt(String(req.query.userId || ''), 10);
-    if (!id) return res.status(400).json({ error: 'missing userId' });
-    const rawBal = await getUserBalance(id);
-    const fullLoad = await loadAccountFromSupabase(id);
-    res.json({
-        supabase_enabled: supabaseEnabled(),
-        userId: id,
-        raw_supabase_row: rawBal,
-        computed_balance: fullLoad ? fullLoad.balance : null,
-        full_load_ok: !!fullLoad
-    });
-});
+// REMOVED: /api/debug/balance was a public endpoint that leaked raw Supabase balance data.
 
 
 app.post('/api/account-sync', async (req, res) => {
@@ -1600,12 +1609,14 @@ app.post('/api/account-sync', async (req, res) => {
     }
     mergeFlipIntoBalance(save);
     save.savedAt = Date.now();
-    if (typeof save.balanceZh !== 'number' || save.balanceZh < 0) {
-        save.balanceZh = 0;
-    }
     if (!save.stats || typeof save.stats !== 'object') {
         save.stats = {};
     }
+    // SECURITY: Strip any balance fields — client CANNOT set balance via account-sync.
+    // Balance is ONLY ever written by deductUserBet / creditUserWin on the server.
+    delete save.balance;
+    delete save.balanceZh;
+    delete save.flipBalance;
     if (!supabaseEnabled()) {
         return res.status(200).json({ ok: true, _isDisabled: true });
     }
@@ -1622,7 +1633,7 @@ app.post('/api/account-sync', async (req, res) => {
             }
         }
 
-        const result = await persistAccountSave(userId, save);
+        const result = await persistAccountSave(userId, save, true);
         if (!result.ok) {
             return res.status(503).json({
                 error: 'Could not save account. Storage may be unavailable.',
@@ -2804,16 +2815,16 @@ io.on('connection', (socket) => {
     socket.on('crash:join', async ({ userId, username, bet, auto }) => {
         if (crashGame.state !== 'starting') return socket.emit('notification', {type: 'error', text: 'Crash has already started!'});
         if (crashGame.players.has(String(userId))) return;
-        
-        const save = await readAccountJson(userId);
-        if (!save || save.balance < bet) return socket.emit('notification', {type: 'error', text: 'Not enough balance!'});
-        
-        save.balance -= bet;
-        await persistAccountSave(userId, save);
-        socket.emit('balance:update', { balance: save.balance, balanceZh: save.balanceZh });
-        
-        crashGame.players.set(String(userId), { userId, username, bet, auto, cashedOut: false, winAmt: 0 });
-        io.emit('crash:playerJoined', { userId: String(userId), username, bet });
+        const betVal = num(bet, 0);
+        if (betVal <= 0) return socket.emit('notification', {type: 'error', text: 'Invalid bet amount.'});
+
+        await withUserLock(userId, async () => {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return socket.emit('notification', {type: 'error', text: deduct.error || 'Insufficient balance.'});
+            socket.emit('balance:update', { balance: deduct.newBalance, balanceZh: deduct.balanceZh });
+            crashGame.players.set(String(userId), { userId, username, bet: betVal, auto, cashedOut: false, winAmt: 0 });
+            io.emit('crash:playerJoined', { userId: String(userId), username, bet: betVal });
+        });
     });
 
     socket.on('crash:cashout', ({ userId }) => {
@@ -2845,62 +2856,46 @@ io.on('connection', (socket) => {
     // TIP SYSTEM SVR
     socket.on('tip:send', async ({ fromUserId, toTarget, amount }) => {
         if (!fromUserId || !toTarget || amount < 1) return;
-        
-        try {
-            const senderSave = await readAccountJson(fromUserId);
-            if (senderSave && senderSave.stats && senderSave.stats.tipAccessRevoked === true) {
-                return socket.emit('notification', { type: 'error', text: 'Tip access has been revoked for this account.' });
+
+        await withUserLock(fromUserId, async () => {
+            try {
+                const senderSave = await readAccountJson(fromUserId);
+                if (senderSave && senderSave.stats && senderSave.stats.tipAccessRevoked === true) {
+                    return socket.emit('notification', { type: 'error', text: 'Tip access has been revoked for this account.' });
+                }
+                if (!senderSave || senderSave.balance < amount) {
+                    return socket.emit('notification', { type: 'error', text: 'Not enough balance for tip!' });
+                }
+
+                let recipientId = null;
+                const parsedId = parseInt(toTarget);
+                if (!isNaN(parsedId) && parsedId > 0) {
+                    recipientId = parsedId;
+                } else {
+                    recipientId = await findUserIdByAccountProfileUsername(toTarget);
+                }
+                if (!recipientId || String(recipientId) === String(fromUserId)) {
+                    return socket.emit('notification', { type: 'error', text: 'Recipient not found!' });
+                }
+
+                const recSave = await readAccountJson(recipientId);
+                if (!recSave) return socket.emit('notification', { type: 'error', text: 'Recipient wallet not initialized.' });
+
+                senderSave.balance -= amount;
+                recSave.balance += amount;
+                await persistAccountSave(fromUserId, senderSave);
+                await persistAccountSave(recipientId, recSave);
+                emitBalanceRemoteSync(io, fromUserId, senderSave);
+                emitBalanceRemoteSync(io, recipientId, recSave);
+
+                socket.emit('notification', { type: 'success', text: `Tipped ${formatAmountDisplay(amount)} ZH$ to ${recSave.username || recipientId}!` });
+                io.emit('chat:message', { username: 'System', text: `${senderSave.username} tipped ${formatAmountDisplay(amount)} ZH$ to ${recSave.username || recipientId}!`, createdAt: Date.now() });
+                io.emit('tip:received', { recipientId, amount, sender: senderSave.username || 'A player' });
+            } catch (e) {
+                console.error('[Tip Error]', e);
+                socket.emit('notification', { type: 'error', text: 'An error occurred sending the tip.' });
             }
-            if (!senderSave || senderSave.balance < amount) {
-                return socket.emit('notification', { type: 'error', text: 'Not enough balance for tip!' });
-            }
-
-            // Find recipient — by numeric ID or username lookup in Supabase
-            let recipientId = null;
-            const parsedId = parseInt(toTarget);
-            if (!isNaN(parsedId) && parsedId > 0) {
-                recipientId = parsedId;
-            } else {
-                recipientId = await findUserIdByAccountProfileUsername(toTarget);
-            }
-
-            if (!recipientId || recipientId === fromUserId) {
-                return socket.emit('notification', { type: 'error', text: 'Recipient not found!' });
-            }
-
-            const recSave = await readAccountJson(recipientId);
-            if (!recSave) return socket.emit('notification', { type: 'error', text: 'Recipient wallet not initialized.' });
-
-            // Transfer from main balance
-            senderSave.balance -= amount;
-            recSave.balance += amount;
-
-            await persistAccountSave(fromUserId, senderSave);
-            await persistAccountSave(recipientId, recSave);
-
-            socket.emit('notification', {
-                type: 'success',
-                text: `Tipped ${formatAmountDisplay(amount)} ZH$ to ${recSave.username || recipientId}!`
-            });
-            socket.emit('balance:update', { balance: senderSave.balance, balanceZh: senderSave.balanceZh });
-            
-            io.emit('chat:message', {
-                username: 'System',
-                text: `${senderSave.username} tipped ${formatAmountDisplay(amount)} ZH$ to ${recSave.username || recipientId}!`,
-                createdAt: Date.now()
-            });
-            
-            // Notify the specific recipient so their wallet instantly updates in real-time
-            io.emit('tip:received', {
-                recipientId: recipientId,
-                amount: amount,
-                sender: senderSave.username || 'A player'
-            });
-
-        } catch (e) {
-            console.error('[Tip Error]', e);
-            socket.emit('notification', { type: 'error', text: 'An error occurred sending the tip.' });
-        }
+        });
     });
 
     // RAIN SYSTEM SVR
@@ -3066,68 +3061,61 @@ io.on('connection', (socket) => {
             return socket.emit('notification', { type: 'error', text: 'You already have an active coinflip!' });
         }
 
-        try {
-            const save = await readAccountJson(userId);
-            if (!save || save.balance < amount) return;
-
-            save.balance -= amount;
-            await persistAccountSave(userId, save);
-            socket.emit('balance:update', { balance: save.balance });
-            socket.emit('coinflip:created'); // Confirm success to clear loading state
-
-            const flip = {
-                id: Math.random().toString(36).substr(2, 9),
-                amount,
-                player1: { userId, username: save.username, avatar: save.robloxAvatarUrl },
-                player2: null,
-                status: 'waiting',
-                createdAt: Date.now()
-            };
-
-            activeFlips.push(flip);
-            io.emit('coinflip:list', activeFlips);
-        } catch (e) {}
+        await withUserLock(userId, async () => {
+            try {
+                const deduct = await deductUserBet(userId, amount);
+                if (!deduct.ok) return socket.emit('notification', { type: 'error', text: deduct.error || 'Insufficient balance.' });
+                const save = await readAccountJson(userId);
+                socket.emit('balance:update', { balance: deduct.newBalance });
+                socket.emit('coinflip:created');
+                const flip = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    amount,
+                    player1: { userId, username: save ? save.username : userId, avatar: save ? save.robloxAvatarUrl : null },
+                    player2: null,
+                    status: 'waiting',
+                    createdAt: Date.now()
+                };
+                activeFlips.push(flip);
+                io.emit('coinflip:list', activeFlips);
+            } catch (e) { console.error('[Coinflip:create]', e); }
+        });
     });
 
     socket.on('coinflip:join', async ({ flipId, userId }) => {
         const flip = activeFlips.find(f => f.id === flipId);
-        if (!flip || flip.status !== 'waiting' || flip.player1.userId === userId) return;
+        if (!flip || flip.status !== 'waiting' || String(flip.player1.userId) === String(userId)) return;
 
-        try {
-            const save = await readAccountJson(userId);
-            if (!save || save.balance < flip.amount) return;
+        await withUserLock(userId, async () => {
+            try {
+                // Re-check flip is still open inside the lock
+                const flipNow = activeFlips.find(f => f.id === flipId && f.status === 'waiting');
+                if (!flipNow) return;
+                const deduct = await deductUserBet(userId, flipNow.amount);
+                if (!deduct.ok) return socket.emit('notification', { type: 'error', text: deduct.error || 'Insufficient balance.' });
+                const save = await readAccountJson(userId);
+                socket.emit('balance:update', { balance: deduct.newBalance });
 
-            save.balance -= flip.amount;
-            await persistAccountSave(userId, save);
-            socket.emit('balance:update', { balance: save.balance });
+                flipNow.player2 = { userId, username: save ? save.username : userId, avatar: save ? save.robloxAvatarUrl : null };
+                flipNow.status = 'playing';
+                io.emit('coinflip:list', activeFlips);
 
-            flip.player2 = { userId, username: save.username, avatar: save.robloxAvatarUrl };
-            flip.status = 'playing';
-            io.emit('coinflip:list', activeFlips);
-
-            // Execute Flip
-            setTimeout(async () => {
-                const winnerIdx = Math.random() < 0.5 ? 1 : 2;
-                const winner = winnerIdx === 1 ? flip.player1 : flip.player2;
-                const totalPot = flip.amount * 2;
-                const fee = Math.floor(totalPot * 0.05); // 5% fee
-                const payout = totalPot - fee;
-
-                const winSave = await readAccountJson(winner.userId);
-                if (winSave) {
-                    winSave.balance += payout;
-                    await persistAccountSave(winner.userId, winSave);
-                }
-
-                io.emit('coinflip:results', { flipId: flip.id, winnerIdx, winner, payout });
-                
-                setTimeout(() => {
-                    activeFlips = activeFlips.filter(f => f.id !== flipId);
-                    io.emit('coinflip:list', activeFlips);
-                }, 5000);
-            }, 500);
-
-        } catch (e) {}
+                setTimeout(async () => {
+                    const winnerIdx = Math.random() < 0.5 ? 1 : 2;
+                    const winner = winnerIdx === 1 ? flipNow.player1 : flipNow.player2;
+                    const totalPot = flipNow.amount * 2;
+                    const fee = Math.floor(totalPot * 0.05);
+                    const payout = totalPot - fee;
+                    await creditUserWin(winner.userId, payout);
+                    emitBalanceRemoteSync(io, parseRobloxNumericId(winner.userId), { balance: payout, stats: {} });
+                    io.emit('coinflip:results', { flipId: flipNow.id, winnerIdx, winner, payout });
+                    setTimeout(() => {
+                        activeFlips = activeFlips.filter(f => f.id !== flipId);
+                        io.emit('coinflip:list', activeFlips);
+                    }, 5000);
+                }, 500);
+            } catch (e) { console.error('[Coinflip:join]', e); }
+        });
     });
 
     // ===================================
