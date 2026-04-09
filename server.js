@@ -1132,48 +1132,51 @@ function computeTowersMultiplier(diff, row) {
 app.post('/api/game/dice', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const { userId, target, isOver, bet } = req.body;
-    // SECURITY: multi is computed SERVER-SIDE from target/isOver — client value ignored entirely.
-    const betVal = num(bet, 0);
-    const targetVal = parseFloat(target);
-    if (!Number.isFinite(targetVal) || targetVal <= 0 || targetVal >= 100) {
-        return res.status(400).json({ error: 'Invalid target.' });
-    }
-    // Compute the fair multiplier server-side (mirrors client formula)
-    const serverMulti = parseFloat(((isOver ? (100 - targetVal) : targetVal) / 99 * 0.95).toFixed(4));
-    if (!Number.isFinite(serverMulti) || serverMulti <= 0) {
-        return res.status(400).json({ error: 'Invalid multiplier computation.' });
-    }
-    // Atomically deduct bet before computing outcome
-    if (betVal > 0 && supabaseEnabled()) {
-        const deduct = await deductUserBet(userId, betVal);
-        if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-    }
-    let forceLoss = getCusState(userId).check();
-    let forceWin = getCusState(userId).checkWin();
-    let roll;
-    if (forceWin) {
-        if (isOver) roll = targetVal + Math.max(0.01, (Math.random() * (99.99 - targetVal)));
-        else roll = (Math.random() * targetVal);
-        if (roll >= 100) roll = 99.99;
-    } else if (forceLoss) {
-        if (isOver) roll = (Math.random() * targetVal);
-        else {
-            roll = targetVal + (Math.random() * (100 - targetVal));
-            if (roll >= 100) roll = 99.99;
+    
+    await withUserLock(userId, async () => {
+        // SECURITY: multi is computed SERVER-SIDE from target/isOver — client value ignored entirely.
+        const betVal = num(bet, 0);
+        const targetVal = parseFloat(target);
+        if (!Number.isFinite(targetVal) || targetVal <= 0 || targetVal >= 100) {
+            return res.status(400).json({ error: 'Invalid target.' });
         }
-    } else {
-        roll = (Math.random() * 100);
-    }
-    roll = parseFloat(roll.toFixed(2));
-    const win = isOver ? (roll > targetVal) : (roll < targetVal);
-    // Credit win (or just sync balance on loss) — all tabs get updated via socket
-    if (betVal > 0 && supabaseEnabled()) {
-        const winAmount = win ? betVal * serverMulti : 0;
-        await creditUserWin(userId, winAmount);
-    }
-    if (win) getCusState(userId).recordWin(serverMulti >= 3);
-    else getCusState(userId).recordLoss();
-    res.json({ roll, win, multi: serverMulti });
+        // Compute the fair multiplier server-side (mirrors client formula)
+        const serverMulti = parseFloat(((isOver ? (100 - targetVal) : targetVal) / 99 * 0.95).toFixed(4));
+        if (!Number.isFinite(serverMulti) || serverMulti <= 0) {
+            return res.status(400).json({ error: 'Invalid multiplier computation.' });
+        }
+        // Atomically deduct bet before computing outcome
+        if (betVal > 0 && supabaseEnabled()) {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+        }
+        let forceLoss = getCusState(userId).check();
+        let forceWin = getCusState(userId).checkWin();
+        let roll;
+        if (forceWin) {
+            if (isOver) roll = targetVal + Math.max(0.01, (Math.random() * (99.99 - targetVal)));
+            else roll = (Math.random() * targetVal);
+            if (roll >= 100) roll = 99.99;
+        } else if (forceLoss) {
+            if (isOver) roll = (Math.random() * targetVal);
+            else {
+                roll = targetVal + (Math.random() * (100 - targetVal));
+                if (roll >= 100) roll = 99.99;
+            }
+        } else {
+            roll = (Math.random() * 100);
+        }
+        roll = parseFloat(roll.toFixed(2));
+        const win = isOver ? (roll > targetVal) : (roll < targetVal);
+        // Credit win (or just sync balance on loss) — all tabs get updated via socket
+        if (betVal > 0 && supabaseEnabled()) {
+            const winAmount = win ? betVal * serverMulti : 0;
+            await creditUserWin(userId, winAmount);
+        }
+        if (win) getCusState(userId).recordWin(serverMulti >= 3);
+        else getCusState(userId).recordLoss();
+        res.json({ roll, win, multi: serverMulti });
+    });
 });
 
 app.post('/api/game/plinko', express.json(), async (req, res) => {
@@ -1182,66 +1185,68 @@ app.post('/api/game/plinko', express.json(), async (req, res) => {
     const betVal = num(bet, 0);
     const uid = parseRobloxNumericId(userId);
 
-    // STEP 1: Atomically deduct bet server-side before any outcome
-    if (betVal > 0 && uid && supabaseEnabled()) {
-        const deduct = await deductUserBet(userId, betVal);
-        if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-        emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
-    }
-
-    const rows = parseInt(pRows) || 16;
-    const diff = String(pDiff || 'hard');
-
-    // STEP 2: Weighted bucket selection (same weights as client)
-    const weightTables = {
-        8:  { easy:[0.5,3,8,17,25,17,8,3,0.5], normal:[0.3,2,7,16,24,16,7,2,0.3], hard:[0.3,2,8,18,26,18,8,2,0.3] },
-        10: { easy:[0.5,2,5,10,17,23,17,10,5,2,0.5], normal:[0.3,1.5,4,9,16,22,16,9,4,1.5,0.3], hard:[0.3,2,5,12,20,25,20,12,5,2,0.3] },
-        12: { easy:[0.5,1.5,3,6,10,16,20,16,10,6,3,1.5,0.5], normal:[0.3,1,3,6,10,17,22,17,10,6,3,1,0.3], hard:[0.25,1.5,4,6,15,20,20,20,15,6,4,1.5,0.25] },
-        14: { easy:[0.4,1,2,4,7,12,16,17,16,12,7,4,2,1,0.4], normal:[0.3,0.7,2,4,7,12,17,20,17,12,7,4,2,0.7,0.3], hard:[0.25,1.5,3,5,5,15,15,15,15,15,5,5,3,1.5,0.25] },
-        16: { easy:[0.3,0.8,1.5,3,5,7,10,14,18,14,10,7,5,3,1.5,0.8,0.3], normal:[0.2,0.5,1.5,3,6,10,15,20,20,20,15,10,6,3,1.5,0.5,0.2], hard:[0.25,1.25,3.35,5,3,5,13,13,13,13,13,5,3,5,3.35,1.25,0.25] }
-    };
-    const table = weightTables[rows];
-    const weights = table ? (table[diff] || table['easy']) : null;
-    let idx;
-    if (weights) {
-        const total = weights.reduce((s, w) => s + w, 0);
-        let r = Math.random() * total;
-        idx = weights.length - 1;
-        for (let i = 0; i < weights.length; i++) { r -= weights[i]; if (r <= 0) { idx = i; break; } }
-    } else {
-        idx = Math.floor(rows / 2);
-    }
-
-    // STEP 3: Apply CUS bias
-    const forceLoss = getCusState(userId).check();
-    const forceWin = getCusState(userId).checkWin();
-    if (forceWin) {
-        const edges = [0, rows];
-        idx = edges[Math.floor(Math.random() * edges.length)];
-        getCusState(userId).recordWin(true);
-    } else if (forceLoss) {
-        const center = Math.floor(rows / 2);
-        idx = center + (Math.random() < 0.5 ? -1 : 1) * Math.floor(Math.random() * 2);
-        if (idx < 0) idx = 0;
-        if (idx > rows) idx = rows;
-        getCusState(userId).recordLoss();
-    }
-
-    // STEP 4: Credit win server-side
-    let newBalance = null;
-    if (betVal > 0 && uid && supabaseEnabled()) {
-        const multiplier = getServerPlinkoMultiplier(rows, diff, idx);
-        const winAmt = betVal * multiplier;
-        const credit = await creditUserWin(userId, winAmt);
-        if (credit.ok) newBalance = credit.newBalance;
-        const bigWin = multiplier >= 3.0;
-        if (!forceLoss && !forceWin) {
-            if (multiplier >= 1.0) getCusState(userId).recordWin(bigWin);
-            else getCusState(userId).recordLoss();
+    await withUserLock(userId, async () => {
+        // STEP 1: Atomically deduct bet server-side before any outcome
+        if (betVal > 0 && uid && supabaseEnabled()) {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+            emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
         }
-    }
 
-    res.json({ customOutcome: true, idx, newBalance });
+        const rows = parseInt(pRows) || 16;
+        const diff = String(pDiff || 'hard');
+
+        // STEP 2: Weighted bucket selection (same weights as client)
+        const weightTables = {
+            8:  { easy:[0.5,3,8,17,25,17,8,3,0.5], normal:[0.3,2,7,16,24,16,7,2,0.3], hard:[0.3,2,8,18,26,18,8,2,0.3] },
+            10: { easy:[0.5,2,5,10,17,23,17,10,5,2,0.5], normal:[0.3,1.5,4,9,16,22,16,9,4,1.5,0.3], hard:[0.3,2,5,12,20,25,20,12,5,2,0.3] },
+            12: { easy:[0.5,1.5,3,6,10,16,20,16,10,6,3,1.5,0.5], normal:[0.3,1,3,6,10,17,22,17,10,6,3,1,0.3], hard:[0.25,1.5,4,6,15,20,20,20,15,6,4,1.5,0.25] },
+            14: { easy:[0.4,1,2,4,7,12,16,17,16,12,7,4,2,1,0.4], normal:[0.3,0.7,2,4,7,12,17,20,17,12,7,4,2,0.7,0.3], hard:[0.25,1.5,3,5,5,15,15,15,15,15,5,5,3,1.5,0.25] },
+            16: { easy:[0.3,0.8,1.5,3,5,7,10,14,18,14,10,7,5,3,1.5,0.8,0.3], normal:[0.2,0.5,1.5,3,6,10,15,20,20,20,15,10,6,3,1.5,0.5,0.2], hard:[0.25,1.25,3.35,5,3,5,13,13,13,13,13,5,3,5,3.35,1.25,0.25] }
+        };
+        const table = weightTables[rows];
+        const weights = table ? (table[diff] || table['easy']) : null;
+        let idx;
+        if (weights) {
+            const total = weights.reduce((s, w) => s + w, 0);
+            let r = Math.random() * total;
+            idx = weights.length - 1;
+            for (let i = 0; i < weights.length; i++) { r -= weights[i]; if (r <= 0) { idx = i; break; } }
+        } else {
+            idx = Math.floor(rows / 2);
+        }
+
+        // STEP 3: Apply CUS bias
+        const forceLoss = getCusState(userId).check();
+        const forceWin = getCusState(userId).checkWin();
+        if (forceWin) {
+            const edges = [0, rows];
+            idx = edges[Math.floor(Math.random() * edges.length)];
+            getCusState(userId).recordWin(true);
+        } else if (forceLoss) {
+            const center = Math.floor(rows / 2);
+            idx = center + (Math.random() < 0.5 ? -1 : 1) * Math.floor(Math.random() * 2);
+            if (idx < 0) idx = 0;
+            if (idx > rows) idx = rows;
+            getCusState(userId).recordLoss();
+        }
+
+        // STEP 4: Credit win server-side
+        let newBalance = null;
+        if (betVal > 0 && uid && supabaseEnabled()) {
+            const multiplier = getServerPlinkoMultiplier(rows, diff, idx);
+            const winAmt = betVal * multiplier;
+            const credit = await creditUserWin(userId, winAmt);
+            if (credit.ok) newBalance = credit.newBalance;
+            const bigWin = multiplier >= 3.0;
+            if (!forceLoss && !forceWin) {
+                if (multiplier >= 1.0) getCusState(userId).recordWin(bigWin);
+                else getCusState(userId).recordLoss();
+            }
+        }
+
+        res.json({ customOutcome: true, idx, newBalance });
+    });
 });
 
 
@@ -1251,25 +1256,28 @@ app.post('/api/game/plinko', express.json(), async (req, res) => {
 app.post('/api/game/towers/start', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const { userId, rows, width, bombs, bet, diff } = req.body;
-    const betVal = num(bet, 0);
-    if (betVal > 0 && supabaseEnabled()) {
-        const deduct = await deductUserBet(userId, betVal);
-        if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-        // Immediately push depleted balance to all tabs
-        emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
-    }
-    let logic = [];
-    for(let r=0; r<rows; r++) {
-        let rArr = Array(width).fill(false);
-        let placed = 0;
-        while(placed < bombs) {
-            let i = Math.floor(Math.random()*width);
-            if(!rArr[i]) { rArr[i] = true; placed++; }
+    await withUserLock(userId, async () => {
+        const betVal = num(bet, 0);
+        if (betVal > 0 && supabaseEnabled()) {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+            // Immediately push depleted balance to all tabs
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
         }
-        logic.push(rArr);
-    }
-    activeTowersGames.set(String(userId), { logic, bet: betVal, diff: String(diff || 'easy') });
-    res.json({ ok: true });
+        let logic = [];
+        for(let r=0; r<rows; r++) {
+            let rArr = Array(width).fill(false);
+            let placed = 0;
+            while(placed < bombs) {
+                let i = Math.floor(Math.random()*width);
+                if(!rArr[i]) { rArr[i] = true; placed++; }
+            }
+            logic.push(rArr);
+        }
+        // SECURITY: Server must track curRow to prevent fake cashouts
+        activeTowersGames.set(String(userId), { logic, bet: betVal, diff: String(diff || 'easy'), curRow: 0 });
+        res.json({ ok: true });
+    });
 });
 
 app.post('/api/game/towers/click', express.json(), (req, res) => {
@@ -1279,6 +1287,9 @@ app.post('/api/game/towers/click', express.json(), (req, res) => {
     if (!g) return res.status(400).json({ error: 'No active game' });
     
     setTimeout(async () => {
+        // SECURITY: Verify user is clicking the correct sequential row
+        if (row !== g.curRow) return res.json({ error: 'Wrong row' });
+        
         let logicRow = g.logic[row];
         if (!logicRow) return res.json({ error: 'Invalid row' });
         
@@ -1307,6 +1318,9 @@ app.post('/api/game/towers/click', express.json(), (req, res) => {
             activeTowersGames.delete(String(userId));
             // Bet was deducted at start — sync the true balance to all tabs
             if (supabaseEnabled()) await creditUserWin(userId, 0);
+        } else {
+            // SECURITY: Track progress server-side
+            g.curRow++;
         }
         res.json({ isBomb, rowData: logicRow });
     }, Math.floor(Math.random() * 2500));
@@ -1314,39 +1328,46 @@ app.post('/api/game/towers/click', express.json(), (req, res) => {
 
 app.post('/api/game/towers/cashout', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, curRow } = req.body;
-    const g = activeTowersGames.get(String(userId));
-    if (!g) return res.status(400).json({ error: 'No active game' });
-    activeTowersGames.delete(String(userId));
-    if (g.bet > 0 && curRow > 0 && supabaseEnabled()) {
-        const multi = computeTowersMultiplier(g.diff || 'easy', curRow);
-        const winAmount = g.bet * multi;
-        const result = await creditUserWin(userId, winAmount);
-        getCusState(userId).recordWin(multi >= 3.0);
-        return res.json({ ok: true, winAmount, multiplier: multi, newBalance: result.newBalance });
-    }
-    res.json({ ok: true });
+    const { userId, curRow: reqCurRow } = req.body;
+    await withUserLock(userId, async () => {
+        const g = activeTowersGames.get(String(userId));
+        if (!g) return res.status(400).json({ error: 'No active game' });
+        // SECURITY: Use server-tracked curRow, completely ignore req.body.curRow
+        const targetRow = g.curRow || 0;
+        activeTowersGames.delete(String(userId));
+        if (g.bet > 0 && targetRow > 0 && supabaseEnabled()) {
+            const multi = computeTowersMultiplier(g.diff || 'easy', targetRow);
+            const winAmount = g.bet * multi;
+            const result = await creditUserWin(userId, winAmount);
+            getCusState(userId).recordWin(multi >= 3.0);
+            return res.json({ ok: true, winAmount, multiplier: multi, newBalance: result.newBalance });
+        }
+        res.json({ ok: true });
+    });
 });
 
 app.post('/api/game/mines/start', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const { userId, bombs, bet } = req.body;
-    const betVal = num(bet, 0);
-    if (betVal > 0 && supabaseEnabled()) {
-        const deduct = await deductUserBet(userId, betVal);
-        if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-        // Immediately push depleted balance to all tabs
-        emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
-    }
-    const nb = Math.min(Math.max(parseInt(bombs) || 3, 1), 24);
-    let mGrid = Array(25).fill(false);
-    let placed = 0;
-    while(placed < nb) {
-        let idx = Math.floor(Math.random() * 25);
-        if(!mGrid[idx]) { mGrid[idx] = true; placed++; }
-    }
-    activeMinesGames.set(String(userId), { logic: mGrid, bet: betVal, bombs: nb });
-    res.json({ ok: true });
+    await withUserLock(userId, async () => {
+        const betVal = num(bet, 0);
+        if (betVal > 0 && supabaseEnabled()) {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+            // Immediately push depleted balance to all tabs
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+        }
+        const nb = Math.min(Math.max(parseInt(bombs) || 3, 1), 24);
+        let mGrid = Array(25).fill(false);
+        let placed = 0;
+        while(placed < nb) {
+            let idx = Math.floor(Math.random() * 25);
+            if(!mGrid[idx]) { mGrid[idx] = true; placed++; }
+        }
+        // SECURITY: Server must track safeRevealed to prevent fake cashouts
+        activeMinesGames.set(String(userId), { logic: mGrid, bet: betVal, bombs: nb, safeRevealed: new Set() });
+        res.json({ ok: true });
+    });
 });
 
 app.post('/api/game/mines/click', express.json(), (req, res) => {
@@ -1356,6 +1377,9 @@ app.post('/api/game/mines/click', express.json(), (req, res) => {
     if (!g) return res.status(400).json({ error: 'No active game' });
     
     setTimeout(async () => {
+        // SECURITY: Prevent clicking the same tile twice
+        if (g.safeRevealed.has(tileIdx)) return res.json({ error: 'Already clicked' });
+        
         let isBomb = g.logic[tileIdx];
         let forceLoss = getCusState(userId).check();
         let forceWin = getCusState(userId).checkWin();
@@ -1380,6 +1404,9 @@ app.post('/api/game/mines/click', express.json(), (req, res) => {
             activeMinesGames.delete(String(userId));
             // Bet was deducted at start — sync true balance to all tabs
             if (supabaseEnabled()) await creditUserWin(userId, 0);
+        } else {
+            // SECURITY: Track safely clicked tiles server-side
+            g.safeRevealed.add(tileIdx);
         }
         res.json({ isBomb, mGridFull: isBomb ? g.logic : null });
     }, Math.floor(Math.random() * 2500));
@@ -1388,20 +1415,23 @@ app.post('/api/game/mines/click', express.json(), (req, res) => {
 app.post('/api/game/mines/cashout', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const { userId, revealed } = req.body;
-    const g = activeMinesGames.get(String(userId));
-    if (!g) return res.json({ error: 'No active game' });
-    activeMinesGames.delete(String(userId));
-    const revealedCount = parseInt(revealed) || 0;
-    if (g.bet > 0 && revealedCount > 0 && supabaseEnabled()) {
-        const multi = computeMinesMultiplier(g.bombs || 3, revealedCount);
-        const winAmount = g.bet * multi;
-        const result = await creditUserWin(userId, winAmount);
-        getCusState(userId).recordWin(multi >= 3.0);
-        return res.json({ logic: g.logic, winAmount, multiplier: multi, newBalance: result.newBalance });
-    }
-    // No tiles revealed or no bet — just sync balance (loss already deducted at start)
-    if (supabaseEnabled()) await creditUserWin(userId, 0);
-    res.json({ logic: g.logic });
+    await withUserLock(userId, async () => {
+        const g = activeMinesGames.get(String(userId));
+        if (!g) return res.json({ error: 'No active game' });
+        // SECURITY: Use server-tracked safeRevealed size, completely ignore req.body.revealed
+        const revealedCount = (g.safeRevealed && g.safeRevealed.size) || 0;
+        activeMinesGames.delete(String(userId));
+        if (g.bet > 0 && revealedCount > 0 && supabaseEnabled()) {
+            const multi = computeMinesMultiplier(g.bombs || 3, revealedCount);
+            const winAmount = g.bet * multi;
+            const result = await creditUserWin(userId, winAmount);
+            getCusState(userId).recordWin(multi >= 3.0);
+            return res.json({ logic: g.logic, winAmount, multiplier: multi, newBalance: result.newBalance });
+        }
+        // No tiles revealed or no bet — just sync balance (loss already deducted at start)
+        if (supabaseEnabled()) await creditUserWin(userId, 0);
+        res.json({ logic: g.logic });
+    });
 });
 
 /** Session-restore: check if server still has an active mines game for this user */
@@ -1413,28 +1443,10 @@ app.get('/api/game/mines/status', (req, res) => {
     res.json({ active: !!g, bombs: g ? g.logic.filter(Boolean).length : 0 });
 });
 
-/** Session-restore: re-create server mines game after cold-start, ensuring bombs avoid already-revealed tiles */
+/** Session-restore: functionally disabled for security (prevent fake bet inflation) */
 app.post('/api/game/mines/restore', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, bombs, bet, revealedTiles } = req.body;
-    const uid = String(userId || '').trim();
-    if (!uid) return res.status(400).json({ error: 'Missing userId' });
-    if (activeMinesGames.has(uid)) return res.json({ ok: true, restored: false });
-    // SECURITY: Bet must be provided and positive — restoring without a bet would allow
-    // free cashouts. The bet is what guards the cashout payout check (g.bet > 0).
-    const betVal = num(bet, 0);
-    if (betVal <= 0) return res.status(400).json({ error: 'Missing bet for restore.' });
-    const safe = new Set(Array.isArray(revealedTiles) ? revealedTiles.map(Number) : []);
-    const nb = Math.min(Math.max(parseInt(bombs) || 3, 1), 24);
-    let mGrid = Array(25).fill(false);
-    let placed = 0, attempts = 0;
-    while (placed < nb && attempts < 20000) {
-        attempts++;
-        const idx = Math.floor(Math.random() * 25);
-        if (!mGrid[idx] && !safe.has(idx)) { mGrid[idx] = true; placed++; }
-    }
-    activeMinesGames.set(uid, { logic: mGrid, bet: betVal, bombs: nb });
-    res.json({ ok: true, restored: true });
+    res.json({ ok: false, restored: false, error: 'Session restoration disabled' });
 });
 
 /** Session-restore: check if server still has an active towers game for this user */
@@ -1446,31 +1458,10 @@ app.get('/api/game/towers/status', (req, res) => {
     res.json({ active: !!g });
 });
 
-/** Session-restore: re-create server towers game after cold-start */
+/** Session-restore: functionally disabled for security */
 app.post('/api/game/towers/restore', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, rows, width, bombs, bet, diff } = req.body;
-    const uid = String(userId || '').trim();
-    if (!uid) return res.status(400).json({ error: 'Missing userId' });
-    if (activeTowersGames.has(uid)) return res.json({ ok: true, restored: false });
-    // SECURITY: Bet must be provided and positive to prevent free cashouts.
-    const betVal = num(bet, 0);
-    if (betVal <= 0) return res.status(400).json({ error: 'Missing bet for restore.' });
-    const r = parseInt(rows) || 8;
-    const w = parseInt(width) || 4;
-    const nb = parseInt(bombs) || 1;
-    let logic = [];
-    for (let row = 0; row < r; row++) {
-        let rArr = Array(w).fill(false);
-        let placed = 0;
-        while (placed < nb) {
-            let i = Math.floor(Math.random() * w);
-            if (!rArr[i]) { rArr[i] = true; placed++; }
-        }
-        logic.push(rArr);
-    }
-    activeTowersGames.set(uid, { logic, bet: betVal, diff: String(diff || 'easy') });
-    res.json({ ok: true, restored: true });
+    res.json({ ok: false, restored: false, error: 'Session restoration disabled' });
 });
 
 /** Build a standard 52-card deck and shuffle it server-side (Fisher-Yates). */
@@ -1504,46 +1495,48 @@ app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     // SECURITY: Deck is generated SERVER-SIDE — client deck is ignored entirely.
     const { userId, bet } = req.body;
-    const betVal = num(bet, 0);
-    if (betVal > 0 && supabaseEnabled()) {
-        const deduct = await deductUserBet(userId, betVal);
-        if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-        emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
-    }
-    let forceLoss = getCusState(userId).check();
-    let forceWin = getCusState(userId).checkWin();
+    await withUserLock(userId, async () => {
+        const betVal = num(bet, 0);
+        if (betVal > 0 && supabaseEnabled()) {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+        }
+        let forceLoss = getCusState(userId).check();
+        let forceWin = getCusState(userId).checkWin();
 
-    // Build and shuffle deck on the server
-    const deck = buildServerDeck();
+        // Build and shuffle deck on the server
+        const deck = buildServerDeck();
 
-    let pHand = [deck.pop(), deck.pop()];
-    let dHand = [deck.pop(), deck.pop()];
-    
-    if (forceWin) {
-        pHand = [
-            {suitLetter: 'S', value: 'A', score: 11, isRed: false},
-            {suitLetter: 'H', value: 'K', score: 10, isRed: true}
-        ];
-    } else if (forceLoss) {
-        dHand = [
-            {suitLetter: 'S', value: 'A', score: 11, isRed: false},
-            {suitLetter: 'H', value: 'K', score: 10, isRed: true}
-        ];
-        let pScore = 0, aces = 0;
-        for(let c of pHand) { pScore += c.score; if(c.value==='A') aces++; }
-        while(pScore>21 && aces>0) { pScore-=10; aces--; }
-        if (pScore === 21) pHand[0] = {suitLetter: 'C', value: '5', score: 5, isRed: false};
-    }
-    // Store FULL hand + deck state so server can authoritatively compute outcomes
-    activeBlackjackGames.set(String(userId), {
-        bet: betVal,
-        pHand: [...pHand],
-        dHand: [...dHand],
-        deck: [...deck],
-        forceLoss,
-        forceWin
+        let pHand = [deck.pop(), deck.pop()];
+        let dHand = [deck.pop(), deck.pop()];
+        
+        if (forceWin) {
+            pHand = [
+                {suitLetter: 'S', value: 'A', score: 11, isRed: false},
+                {suitLetter: 'H', value: 'K', score: 10, isRed: true}
+            ];
+        } else if (forceLoss) {
+            dHand = [
+                {suitLetter: 'S', value: 'A', score: 11, isRed: false},
+                {suitLetter: 'H', value: 'K', score: 10, isRed: true}
+            ];
+            let pScore = 0, aces = 0;
+            for(let c of pHand) { pScore += c.score; if(c.value==='A') aces++; }
+            while(pScore>21 && aces>0) { pScore-=10; aces--; }
+            if (pScore === 21) pHand[0] = {suitLetter: 'C', value: '5', score: 5, isRed: false};
+        }
+        // Store FULL hand + deck state so server can authoritatively compute outcomes
+        activeBlackjackGames.set(String(userId), {
+            bet: betVal,
+            pHand: [...pHand],
+            dHand: [...dHand],
+            deck: [...deck],
+            forceLoss,
+            forceWin
+        });
+        res.json({ deck, pHand, dHand });
     });
-    res.json({ deck, pHand, dHand });
 });
 
 
@@ -2158,61 +2151,63 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
         return res.status(400).json({ error: 'Invalid request. Minimum is 1800 ZR$.' });
     }
     
-    // Use the dedicated fast balance read so we always get the live number from Supabase
-    const bal = await getUserBalance(userId);
-    const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
-    if (!bal || currentBalance < zhAmount) {
-        return res.status(400).json({ error: `Insufficient balance. You have ${Math.floor(currentBalance)} ZR$.` });
-    }
+    await withUserLock(userId, async () => {
+        // Use the dedicated fast balance read so we always get the live number from Supabase
+        const bal = await getUserBalance(userId);
+        const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
+        if (!bal || currentBalance < zhAmount) {
+            return res.status(400).json({ error: `Insufficient balance. You have ${Math.floor(currentBalance)} ZR$.` });
+        }
 
-    // Deduct directly via updateUserBalance (the single source of truth)
-    const newBalance = Math.round((currentBalance - zhAmount) * 100) / 100;
-    const updateResult = await updateUserBalance(userId, newBalance, 0);
-    if (!updateResult.ok) {
-        return res.status(500).json({ error: 'Could not process withdrawal. Try again.' });
-    }
-    // Push balance update to any open tabs for this user
-    emitBalanceRemoteSync(io, userId, { balance: newBalance, stats: {} });
+        // Deduct directly via updateUserBalance (the single source of truth)
+        const newBalance = Math.round((currentBalance - zhAmount) * 100) / 100;
+        const updateResult = await updateUserBalance(userId, newBalance, 0);
+        if (!updateResult.ok) {
+            return res.status(500).json({ error: 'Could not process withdrawal. Try again.' });
+        }
+        // Push balance update to any open tabs for this user
+        emitBalanceRemoteSync(io, userId, { balance: newBalance, stats: {} });
 
-    // Fiat value estimation: 1 ZR$ = 0.007 EUR
-    const fiatValue = parseFloat((zhAmount * 0.007).toFixed(2));
+        // Fiat value estimation: 1 ZR$ = 0.007 EUR
+        const fiatValue = parseFloat((zhAmount * 0.007).toFixed(2));
 
-    // Look up username from in-memory connected players (best-effort)
-    let wdUsername = 'Unknown';
-    for (const p of onlinePlayers.values()) {
-        if (String(p.userId) === String(userId)) { wdUsername = p.username || 'Unknown'; break; }
-    }
+        // Look up username from in-memory connected players (best-effort)
+        let wdUsername = 'Unknown';
+        for (const p of onlinePlayers.values()) {
+            if (String(p.userId) === String(userId)) { wdUsername = p.username || 'Unknown'; break; }
+        }
 
-    const wdReq = {
-        id: `cwd_${Date.now()}_${userId}`,
-        userId: userId,
-        username: wdUsername,
-        coin: coin,
-        address: address,
-        extraId: extraId || '',
-        zhAmount: zhAmount,
-        fiatAmount: fiatValue,
-        fiatCurrency: 'eur',
-        status: 'pending',
-        createdAt: Date.now()
-    };
-    
-    cryptoWdState.push(wdReq);
-    saveCryptoWd();
-    const fiatLabel = `${fiatValue.toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    })} ${String(wdReq.fiatCurrency || 'eur').toUpperCase()}`;
-    postDiscordAudit(
-        `📤 ${wdUsername || `User ${userId}`} requested withdraw ${zhAmount.toLocaleString(
-            'en-US'
-        )} ZR$ (~${fiatLabel}) to ${String(coin || '').toUpperCase()}.`
-    );
-    
-    res.json({ ok: true, request: wdReq });
-    
-    // Notify admins if connected
-    io.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
+        const wdReq = {
+            id: `cwd_${Date.now()}_${userId}`,
+            userId: userId,
+            username: wdUsername,
+            coin: coin,
+            address: address,
+            extraId: extraId || '',
+            zhAmount: zhAmount,
+            fiatAmount: fiatValue,
+            fiatCurrency: 'eur',
+            status: 'pending',
+            createdAt: Date.now()
+        };
+        
+        cryptoWdState.push(wdReq);
+        saveCryptoWd();
+        const fiatLabel = `${fiatValue.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })} ${String(wdReq.fiatCurrency || 'eur').toUpperCase()}`;
+        postDiscordAudit(
+            `📤 ${wdUsername || `User ${userId}`} requested withdraw ${zhAmount.toLocaleString(
+                'en-US'
+            )} ZR$ (~${fiatLabel}) to ${String(coin || '').toUpperCase()}.`
+        );
+        
+        res.json({ ok: true, request: wdReq });
+        
+        // Notify admins if connected
+        io.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
+    });
 });
 
 app.get('/api/withdraw/crypto/list', (req, res) => {
@@ -2388,7 +2383,8 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(403).json({ error: 'This gamepass does not belong to your Roblox account. Please create the gamepass from YOUR account.' });
     }
 
-    // --- Step 3: Check our balance in Supabase before touching Roblox ---
+    await withUserLock(userId, async () => {
+        // --- Step 3: Check our balance in Supabase before touching Roblox ---
     const currentBal = await getUserBalance(userId);
     if (!currentBal) {
         return res.status(503).json({ error: 'Could not read your account balance. Try again.' });
@@ -2464,6 +2460,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         message: `Gamepass purchased successfully. You will receive ${Math.floor(gamepassPrice * 0.7)} R$ in your pending balance after Roblox tax.`,
         robuxPaid: gamepassPrice,
         robuxAfterTax: Math.floor(gamepassPrice * 0.7)
+    });
     });
 });
 // =====================================================================
@@ -3284,8 +3281,9 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('rain:join', ({ rainId, userId }) => {
-        const uid = parseRobloxUserIdStrict(userId);
+    socket.on('rain:join', ({ rainId }) => {
+        // SECURITY: Use server-authenticated socket.data.userId, not client payload
+        const uid = parseRobloxUserIdStrict(socket.data.userId);
         if (uid == null) {
             socket.emit('rain:join-failed', { rainId });
             return socket.emit('notification', { type: 'error', text: 'Log in to join the rain.' });
@@ -3367,8 +3365,8 @@ io.on('connection', (socket) => {
                     const totalPot = flipNow.amount * 2;
                     const fee = Math.floor(totalPot * 0.05);
                     const payout = totalPot - fee;
-                    await creditUserWin(winner.userId, payout);
-                    emitBalanceRemoteSync(io, parseRobloxNumericId(winner.userId), { balance: payout, stats: {} });
+                    const result = await creditUserWin(winner.userId, payout);
+                    emitBalanceRemoteSync(io, parseRobloxNumericId(winner.userId), { balance: result.ok ? result.newBalance : payout, stats: {} });
                     io.emit('coinflip:results', { flipId: flipNow.id, winnerIdx, winner, payout });
                     setTimeout(() => {
                         activeFlips = activeFlips.filter(f => f.id !== flipId);
@@ -3570,7 +3568,7 @@ io.on('connection', (socket) => {
                 targetUserId: String(targetUserId),
                 skipAdminLookup: true
             });
-            console.log(`[Admin] ${adminUserId} set withdrawAccessRevoked=${wantRevoke} for ${targetUserId}`);
+            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set withdrawAccessRevoked=${wantRevoke} for ${targetUserId}`);
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating withdrawal access.' });
         }
@@ -3596,7 +3594,7 @@ io.on('connection', (socket) => {
                 targetUserId: String(targetUserId),
                 skipAdminLookup: true
             });
-            console.log(`[Admin] ${adminUserId} set rainAccessRevoked=${wantRevoke} for ${targetUserId}`);
+            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set rainAccessRevoked=${wantRevoke} for ${targetUserId}`);
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating rain access.' });
         }
@@ -3622,7 +3620,7 @@ io.on('connection', (socket) => {
                 targetUserId: String(targetUserId),
                 skipAdminLookup: true
             });
-            console.log(`[Admin] ${adminUserId} set tipAccessRevoked=${wantRevoke} for ${targetUserId}`);
+            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set tipAccessRevoked=${wantRevoke} for ${targetUserId}`);
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating tip access.' });
         }
@@ -3662,7 +3660,7 @@ io.on('connection', (socket) => {
                 targetUserId: String(targetUserId),
                 skipAdminLookup: true
             });
-            console.log(`[Admin] ${adminUserId} set balance of ${targetUserId} to ZR$${save.balance}`);
+            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set balance of ${targetUserId} to ZR$${save.balance}`);
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating balance.' });
         }
@@ -3687,7 +3685,7 @@ io.on('connection', (socket) => {
             targetUserId: tid,
             skipAdminLookup: true
         });
-        console.log(`[Admin] ${adminUserId} set rig of ${tid} to ${rigMode}`);
+        console.log(`[Admin] ${socket.data.userId || 'Unknown'} set rig of ${tid} to ${rigMode}`);
     });
 
     socket.on('admin:set_wd_cooldown', async ({ targetUserId, action, durationMinutes }) => {
@@ -3879,7 +3877,7 @@ io.on('connection', (socket) => {
         saveBansSync();
         
         // Discord Notification
-        const webhookMsg = `🔨 **Ban Issued**\n**Player:** ${targetName} (${targetUserId})\n**Reason:** ${banReason}\n**Duration:** ${durationText}${ipBan && targetIp ? `\n**IP:** ${targetIp} (BANNED)` : ''}`;
+        const webhookMsg = `🔨 **Ban Issued**\n**Player:** ${targetName} (${targetUserId})\n**Reason:** ${banReason}\n**Duration:** ${durationText}${ipBan && targetIp ? `\n**IP:** ${targetIp} (BANNED)` : ''}\n**By admin:** ${socket.data.userId || 'Unknown'}`;
         sendDiscordWebhook(webhookMsg);
         
         // Actively boot the user
@@ -3928,7 +3926,7 @@ io.on('connection', (socket) => {
         
         if (changed) {
             saveBansSync();
-            sendDiscordWebhook(`🔓 **Unban Issued**\n**Targets:** ${details.join(', ')}\n**By admin:** ${adminUserId}`);
+            sendDiscordWebhook(`🔓 **Unban Issued**\n**Targets:** ${details.join(', ')}\n**By admin:** ${socket.data.userId || 'Unknown'}`);
         }
         
         socket.emit('admin:action_result', {
@@ -4363,30 +4361,32 @@ app.post('/api/cases/open', express.json(), async (req, res) => {
     const caseData = CASES_DATA.find(c => c.id === caseId);
     if (!caseData) return res.status(404).json({ error: 'Case not found.' });
 
-    // Check and deduct balance from Supabase
-    const bal = await getUserBalance(uid);
-    const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
-    if (!bal || currentBalance < caseData.price) {
-        return res.status(400).json({ error: `Insufficient balance. Need ${caseData.price} ZR$.` });
-    }
+    await withUserLock(uid, async () => {
+        // Check and deduct balance from Supabase
+        const bal = await getUserBalance(uid);
+        const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
+        if (!bal || currentBalance < caseData.price) {
+            return res.status(400).json({ error: `Insufficient balance. Need ${caseData.price} ZR$.` });
+        }
 
-    const newBalance = Math.round((currentBalance - caseData.price) * 100) / 100;
-    const updateResult = await updateUserBalance(uid, newBalance, 0);
-    if (!updateResult.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
+        const newBalance = Math.round((currentBalance - caseData.price) * 100) / 100;
+        const updateResult = await updateUserBalance(uid, newBalance, 0);
+        if (!updateResult.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
 
-    // Roll item BEFORE we respond (all server-side, no client can manipulate)
-    const item = rollCaseItem(caseData, uid, false);
+        // Roll item BEFORE we respond (all server-side, no client can manipulate)
+        const item = rollCaseItem(caseData, uid, false);
 
-    // Credit the item value back if it's worth something
-    if (item.value > 0) {
-        const finalBalance = Math.round((newBalance + item.value) * 100) / 100;
-        await updateUserBalance(uid, finalBalance, 0);
-        emitBalanceRemoteSync(io, uid, { balance: finalBalance, stats: {} });
-        return res.json({ ok: true, item, newBalance: finalBalance });
-    }
+        // Credit the item value back if it's worth something
+        if (item.value > 0) {
+            const finalBalance = Math.round((newBalance + item.value) * 100) / 100;
+            await updateUserBalance(uid, finalBalance, 0);
+            emitBalanceRemoteSync(io, uid, { balance: finalBalance, stats: {} });
+            return res.json({ ok: true, item, newBalance: finalBalance });
+        }
 
-    emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
-    res.json({ ok: true, item, newBalance });
+        emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
+        res.json({ ok: true, item, newBalance });
+    });
 });
 
 // POST /api/battles/create
@@ -4407,50 +4407,52 @@ app.post('/api/battles/create', express.json(), async (req, res) => {
     const battleMode = validModes.includes(mode) ? mode : 'normal';
     const totalCost = caseData.price * numRounds;
 
-    const bal = await getUserBalance(uid);
-    const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
-    if (!bal || currentBalance < totalCost) {
-        return res.status(400).json({ error: `Need ${totalCost} ZR$ to create this battle.` });
-    }
+    await withUserLock(uid, async () => {
+        const bal = await getUserBalance(uid);
+        const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
+        if (!bal || currentBalance < totalCost) {
+            return res.status(400).json({ error: `Need ${totalCost} ZR$ to create this battle.` });
+        }
 
-    const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
-    const upd = await updateUserBalance(uid, newBalance, 0);
-    if (!upd.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
-    emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
+        const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
+        const upd = await updateUserBalance(uid, newBalance, 0);
+        if (!upd.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
+        emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
 
-    // Find username from online players
-    let creatorName = 'Unknown';
-    for (const p of onlinePlayers.values()) {
-        if (String(p.userId) === String(uid)) { creatorName = p.username || 'Unknown'; break; }
-    }
+        // Find username from online players
+        let creatorName = 'Unknown';
+        for (const p of onlinePlayers.values()) {
+            if (String(p.userId) === String(uid)) { creatorName = p.username || 'Unknown'; break; }
+        }
 
-    const battleId = `battle_${Date.now()}_${uid}`;
-    const battle = {
-        id: battleId,
-        caseId,
-        caseName: caseData.name,
-        caseImage: caseData.image,
-        caseColor: caseData.color,
-        casePrice: caseData.price,
-        rounds: numRounds,
-        mode: battleMode,
-        status: 'waiting', // waiting | active | done
-        currentRound: 0,
-        maxPlayers: (Number.isInteger(clientMaxPlayers) && clientMaxPlayers >= 2 && clientMaxPlayers <= 10) ? clientMaxPlayers : (battleMode === 'team' ? 4 : 2),
-        players: [{
-            userId: uid,
-            username: creatorName,
-            isBot: false,
-            rolls: [],  // [{item, round}]
-            total: 0,
-            paid: totalCost
-        }],
-        winner: null,
-        createdAt: Date.now()
-    };
-    activeBattles.set(battleId, battle);
-    io.emit('battles:list_update', getBattlesList());
-    res.json({ ok: true, battle });
+        const battleId = `battle_${Date.now()}_${uid}`;
+        const battle = {
+            id: battleId,
+            caseId,
+            caseName: caseData.name,
+            caseImage: caseData.image,
+            caseColor: caseData.color,
+            casePrice: caseData.price,
+            rounds: numRounds,
+            mode: battleMode,
+            status: 'waiting', // waiting | active | done
+            currentRound: 0,
+            maxPlayers: (Number.isInteger(clientMaxPlayers) && clientMaxPlayers >= 2 && clientMaxPlayers <= 10) ? clientMaxPlayers : (battleMode === 'team' ? 4 : 2),
+            players: [{
+                userId: uid,
+                username: creatorName,
+                isBot: false,
+                rolls: [],  // [{item, round}]
+                total: 0,
+                paid: totalCost
+            }],
+            winner: null,
+            createdAt: Date.now()
+        };
+        activeBattles.set(battleId, battle);
+        io.emit('battles:list_update', getBattlesList());
+        res.json({ ok: true, battle });
+    });
 });
 
 // GET /api/battles
@@ -4492,31 +4494,34 @@ app.post('/api/battles/:id/join', express.json(), async (req, res) => {
     if (battle.players.length >= battle.maxPlayers) return res.status(400).json({ error: 'Battle is full.' });
 
     const totalCost = battle.casePrice * battle.rounds;
-    const bal = await getUserBalance(uid);
-    const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
-    if (!bal || currentBalance < totalCost) {
-        return res.status(400).json({ error: `Need ${totalCost} ZR$ to join.` });
-    }
 
-    const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
-    const upd = await updateUserBalance(uid, newBalance, 0);
-    if (!upd.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
-    emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
+    await withUserLock(uid, async () => {
+        const bal = await getUserBalance(uid);
+        const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
+        if (!bal || currentBalance < totalCost) {
+            return res.status(400).json({ error: `Need ${totalCost} ZR$ to join.` });
+        }
 
-    let joinName = 'Player';
-    for (const p of onlinePlayers.values()) {
-        if (String(p.userId) === String(uid)) { joinName = p.username || 'Player'; break; }
-    }
+        const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
+        const upd = await updateUserBalance(uid, newBalance, 0);
+        if (!upd.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
+        emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
 
-    battle.players.push({ userId: uid, username: joinName, isBot: false, rolls: [], total: 0, paid: totalCost });
-    io.emit('battles:list_update', getBattlesList());
-    io.emit(`battle:${battle.id}:update`, battle);
+        let joinName = 'Player';
+        for (const p of onlinePlayers.values()) {
+            if (String(p.userId) === String(uid)) { joinName = p.username || 'Player'; break; }
+        }
 
-    // Auto-start if full
-    if (battle.players.length >= battle.maxPlayers) {
-        runBattle(battle).catch(e => console.error(e));
-    }
-    res.json({ ok: true, battle });
+        battle.players.push({ userId: uid, username: joinName, isBot: false, rolls: [], total: 0, paid: totalCost });
+        io.emit('battles:list_update', getBattlesList());
+        io.emit(`battle:${battle.id}:update`, battle);
+
+        // Auto-start if full
+        if (battle.players.length >= battle.maxPlayers) {
+            runBattle(battle).catch(e => console.error(e));
+        }
+        res.json({ ok: true, battle });
+    });
 });
 
 // POST /api/battles/:id/callbot

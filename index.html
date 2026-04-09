@@ -1821,6 +1821,25 @@
         </div>
       </div>
     </div>
+    <!-- ====== CASE CONFIRM MODAL ====== -->
+    <div id="cb-confirm-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+      <div class="cb-modal cb-open-modal-inner" style="max-width: 400px; text-align: center;">
+        <div class="cb-modal-header" style="padding-bottom:16px;">
+          <h2><i class="fa-solid fa-circle-question" style="color:#a78bfa;"></i> Confirm Open</h2>
+          <button class="cb-modal-close" onclick="document.getElementById('cb-confirm-modal').style.display='none'">&times;</button>
+        </div>
+        <div style="margin: 20px 0; font-size: 16px;">
+          Are you sure you want to open <strong id="cb-confirm-name" style="color:var(--accent);">Case Name</strong>?
+          <div style="margin-top: 10px; color: var(--text-secondary); font-size: 14px;">
+            Cost: <strong id="cb-confirm-cost" style="color:#fff;">0</strong> ZR$
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button class="cb-btn cb-btn-create" id="cb-confirm-yes-btn" style="flex:1;"><i class="fa-solid fa-check"></i> Yes, Open</button>
+            <button class="cb-btn" style="flex:1; background: #2c2f4a;" onclick="document.getElementById('cb-confirm-modal').style.display='none'"><i class="fa-solid fa-xmark"></i> Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ====== CASE OPEN MODAL (spinner) ====== -->
     <div id="cb-open-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this&&!window._cbSpinning)this.style.display='none'">

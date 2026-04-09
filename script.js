@@ -5364,7 +5364,7 @@ function cbRenderCasesGrid() {
     const grid = document.getElementById('cb-cases-grid');
     if (!grid) return;
     grid.innerHTML = _cbCases.map(c => `
-        <div class="cb-case-card" style="--case-color:${c.color}" onclick="cbOpenCaseModal('${c.id}')">
+        <div class="cb-case-card" style="--case-color:${c.color}" onclick="cbShowConfirmCaseModal('${c.id}')">
             <img class="cb-case-img" src="${c.image}" alt="${c.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 rx=%2210%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>%F0%9F%93%A6</text></svg>'">
             <div class="cb-case-name">${c.name}</div>
             <div class="cb-case-price">${c.price.toLocaleString()} <span>ZR$</span></div>
@@ -5575,6 +5575,23 @@ async function cbConfirmCreate() {
 
 
 // --- Solo case open ---
+window.cbShowConfirmCaseModal = function(caseId) {
+    if (!robloxUserId) return alert('Please log in first.');
+    const caseData = _cbCases.find(c => c.id === caseId);
+    if (!caseData) return;
+    
+    document.getElementById('cb-confirm-name').textContent = caseData.name;
+    document.getElementById('cb-confirm-cost').textContent = caseData.price.toLocaleString();
+    
+    const yesBtn = document.getElementById('cb-confirm-yes-btn');
+    yesBtn.onclick = () => {
+        document.getElementById('cb-confirm-modal').style.display = 'none';
+        cbOpenCaseModal(caseId);
+    };
+    
+    document.getElementById('cb-confirm-modal').style.display = 'flex';
+};
+
 async function cbOpenCaseModal(caseId) {
     if (!robloxUserId) return alert('Please log in first.');
     const caseData = _cbCases.find(c => c.id === caseId);
