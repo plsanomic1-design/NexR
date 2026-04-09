@@ -5961,9 +5961,9 @@ function cbRenderBattleRoom(b) {
 
     let html = `
     <div class="cb-1v1-battle">
-        <div class="cb-1v1-players-header" style="flex-wrap:wrap;">
+        <div class="cb-1v1-players-header">
             <!-- Left Side Players -->
-            <div class="team-side left" style="display:flex; flex-direction:column; gap:8px;">
+            <div class="team-side left">
                 ${b.players.slice(0, Math.ceil(b.maxPlayers/2)).map(p => `
                 <div class="cb-1v1-player">
                     <div class="avatar"><i class="fa-solid fa-${p.isBot?'robot':'user'}" style="color:${p.isBot?'#a78bfa':'#60a5fa'}"></i></div>
@@ -5980,7 +5980,7 @@ function cbRenderBattleRoom(b) {
             </div>
             
             <!-- Center Case Info -->
-            <div class="cb-1v1-center-case" style="display:${b.status==='active'?'flex':'none'}">
+            <div class="cb-1v1-center-case ${b.status==='active'?'':'is-hidden'}">
                 <div class="round-lbl">Round</div>
                 <div class="cb-1v1-center-hex">
                     <img src="${caseImg}" onerror="this.style.display='none'">
@@ -5989,7 +5989,7 @@ function cbRenderBattleRoom(b) {
             </div>
             
             <!-- Right Side Players -->
-            <div class="team-side right" style="display:flex; flex-direction:column; gap:8px;">
+            <div class="team-side right">
                 ${b.players.slice(Math.ceil(b.maxPlayers/2)).map(p => `
                 <div class="cb-1v1-player right">
                     <div class="avatar"><i class="fa-solid fa-${p.isBot?'robot':'user'}" style="color:${p.isBot?'#a78bfa':'#fc6161'}"></i></div>
@@ -6006,15 +6006,17 @@ function cbRenderBattleRoom(b) {
             </div>
         </div>
 
-        <div class="cb-1v1-spinners" style="display:${b.status==='active'?'block':'none'}">
+        <div class="cb-1v1-spinners ${b.status==='active'?'':'is-hidden'}">
             ${b.players.map(p => `
-            <div class="cb-1v1-spinner-line" id="bspinnerbox-${p.userId}" style="margin-bottom:5px;">
+            <div class="cb-1v1-spinner-line" id="bspinnerbox-${p.userId}">
                 <div class="win-tick"></div>
-                <div class="cb-battle-spinner-track" id="bspinner-${p.userId}" style="flex-direction:row; padding:0 8px;"></div>
+                <div class="cb-spinner-viewport">
+                    <div class="cb-battle-spinner-track" id="bspinner-${p.userId}"></div>
+                </div>
             </div>`).join('')}
         </div>
 
-        <div class="cb-1v1-winnings-area" style="flex-wrap:wrap; display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+        <div class="cb-1v1-winnings-area">
             ${b.players.map(p => `
             <div class="cb-1v1-win-col">
                 <div class="cb-1v1-win-header">${p.username}'s Winnings</div>
@@ -6129,10 +6131,12 @@ function cbBindSockets() {
                 const spinPromises = results.map(async (r) => {
                     const track = document.getElementById(`bspinner-${r.userId}`);
                     if (!track) return;
+                    const LEAD_ITEMS = 24;
+                    const TAIL_ITEMS = 16;
                     
                     let fakeItems = [];
                     if (caseData) {
-                        for(let i=0; i<30; i++) {
+                        for (let i = 0; i < LEAD_ITEMS; i++) {
                             fakeItems.push(caseData.items[Math.floor(Math.random() * caseData.items.length)]);
                         }
                     }
@@ -6140,7 +6144,7 @@ function cbBindSockets() {
                     
                     // Add trailing items so the spinner loops smoothly and isn't empty post-winner
                     if (caseData) {
-                        for(let i=0; i<12; i++) {
+                        for (let i = 0; i < TAIL_ITEMS; i++) {
                             fakeItems.push(caseData.items[Math.floor(Math.random() * caseData.items.length)]);
                         }
                     }
@@ -6157,8 +6161,8 @@ function cbBindSockets() {
                         </div>
                     `).join('');
 
-                    const wrap = track.parentElement;
-                    const targetIndex = Math.min(30, Math.max(0, track.children.length - 1));
+                    const wrap = track.closest('.cb-spinner-viewport') || track.parentElement;
+                    const targetIndex = Math.min(LEAD_ITEMS, Math.max(0, track.children.length - 1));
                     // Keep spinner layout stable: avoid large dynamic paddings that can push
                     // the whole track out of view on some modal sizes.
                     track.style.paddingLeft = '8px';
@@ -6168,7 +6172,7 @@ function cbBindSockets() {
                     await new Promise(res => setTimeout(res, 50 + Math.random()*200));
                     
                     const targetEl = track.children[targetIndex];
-                    let rawTargetVal = 30 * 134;
+                    let rawTargetVal = LEAD_ITEMS * 134;
                     if (wrap && targetEl) {
                         rawTargetVal = targetEl.offsetLeft + targetEl.offsetWidth / 2 - wrap.clientWidth / 2;
                     }
