@@ -6010,7 +6010,7 @@ function cbRenderBattleRoom(b) {
             ${b.players.map(p => `
             <div class="cb-1v1-spinner-line" id="bspinnerbox-${p.userId}" style="margin-bottom:5px;">
                 <div class="win-tick"></div>
-                <div class="cb-battle-spinner-track" id="bspinner-${p.userId}" style="flex-direction:row; padding-left:calc(50% - 67px); padding-top:0;"></div>
+                <div class="cb-battle-spinner-track" id="bspinner-${p.userId}" style="flex-direction:row; padding:0 8px;"></div>
             </div>`).join('')}
         </div>
 
