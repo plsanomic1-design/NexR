@@ -5789,7 +5789,6 @@ async function cbOpenCaseModal(caseId) {
     // Build spinner track
     const ITEM_COUNT = 56;
     const WIN_POS    = 47; // winning item position
-    const ITEM_WIDTH = 134; // item width (130) + margin (2+2)
 
     // Guarantee at least 1 item per rarity tier for visual distribution
     const rarityOrder = ['legendary','epic','rare','uncommon','common'];
@@ -5822,7 +5821,17 @@ async function cbOpenCaseModal(caseId) {
 
     await new Promise(r => setTimeout(r, 80));
 
-    const targetX   = WIN_POS * ITEM_WIDTH;
+    const firstItem = track.children[0];
+    let itemStep = 134;
+    if (firstItem) {
+        const itemRect = firstItem.getBoundingClientRect();
+        const trackStyle = window.getComputedStyle(track);
+        const gap = parseFloat(trackStyle.columnGap || trackStyle.gap || '0') || 0;
+        itemStep = itemRect.width + gap;
+    }
+    const rawTargetX = WIN_POS * itemStep;
+    const maxShiftX = Math.max(0, track.scrollWidth - track.parentElement.clientWidth);
+    const targetX = Math.min(rawTargetX, maxShiftX);
 
     // Play whoosh + start motion blur
     cbSoundEngine.whoosh();

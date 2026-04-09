@@ -1525,6 +1525,10 @@ input:checked + .slider:before { transform: translateX(14px); }
 .cb-spinner-track .cb-horiz-item {
     padding: 8px 7px;
     min-height: 78px;
+    border: 1px solid rgba(148,163,184,0.35);
+    border-radius: 10px;
+    background: rgba(8,12,24,0.55);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
 }
 .cb-spinner-track .cb-horiz-item-img {
     width: 34px;
