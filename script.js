@@ -6118,8 +6118,15 @@ function cbBindSockets() {
         socket.off(`battle:${bid}:round`);
         socket.off(`battle:${bid}:done`);
 
-        socket.on(`battle:${bid}:update`, (b) => cbRenderBattleRoom(b));
-        socket.on(`battle:${bid}:started`, (b) => cbRenderBattleRoom(b));
+        socket.on(`battle:${bid}:update`, (b) => {
+            // Avoid rebuilding DOM during active spin animation.
+            if (window._cbBattleSpinning) return;
+            cbRenderBattleRoom(b);
+        });
+        socket.on(`battle:${bid}:started`, (b) => {
+            if (window._cbBattleSpinning) return;
+            cbRenderBattleRoom(b);
+        });
 
         socket.on(`battle:${bid}:round`, async ({ round, results }) => {
             cbSetBattleSpinLock(true);
