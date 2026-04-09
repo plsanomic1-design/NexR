@@ -5821,17 +5821,19 @@ async function cbOpenCaseModal(caseId) {
 
     await new Promise(r => setTimeout(r, 80));
 
-    const firstItem = track.children[0];
-    let itemStep = 134;
-    if (firstItem) {
-        const itemRect = firstItem.getBoundingClientRect();
-        const trackStyle = window.getComputedStyle(track);
-        const gap = parseFloat(trackStyle.columnGap || trackStyle.gap || '0') || 0;
-        itemStep = itemRect.width + gap;
+    const spinnerWrap = track.parentElement;
+    const winTargetEl = track.children[WIN_POS];
+    let rawTargetX = 0;
+    if (spinnerWrap && winTargetEl) {
+        const wrapWidth = spinnerWrap.clientWidth;
+        const itemLeft = winTargetEl.offsetLeft;
+        const itemWidth = winTargetEl.offsetWidth;
+        rawTargetX = itemLeft + itemWidth / 2 - wrapWidth / 2;
+    } else {
+        rawTargetX = WIN_POS * 134;
     }
-    const rawTargetX = WIN_POS * itemStep;
-    const maxShiftX = Math.max(0, track.scrollWidth - track.parentElement.clientWidth);
-    const targetX = Math.min(rawTargetX, maxShiftX);
+    const maxShiftX = Math.max(0, track.scrollWidth - (spinnerWrap ? spinnerWrap.clientWidth : 0));
+    const targetX = Math.max(0, Math.min(rawTargetX, maxShiftX));
 
     // Play whoosh + start motion blur
     cbSoundEngine.whoosh();
