@@ -6156,12 +6156,22 @@ function cbBindSockets() {
                             <div class="cb-horiz-item-val">${item.value ? item.value.toLocaleString() + ' ZR$' : '—'}</div>
                         </div>
                     `).join('');
+
+                    const wrap = track.parentElement;
+                    const targetIndex = Math.min(30, Math.max(0, track.children.length - 1));
+                    const firstEl = track.children[0];
+                    if (wrap && firstEl) {
+                        const itemW = firstEl.getBoundingClientRect().width || 122;
+                        // Keep the center marker aligned while preserving enough runway.
+                        const sidePad = Math.max(8, Math.round((wrap.clientWidth - itemW) / 2));
+                        track.style.paddingLeft = `${sidePad}px`;
+                        track.style.paddingRight = `${sidePad}px`;
+                    }
                     
                     // wait slight random delay so they don't look perfectly synced
                     await new Promise(res => setTimeout(res, 50 + Math.random()*200));
                     
-                    const wrap = track.parentElement;
-                    const targetEl = track.children[30];
+                    const targetEl = track.children[targetIndex];
                     let rawTargetVal = 30 * 134;
                     if (wrap && targetEl) {
                         rawTargetVal = targetEl.offsetLeft + targetEl.offsetWidth / 2 - wrap.clientWidth / 2;
@@ -6178,7 +6188,7 @@ function cbBindSockets() {
                         cbSoundEngine.click();
                         track.classList.remove('is-spinning', 'is-spinning-fast');
                         
-                        track.children[30]?.classList.add('cb-spin-item--win-ver');
+                        track.children[targetIndex]?.classList.add('cb-spin-item--win-ver');
 
                         await new Promise(res => setTimeout(res, 200));
                         cbSoundEngine.result(r.item.rarity);
