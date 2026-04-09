@@ -343,25 +343,35 @@
                 <h3 class="admin-card-title"><i class="fa-solid fa-bullhorn"></i> Global Announcement</h3>
                 <div class="admin-balance-row" style="flex-wrap:wrap; margin-top:12px;">
                     <div class="admin-balance-block" style="flex:2;min-width:160px;">
-                        <input type="text" id="admin-announce-text" placeholder="Server restarting in 5 minutes! ...">
+                        <div class="input-wrapper">
+                            <input type="text" id="admin-announce-text" placeholder="Server restarting in 5 minutes! ...">
+                        </div>
                     </div>
                 </div>
                 <div class="admin-balance-row" style="margin-top:12px;">
                     <div class="admin-balance-block">
                         <label style="font-size:10px; color:var(--text-dim);">Days</label>
-                        <input type="number" id="admin-announce-d" value="0" min="0" max="30">
+                        <div class="input-wrapper">
+                            <input type="number" id="admin-announce-d" value="0" min="0" max="30">
+                        </div>
                     </div>
                     <div class="admin-balance-block">
                         <label style="font-size:10px; color:var(--text-dim);">Hours</label>
-                        <input type="number" id="admin-announce-h" value="0" min="0" max="23">
+                        <div class="input-wrapper">
+                            <input type="number" id="admin-announce-h" value="0" min="0" max="23">
+                        </div>
                     </div>
                     <div class="admin-balance-block">
                         <label style="font-size:10px; color:var(--text-dim);">Mins</label>
-                        <input type="number" id="admin-announce-m" value="5" min="0" max="59">
+                        <div class="input-wrapper">
+                            <input type="number" id="admin-announce-m" value="5" min="0" max="59">
+                        </div>
                     </div>
                     <div class="admin-balance-block">
                         <label style="font-size:10px; color:var(--text-dim);">Secs</label>
-                        <input type="number" id="admin-announce-s" value="0" min="0" max="59">
+                        <div class="input-wrapper">
+                            <input type="number" id="admin-announce-s" value="0" min="0" max="59">
+                        </div>
                     </div>
                 </div>
                 <div class="admin-rig-btns" style="margin-top:12px;">

@@ -1640,7 +1640,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cMulti = 1.0;
                 
                 // Do NOT manually deduct from UI, wait for the socket to 'balance:update' and confirm the bet!
-                socket?.emit('crash:join', { userId: robloxUserId, username: currentUsername, bet, auto: cAuto });
+                socket?.emit('crash:join', { username: currentUsername, bet, auto: cAuto });
                 setCrashPendingCashoutButton();
                 
             } else if(cState === 'running') {
@@ -1863,7 +1863,7 @@ async function resumeGameSessions() {
                     await fetch('/api/game/mines/restore', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId: robloxUserId, bombs: ms.bombs, revealedTiles: ms.revealedTiles })
+                        body: JSON.stringify({ userId: robloxUserId, bombs: ms.bombs, bet: ms.bet || 0, revealedTiles: ms.revealedTiles })
                     });
                     if (typeof window._minesRestore === 'function') window._minesRestore(ms);
                     showGameToast('\uD83C\uDFAE Mines game restored!', 'var(--accent)');
@@ -1895,7 +1895,7 @@ async function resumeGameSessions() {
                 await fetch('/api/game/towers/restore', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: robloxUserId, rows: 8, width: cfg.w, bombs: cfg.b })
+                    body: JSON.stringify({ userId: robloxUserId, rows: 8, width: cfg.w, bombs: cfg.b, bet: ts.bet || 0, diff: ts.diff || 'easy' })
                 });
             }
             if (ts.curRow > 0) {
@@ -4349,11 +4349,11 @@ function createCoinflip() {
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> CREATING...';
     }
 
-    socket?.emit('coinflip:create', { userId: robloxUserId, amount: amt });
+    socket?.emit('coinflip:create', { amount: amt });
 }
 
 function joinCoinflip(id) {
-    socket?.emit('coinflip:join', { flipId: id, userId: robloxUserId });
+    socket?.emit('coinflip:join', { flipId: id });
 }
 
 function playCFAnimation({ flipId, winnerIdx, winner, payout }) {
@@ -4385,31 +4385,45 @@ function addChatMessage(msg) {
 
     const div = document.createElement('div');
     div.className = 'chat-msg';
-    
-    const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    let text = msg.text;
-    let suffix = '';
 
-    // Detect Rain Announcement: "Player has hosted a 1000ZH$ RAIN"
-    const rainMatch = text.match(/(.+) started a Rain for ([\d\.]+) ZH\$!/);
+    const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // SECURITY: Build DOM nodes with textContent so no user-supplied string can inject HTML/JS.
+    const header = document.createElement('div');
+    header.className = 'chat-msg-header';
+
+    const authorSpan = document.createElement('span');
+    authorSpan.className = 'chat-msg-author';
+    authorSpan.textContent = msg.username || 'Guest';     // ← safe, no XSS
+    authorSpan.addEventListener('click', () => openTipFor(authorSpan.textContent));
+
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'chat-msg-time';
+    timeSpan.textContent = time;                           // ← safe
+
+    header.appendChild(authorSpan);
+    header.appendChild(timeSpan);
+
+    const textDiv = document.createElement('div');
+    textDiv.className = 'chat-msg-text';
+    textDiv.textContent = String(msg.text || '');          // ← safe, no XSS
+
+    // For System rain messages, append a safe JOIN button via DOM (not innerHTML)
+    const rawText = String(msg.text || '');
+    const rainMatch = rawText.match(/(.+) started a Rain for ([\d\.]+) ZH\$!/);
     if (msg.username === 'System' && rainMatch) {
-        // We add a join button
-        // Since we don't have the rainId here easily (unless we pass it), 
-        // we'll assume it's the latest active rain or wait for a specific ID.
-        // For simplicity, we'll try to find an active rain.
-        const rainId = 'active'; // We can use the global active rain list
-        suffix = ` <button class="chat-join-btn" data-rain-id="${rainId}" onclick="handleInlineJoinRain(this)">JOIN</button>`;
+        const joinBtn = document.createElement('button');
+        joinBtn.className = 'chat-join-btn';
+        joinBtn.dataset.rainId = 'active';
+        joinBtn.textContent = 'JOIN';
+        joinBtn.addEventListener('click', () => handleInlineJoinRain(joinBtn));
+        textDiv.appendChild(document.createTextNode(' '));
+        textDiv.appendChild(joinBtn);
     }
 
-    div.innerHTML = `
-        <div class="chat-msg-header">
-            <span class="chat-msg-author" onclick="openTipFor('${msg.username}')">${msg.username}</span>
-            <span class="chat-msg-time">${time}</span>
-        </div>
-        <div class="chat-msg-text">${text}${suffix}</div>
-    `;
-    
+    div.appendChild(header);
+    div.appendChild(textDiv);
+
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
@@ -4462,8 +4476,6 @@ function confirmStartRain() {
     if (amount > roBalance) return alert('Not enough balance!');
 
     socket?.emit('rain:create', {
-        userId: robloxUserId,
-        username: currentUsername,
         amount,
         duration,
         minWager
@@ -4568,8 +4580,6 @@ function confirmSendTip() {
     if (amount > roBalance) return alert('Not enough balance!');
 
     socket?.emit('tip:send', {
-        fromUserId: robloxUserId,
-        fromUsername: currentUsername,
         toTarget: target,
         amount
     });

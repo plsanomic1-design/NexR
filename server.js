@@ -162,10 +162,7 @@ function formatAmountDisplay(n) {
     return x.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-const DISCORD_AUDIT_WEBHOOK = (
-    process.env.DISCORD_WEBHOOK_URL ||
-    'https://discord.com/api/webhooks/1491257150884941929/X1wZVYEQNIw1dfm9731rvRSIUyGm9rNIxJFtbcRNPKU_jkGa1oRqbMadTWfEA8k3Rghb'
-).trim();
+const DISCORD_AUDIT_WEBHOOK = (process.env.DISCORD_WEBHOOK_URL || '').trim();
 
 function getOnlineUsernameByUserId(userId) {
     const needle = String(userId || '').trim();
@@ -1134,9 +1131,19 @@ function computeTowersMultiplier(diff, row) {
 
 app.post('/api/game/dice', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, target, isOver, multi, bet } = req.body;
-    // Atomically deduct bet before computing outcome
+    const { userId, target, isOver, bet } = req.body;
+    // SECURITY: multi is computed SERVER-SIDE from target/isOver — client value ignored entirely.
     const betVal = num(bet, 0);
+    const targetVal = parseFloat(target);
+    if (!Number.isFinite(targetVal) || targetVal <= 0 || targetVal >= 100) {
+        return res.status(400).json({ error: 'Invalid target.' });
+    }
+    // Compute the fair multiplier server-side (mirrors client formula)
+    const serverMulti = parseFloat(((isOver ? (100 - targetVal) : targetVal) / 99 * 0.95).toFixed(4));
+    if (!Number.isFinite(serverMulti) || serverMulti <= 0) {
+        return res.status(400).json({ error: 'Invalid multiplier computation.' });
+    }
+    // Atomically deduct bet before computing outcome
     if (betVal > 0 && supabaseEnabled()) {
         const deduct = await deductUserBet(userId, betVal);
         if (!deduct.ok) return res.status(400).json({ error: deduct.error });
@@ -1145,28 +1152,28 @@ app.post('/api/game/dice', express.json(), async (req, res) => {
     let forceWin = getCusState(userId).checkWin();
     let roll;
     if (forceWin) {
-        if (isOver) roll = target + Math.max(0.01, (Math.random() * (99.99 - target)));
-        else roll = (Math.random() * target);
+        if (isOver) roll = targetVal + Math.max(0.01, (Math.random() * (99.99 - targetVal)));
+        else roll = (Math.random() * targetVal);
         if (roll >= 100) roll = 99.99;
     } else if (forceLoss) {
-        if (isOver) roll = (Math.random() * target);
+        if (isOver) roll = (Math.random() * targetVal);
         else {
-            roll = target + (Math.random() * (100 - target));
+            roll = targetVal + (Math.random() * (100 - targetVal));
             if (roll >= 100) roll = 99.99;
         }
     } else {
         roll = (Math.random() * 100);
     }
     roll = parseFloat(roll.toFixed(2));
-    const win = isOver ? (roll > target) : (roll < target);
+    const win = isOver ? (roll > targetVal) : (roll < targetVal);
     // Credit win (or just sync balance on loss) — all tabs get updated via socket
     if (betVal > 0 && supabaseEnabled()) {
-        const winAmount = win ? betVal * num(multi, 1) : 0;
+        const winAmount = win ? betVal * serverMulti : 0;
         await creditUserWin(userId, winAmount);
     }
-    if (win) getCusState(userId).recordWin(multi >= 3);
+    if (win) getCusState(userId).recordWin(serverMulti >= 3);
     else getCusState(userId).recordLoss();
-    res.json({ roll, win });
+    res.json({ roll, win, multi: serverMulti });
 });
 
 app.post('/api/game/plinko', express.json(), async (req, res) => {
@@ -1409,10 +1416,14 @@ app.get('/api/game/mines/status', (req, res) => {
 /** Session-restore: re-create server mines game after cold-start, ensuring bombs avoid already-revealed tiles */
 app.post('/api/game/mines/restore', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, bombs, revealedTiles } = req.body;
+    const { userId, bombs, bet, revealedTiles } = req.body;
     const uid = String(userId || '').trim();
     if (!uid) return res.status(400).json({ error: 'Missing userId' });
     if (activeMinesGames.has(uid)) return res.json({ ok: true, restored: false });
+    // SECURITY: Bet must be provided and positive — restoring without a bet would allow
+    // free cashouts. The bet is what guards the cashout payout check (g.bet > 0).
+    const betVal = num(bet, 0);
+    if (betVal <= 0) return res.status(400).json({ error: 'Missing bet for restore.' });
     const safe = new Set(Array.isArray(revealedTiles) ? revealedTiles.map(Number) : []);
     const nb = Math.min(Math.max(parseInt(bombs) || 3, 1), 24);
     let mGrid = Array(25).fill(false);
@@ -1422,7 +1433,7 @@ app.post('/api/game/mines/restore', express.json(), (req, res) => {
         const idx = Math.floor(Math.random() * 25);
         if (!mGrid[idx] && !safe.has(idx)) { mGrid[idx] = true; placed++; }
     }
-    activeMinesGames.set(uid, { logic: mGrid });
+    activeMinesGames.set(uid, { logic: mGrid, bet: betVal, bombs: nb });
     res.json({ ok: true, restored: true });
 });
 
@@ -1438,10 +1449,13 @@ app.get('/api/game/towers/status', (req, res) => {
 /** Session-restore: re-create server towers game after cold-start */
 app.post('/api/game/towers/restore', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, rows, width, bombs } = req.body;
+    const { userId, rows, width, bombs, bet, diff } = req.body;
     const uid = String(userId || '').trim();
     if (!uid) return res.status(400).json({ error: 'Missing userId' });
     if (activeTowersGames.has(uid)) return res.json({ ok: true, restored: false });
+    // SECURITY: Bet must be provided and positive to prevent free cashouts.
+    const betVal = num(bet, 0);
+    if (betVal <= 0) return res.status(400).json({ error: 'Missing bet for restore.' });
     const r = parseInt(rows) || 8;
     const w = parseInt(width) || 4;
     const nb = parseInt(bombs) || 1;
@@ -1455,13 +1469,41 @@ app.post('/api/game/towers/restore', express.json(), (req, res) => {
         }
         logic.push(rArr);
     }
-    activeTowersGames.set(uid, { logic });
+    activeTowersGames.set(uid, { logic, bet: betVal, diff: String(diff || 'easy') });
     res.json({ ok: true, restored: true });
 });
 
+/** Build a standard 52-card deck and shuffle it server-side (Fisher-Yates). */
+function buildServerDeck() {
+    const suits = [
+        { letter: 'S', isRed: false }, { letter: 'C', isRed: false },
+        { letter: 'H', isRed: true  }, { letter: 'D', isRed: true  }
+    ];
+    const faces = [
+        { value: 'A', score: 11 }, { value: '2', score: 2  }, { value: '3', score: 3  },
+        { value: '4', score: 4  }, { value: '5', score: 5  }, { value: '6', score: 6  },
+        { value: '7', score: 7  }, { value: '8', score: 8  }, { value: '9', score: 9  },
+        { value: '10', score: 10 }, { value: 'J', score: 10 }, { value: 'Q', score: 10 },
+        { value: 'K', score: 10 }
+    ];
+    const deck = [];
+    for (const s of suits) {
+        for (const f of faces) {
+            deck.push({ suitLetter: s.letter, isRed: s.isRed, value: f.value, score: f.score });
+        }
+    }
+    // Fisher-Yates shuffle
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    return deck;
+}
+
 app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, deck, bet } = req.body;
+    // SECURITY: Deck is generated SERVER-SIDE — client deck is ignored entirely.
+    const { userId, bet } = req.body;
     const betVal = num(bet, 0);
     if (betVal > 0 && supabaseEnabled()) {
         const deduct = await deductUserBet(userId, betVal);
@@ -1470,7 +1512,10 @@ app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
     }
     let forceLoss = getCusState(userId).check();
     let forceWin = getCusState(userId).checkWin();
-    
+
+    // Build and shuffle deck on the server
+    const deck = buildServerDeck();
+
     let pHand = [deck.pop(), deck.pop()];
     let dHand = [deck.pop(), deck.pop()];
     
@@ -1852,9 +1897,16 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
         if (parts.length >= 2 && parts[0] === 'deps') {
             const userId = parseInt(parts[1], 10);
             
-            if (!processedCryptoPayments.has(order_id)) {
+            // SECURITY: Check Supabase for duplicate order_id before crediting.
+            // The in-memory Set is only a fast pre-check; Supabase is the authoritative guard
+            // against replays across restarts and the 50k clear window.
+            const dupCheckRes = await supabaseFetch(
+                `transactions?type=eq.crypto_deposit_webhook&reference_id=eq.${encodeURIComponent(String(order_id).slice(0, 200))}&limit=1`
+            ).catch(() => null);
+            const dupRows = dupCheckRes && dupCheckRes.ok ? await dupCheckRes.json().catch(() => []) : [];
+            const alreadyProcessed = Array.isArray(dupRows) && dupRows.length > 0;
+            if (!processedCryptoPayments.has(order_id) && !alreadyProcessed) {
                 processedCryptoPayments.add(order_id);
-                if (processedCryptoPayments.size > 50000) processedCryptoPayments.clear();
                 
                 // Reverse calculation: ZR$ = EUR / 0.007
                 const depositAmount = Math.round(parseFloat(price_amount) / 0.007);
@@ -1865,6 +1917,20 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                         const bal = await getUserBalance(uid);
                         if (bal) {
                             const newBal = bal.balance_zr + depositAmount; // legacy balance_zh is merged on next login via loadAccountFromSupabase
+                            // Persist a webhook receipt row so replays after restart are blocked
+                            await supabaseFetch('transactions', {
+                                method: 'POST',
+                                headers: { Prefer: 'return=minimal' },
+                                body: JSON.stringify({
+                                    user_id: String(uid),
+                                    amount: depositAmount,
+                                    currency: 'zr',
+                                    type: 'crypto_deposit_webhook',
+                                    status: 'completed',
+                                    game_name: `NOWPayments order: ${order_id}`,
+                                    reference_id: String(order_id).slice(0, 200)
+                                })
+                            }).catch(() => {});
                             const result = await updateUserBalance(uid, newBal, 0); // we pass 0 here because it's merged naturally or zeroed
                             if (result.ok) {
                                 emitBalanceRemoteSync(io, uid, { balance: newBal, stats: {} });
@@ -2170,12 +2236,10 @@ app.post('/api/withdraw/crypto/cancel', express.json(), async (req, res) => {
     cryptoWdState[wdIndex].status = 'cancelled';
     saveCryptoWd();
     
-    // Refund the user's ZR$
-    const save = await readAccountJson(userId);
-    if (save) {
-        save.balance = (save.balance || 0) + reqWd.zhAmount;
-        await persistAccountSave(userId, save);
-        emitBalanceRemoteSync(io, userId, save);
+    // SECURITY: Use creditUserWin for atomic Supabase refund — not the stale read-modify-write pattern.
+    const refundResult = await creditUserWin(userId, reqWd.zhAmount);
+    if (!refundResult.ok) {
+        console.error('[CryptoWd Cancel] Refund failed for', userId, refundResult);
     }
     
     res.json({ ok: true });
@@ -2414,23 +2478,21 @@ const crashGame = {
     timeoutTick: null
 };
 
-function processCrashCashout(userId, cashoutMultiplier) {
-    const p = crashGame.players.get(String(userId));
-    if (!p || p.cashedOut || crashGame.state !== 'running') return false;
-    
-    p.cashedOut = true;
-    p.winAmt = p.bet * cashoutMultiplier;
-    
-    readAccountJson(userId).then(save => {
-        if (save) {
-            save.balance += p.winAmt;
-            persistAccountSave(userId, save);
-            emitBalanceRemoteSync(io, userId, save);
-        }
-    });
+async function processCrashCashout(userId, cashoutMultiplier) {
+    return withUserLock(userId, async () => {
+        const p = crashGame.players.get(String(userId));
+        if (!p || p.cashedOut || crashGame.state !== 'running') return false;
 
-    io.emit('crash:playerCashedOut', { userId: String(userId), multi: cashoutMultiplier, winAmt: p.winAmt });
-    return true;
+        p.cashedOut = true;
+        p.winAmt = p.bet * cashoutMultiplier;
+
+        // SECURITY: Use creditUserWin (atomic Supabase read-modify-write) instead of
+        // the old read-modify-persist pattern which was vulnerable to race conditions.
+        await creditUserWin(userId, p.winAmt);
+
+        io.emit('crash:playerCashedOut', { userId: String(userId), multi: cashoutMultiplier, winAmt: p.winAmt });
+        return true;
+    });
 }
 
 function tickCrash() {
@@ -2545,7 +2607,7 @@ function makeWdCooldownEndsAt(save) {
     return last ? last + getWithdrawCooldownMsFromStats(save.stats) : 0;
 }
 
-/** Push balance + stats to matching socket(s); broadcast only if nobody matched (e.g. not yet identified). */
+/** Push balance + stats only to matching socket(s) for this user. Never broadcasts globally. */
 function emitBalanceRemoteSync(io, rawUserId, save) {
     const stats =
         save && save.stats && typeof save.stats === 'object' ? { ...save.stats } : {};
@@ -2555,18 +2617,14 @@ function emitBalanceRemoteSync(io, rawUserId, save) {
         balanceZh: typeof save.balanceZh === 'number' ? save.balanceZh : 0,
         stats
     };
-    let targeted = 0;
+    // SECURITY: Only deliver to the specific user's own sockets — never broadcast to all.
     for (const [sid, p] of onlinePlayers.entries()) {
         if (userIdsMatch(p.userId, rawUserId)) {
             const sock = io.sockets.sockets.get(sid);
             if (sock) {
                 sock.emit('balance:remote_sync', payload);
-                targeted++;
             }
         }
-    }
-    if (targeted === 0) {
-        io.emit('balance:remote_sync', payload);
     }
 }
 
@@ -2985,6 +3043,9 @@ io.on('connection', (socket) => {
             balance: data.balance || 0,
             balanceZh: data.balanceZh || 0
         });
+        // SECURITY: Store authenticated userId on server-side socket object.
+        // All subsequent handlers use socket.data.userId — never the client-supplied payload.
+        socket.data.userId = uid;
         if (ADMIN_IDS.includes(String(uid))) socket.isAdminMod = true;
     });
 
@@ -2995,7 +3056,10 @@ io.on('connection', (socket) => {
         players: Array.from(crashGame.players.values())
     });
 
-    socket.on('crash:join', async ({ userId, username, bet, auto }) => {
+    socket.on('crash:join', async ({ username, bet, auto }) => {
+        // SECURITY: userId always comes from server-authenticated socket, not client payload.
+        const userId = socket.data.userId;
+        if (!userId) return socket.emit('notification', {type: 'error', text: 'Not authenticated.'});
         if (crashGame.state !== 'starting') return socket.emit('notification', {type: 'error', text: 'Crash has already started!'});
         if (crashGame.players.has(String(userId))) return;
         const betVal = num(bet, 0);
@@ -3010,8 +3074,10 @@ io.on('connection', (socket) => {
         });
     });
 
-    socket.on('crash:cashout', ({ userId }) => {
-        if (crashGame.state !== 'running') return;
+    socket.on('crash:cashout', () => {
+        // SECURITY: userId always comes from server-authenticated socket, not client payload.
+        const userId = socket.data.userId;
+        if (!userId || crashGame.state !== 'running') return;
         const p = crashGame.players.get(String(userId));
         if (!p || p.cashedOut) return;
         const elapsed = Date.now() - crashGame.startTime;
@@ -3020,8 +3086,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('chat:message', async (data) => {
-        const { userId, username, message } = data;
+        const { message } = data;
         if (!message || message.trim().length === 0) return;
+        // SECURITY: userId and username come from server-side socket data, not the client payload.
+        // This prevents chat impersonation (e.g. sending messages as "Admin" or another user).
+        const userId = socket.data.userId;
+        const playerEntry = onlinePlayers.get(socket.id);
+        const username = playerEntry ? (playerEntry.username || 'Guest') : 'Guest';
 
         const msgObj = {
             id: Math.random().toString(36).substr(2, 9),
@@ -3037,7 +3108,9 @@ io.on('connection', (socket) => {
     });
 
     // TIP SYSTEM SVR
-    socket.on('tip:send', async ({ fromUserId, toTarget, amount }) => {
+    socket.on('tip:send', async ({ toTarget, amount }) => {
+        // SECURITY: Sender identity comes from server-authenticated socket, never the client payload.
+        const fromUserId = socket.data.userId;
         if (!fromUserId || !toTarget || amount < 1) return;
 
         await withUserLock(fromUserId, async () => {
@@ -3082,13 +3155,13 @@ io.on('connection', (socket) => {
     });
 
     // RAIN SYSTEM SVR
-    socket.on('rain:create', async ({ userId, amount, duration, minWager }) => {
-        if (amount < 10) return;
-
-        const creatorId = parseRobloxUserIdStrict(userId);
+    socket.on('rain:create', async ({ amount, duration, minWager }) => {
+        // SECURITY: Creator identity comes from server-authenticated socket, never the client payload.
+        const creatorId = parseRobloxUserIdStrict(socket.data.userId);
         if (creatorId == null) {
             return socket.emit('notification', { type: 'error', text: 'Log in to start a rain.' });
         }
+        if (amount < 10) return;
 
         try {
             const save = await readAccountJson(creatorId);
@@ -3235,8 +3308,10 @@ io.on('connection', (socket) => {
     });
 
     // COINFLIP SVR
-    socket.on('coinflip:create', async ({ userId, amount }) => {
-        if (amount < 1) return;
+    socket.on('coinflip:create', async ({ amount }) => {
+        // SECURITY: userId comes from server-authenticated socket, never the client payload.
+        const userId = socket.data.userId;
+        if (!userId || amount < 1) return;
         
         // LIMIT: 1 active flip per player
         const hasActive = activeFlips.some(f => f.player1.userId === userId || (f.player2 && f.player2.userId === userId));
@@ -3265,7 +3340,10 @@ io.on('connection', (socket) => {
         });
     });
 
-    socket.on('coinflip:join', async ({ flipId, userId }) => {
+    socket.on('coinflip:join', async ({ flipId }) => {
+        // SECURITY: userId comes from server-authenticated socket, never the client payload.
+        const userId = socket.data.userId;
+        if (!userId) return;
         const flip = activeFlips.find(f => f.id === flipId);
         if (!flip || flip.status !== 'waiting' || String(flip.player1.userId) === String(userId)) return;
 
@@ -3305,30 +3383,31 @@ io.on('connection', (socket) => {
     // ADMIN ACTIONS
     // ===================================
 
-    socket.on('admin:set_announcement', ({ adminUserId, text, durationMs }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:set_announcement', ({ text, durationMs }) => {
+        // SECURITY: Admin status verified via server-side socket.isAdminMod set during player:identify.
+        if (!socket.isAdminMod) return;
         globalAnnouncement = {
             active: true,
             text: String(text || '').trim(),
             expiresAt: Date.now() + parseInt(durationMs || 0)
         };
         io.emit('announcement:sync', { ...globalAnnouncement, msLeft: globalAnnouncement.expiresAt - Date.now() });
-        adminActionLog(adminUserId, 'Global Announcement', `Started: ${globalAnnouncement.text}`);
+        adminActionLog(socket.data.userId, 'Global Announcement', `Started: ${globalAnnouncement.text}`);
     });
 
-    socket.on('admin:stop_announcement', ({ adminUserId }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:stop_announcement', () => {
+        if (!socket.isAdminMod) return;
         globalAnnouncement = { active: false, text: '', expiresAt: 0 };
         io.emit('announcement:sync', { ...globalAnnouncement, msLeft: 0 });
-        adminActionLog(adminUserId, 'Global Announcement', `Stopped announcement`);
+        adminActionLog(socket.data.userId, 'Global Announcement', `Stopped announcement`);
     });
 
-    socket.on('admin:get_crypto_wd', ({ adminUserId }) => {
+    socket.on('admin:get_crypto_wd', () => {
         if (!socket.isAdminMod) return;
         socket.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
     });
 
-    socket.on('admin:action_crypto_wd', async ({ adminUserId, wdId, action }) => {
+    socket.on('admin:action_crypto_wd', async ({ wdId, action }) => {
         if (!socket.isAdminMod) return;
         const wdIndex = cryptoWdState.findIndex(w => w.id === wdId && w.status === 'pending');
         if (wdIndex === -1) return;
@@ -3339,21 +3418,16 @@ io.on('connection', (socket) => {
             cryptoWdState[wdIndex].status = 'paid';
             saveCryptoWd();
             socket.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
-            console.log(`[Admin] Wd ${wdId} marked as paid by ${adminUserId}`);
+            console.log(`[Admin] Wd ${wdId} marked as paid by ${socket.data.userId}`);
         } else if (action === 'reject') {
             cryptoWdState[wdIndex].status = 'rejected';
             saveCryptoWd();
             
-            // Refund the user
-            const save = await readAccountJson(req.userId);
-            if (save) {
-                save.balance = (save.balance || 0) + req.zhAmount;
-                await persistAccountSave(req.userId, save);
-                emitBalanceRemoteSync(io, req.userId, save);
-            }
+            // SECURITY: Use creditUserWin for atomic Supabase refund — not stale read-modify-write.
+            await creditUserWin(req.userId, req.zhAmount);
             
             socket.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
-            console.log(`[Admin] Wd ${wdId} rejected and refunded by ${adminUserId}`);
+            console.log(`[Admin] Wd ${wdId} rejected and refunded by ${socket.data.userId}`);
         }
     });
 
@@ -3362,15 +3436,16 @@ io.on('connection', (socket) => {
     // ============================================================
 
     // Notify admin clients on connect if they are admin
-    socket.on('admin:identify', ({ userId }) => {
-        if (!ADMIN_IDS.includes(String(userId))) return;
+    socket.on('admin:identify', () => {
+        // isAdminMod was set during player:identify via the server-stored userId.
+        if (!socket.isAdminMod) return;
         socket.emit('admin:auth_success');
-        console.log(`[Admin] Admin connected: userId=${userId}`);
+        console.log(`[Admin] Admin connected: userId=${socket.data.userId}`);
     });
     
     // Provide a list of live online players to admins
-    socket.on('admin:get_online_users', ({ adminUserId }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) {
+    socket.on('admin:get_online_users', () => {
+        if (!socket.isAdminMod) {
             socket.emit('admin:online_users_list', []);
             return;
         }
@@ -3381,8 +3456,8 @@ io.on('connection', (socket) => {
         socket.emit('admin:online_users_list', users);
     });
 
-    socket.on('admin:lookup_user', async ({ adminUserId, query }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) {
+    socket.on('admin:lookup_user', async ({ query }) => {
+        if (!socket.isAdminMod) {
             socket.emit('admin:lookup_result', { error: 'Unauthorized.' });
             return;
         }
@@ -3475,8 +3550,8 @@ io.on('connection', (socket) => {
         });
     });
 
-    socket.on('admin:set_withdraw_access', async ({ adminUserId, targetUserId, revoked }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:set_withdraw_access', async ({ targetUserId, revoked }) => {
+        if (!socket.isAdminMod) return;
         const wantRevoke = Boolean(revoked);
 
         try {
@@ -3501,8 +3576,8 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('admin:set_rain_access', async ({ adminUserId, targetUserId, revoked }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:set_rain_access', async ({ targetUserId, revoked }) => {
+        if (!socket.isAdminMod) return;
         const wantRevoke = Boolean(revoked);
 
         try {
@@ -3527,8 +3602,8 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('admin:set_tip_access', async ({ adminUserId, targetUserId, revoked }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:set_tip_access', async ({ targetUserId, revoked }) => {
+        if (!socket.isAdminMod) return;
         const wantRevoke = Boolean(revoked);
 
         try {
@@ -3553,8 +3628,8 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('admin:update_balance', async ({ adminUserId, targetUserId, newBalance, newBalanceZh }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:update_balance', async ({ targetUserId, newBalance, newBalanceZh }) => {
+        if (!socket.isAdminMod) return;
 
         try {
             let save = await readAccountJson(targetUserId);
@@ -3593,8 +3668,8 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('admin:set_rig', ({ adminUserId, targetUserId, rigMode }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:set_rig', ({ targetUserId, rigMode }) => {
+        if (!socket.isAdminMod) return;
         const validModes = ['win', 'lose', 'default'];
         if (!validModes.includes(rigMode)) return;
 
@@ -3615,9 +3690,9 @@ io.on('connection', (socket) => {
         console.log(`[Admin] ${adminUserId} set rig of ${tid} to ${rigMode}`);
     });
 
-    socket.on('admin:set_wd_cooldown', async ({ adminUserId, targetUserId, action, durationMinutes }) => {
+    socket.on('admin:set_wd_cooldown', async ({ targetUserId, action, durationMinutes }) => {
         // action: 'set' = apply cooldown now for durationMinutes (default 30), 'clear' = remove active cooldown
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+        if (!socket.isAdminMod) return;
 
         try {
             const save = await readAccountJson(targetUserId);
@@ -3660,13 +3735,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('admin:tournaments_list', ({ adminUserId }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:tournaments_list', () => {
+        if (!socket.isAdminMod) return;
         socket.emit('admin:tournaments_data', { tournaments: tournamentsState.list });
     });
 
-    socket.on('admin:tournament_create', ({ adminUserId, title, metric, prizePool, prizeCurrency, durationDays }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:tournament_create', ({ title, metric, prizePool, prizeCurrency, durationDays }) => {
+        if (!socket.isAdminMod) return;
         if (!VALID_TOURNAMENT_METRICS.has(String(metric))) {
             return socket.emit('admin:action_result', { ok: false, msg: 'Invalid metric.' });
         }
@@ -3705,8 +3780,8 @@ io.on('connection', (socket) => {
         socket.emit('admin:tournaments_data', { tournaments: tournamentsState.list });
     });
 
-    socket.on('admin:tournament_finalize', async ({ adminUserId, tournamentId }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:tournament_finalize', async ({ tournamentId }) => {
+        if (!socket.isAdminMod) return;
         const r = await finalizeTournamentById(String(tournamentId || ''));
         let msg = r.msg || '';
         if (r.ok && r.winners && r.winners.length) {
@@ -3726,8 +3801,8 @@ io.on('connection', (socket) => {
         socket.emit('admin:tournaments_data', { tournaments: tournamentsState.list });
     });
 
-    socket.on('admin:tournament_cancel', ({ adminUserId, tournamentId }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:tournament_cancel', ({ tournamentId }) => {
+        if (!socket.isAdminMod) return;
         const tid = String(tournamentId || '');
         const t = tournamentsState.list.find((x) => x.id === tid);
         if (!t || t.status !== 'active') {
@@ -3747,8 +3822,8 @@ io.on('connection', (socket) => {
         console.log(`[Socket] Client disconnected: ${socket.id}`);
     });
 
-    socket.on('admin:ban_user', async ({ adminUserId, targetUserId, reason, durationHours, ipBan }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:ban_user', async ({ targetUserId, reason, durationHours, ipBan }) => {
+        if (!socket.isAdminMod) return;
 
         // PREVENTION: Cannot ban an administrator
         if (ADMIN_IDS.includes(String(targetUserId))) {
@@ -3825,8 +3900,8 @@ io.on('connection', (socket) => {
         socket.emit('admin:bans_list', bansState);
     });
 
-    socket.on('admin:unban_user', ({ adminUserId, targetUserId, targetIp }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:unban_user', ({ targetUserId, targetIp }) => {
+        if (!socket.isAdminMod) return;
         
         let changed = false;
         let details = [];
@@ -3863,8 +3938,8 @@ io.on('connection', (socket) => {
         socket.emit('admin:bans_list', bansState);
     });
 
-    socket.on('admin:get_bans', ({ adminUserId }) => {
-        if (!ADMIN_IDS.includes(String(adminUserId))) return;
+    socket.on('admin:get_bans', () => {
+        if (!socket.isAdminMod) return;
         socket.emit('admin:bans_list', bansState);
     });
 
