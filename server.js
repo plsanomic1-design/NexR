@@ -51,6 +51,8 @@ const PORT = process.env.PORT || 8080;
 const ROOT = __dirname;
 const TOURNAMENTS_FILE = path.join(ROOT, 'data', 'tournaments.json');
 const CRYPTO_WD_FILE = path.join(ROOT, 'data', 'crypto_withdrawals.json');
+const CHAT_HISTORY_FILE = path.join(ROOT, 'data', 'chat_history.json');
+const LIVE_FEED_MEMORY_FILE = path.join(ROOT, 'data', 'live_feed_memory.json');
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
 const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || '').trim();
@@ -961,6 +963,46 @@ function liveFeedCheckRateLimit(ip) {
 function liveFeedMemoryPush(ev) {
     liveFeedMemory.unshift(ev);
     if (liveFeedMemory.length > LIVE_FEED_MEMORY_CAP) liveFeedMemory.length = LIVE_FEED_MEMORY_CAP;
+    saveLiveFeedMemorySync();
+}
+
+function loadLiveFeedMemorySync() {
+    try {
+        if (!fs.existsSync(LIVE_FEED_MEMORY_FILE)) return;
+        const raw = fs.readFileSync(LIVE_FEED_MEMORY_FILE, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        liveFeedMemory.length = 0;
+        for (const e of parsed.slice(0, LIVE_FEED_MEMORY_CAP)) {
+            if (!e || typeof e !== 'object') continue;
+            liveFeedMemory.push({
+                id: e.id != null ? e.id : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                userId: e.userId || null,
+                username: sanitizeLiveFeedUsername(e.username),
+                gameKey: LIVE_FEED_GAME_KEYS.has(String(e.gameKey || '').toLowerCase()) ? String(e.gameKey).toLowerCase() : 'dice',
+                bet: num(e.bet, 0),
+                multiplier: num(e.multiplier, 0),
+                payout: num(e.payout, 0),
+                createdAt: Number.isFinite(Number(e.createdAt)) ? Number(e.createdAt) : Date.now()
+            });
+        }
+    } catch (e) {
+        console.error('[LiveFeed] load fallback memory failed:', e && e.message);
+        liveFeedMemory.length = 0;
+    }
+}
+
+function saveLiveFeedMemorySync() {
+    try {
+        fs.mkdirSync(path.dirname(LIVE_FEED_MEMORY_FILE), { recursive: true });
+        fs.writeFileSync(
+            LIVE_FEED_MEMORY_FILE,
+            JSON.stringify(liveFeedMemory.slice(0, LIVE_FEED_MEMORY_CAP), null, 2),
+            'utf8'
+        );
+    } catch (e) {
+        console.error('[LiveFeed] save fallback memory failed:', e && e.message);
+    }
 }
 
 async function liveFeedInsertSupabase(row) {
@@ -1041,7 +1083,7 @@ function getCusState(userId) {
                 state.winStreak = 0;
                 return true;
             }
-            if (state.winStreak > 2) {
+            if (state.winStreak > 3.5) {
                 let chance = 0.042 + (state.winStreak * 0.05); 
                 if (chance > 0.342) chance = 0.342; 
                 if (state.winStreak >= 5 && Math.random() < 0.02) chance = 1.0; 
@@ -1595,6 +1637,7 @@ app.post('/api/live-feed', async (req, res) => {
     }
     const ev = {
         id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        userId: body.userId || null,
         username,
         gameKey,
         bet,
@@ -2581,6 +2624,37 @@ let activeRains = [];
 let activeFlips = [];
 const onlinePlayers = new Map();
 
+function loadChatHistorySync() {
+    try {
+        if (!fs.existsSync(CHAT_HISTORY_FILE)) return;
+        const raw = fs.readFileSync(CHAT_HISTORY_FILE, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        chatHistory = parsed
+            .filter((m) => m && typeof m === 'object')
+            .map((m) => ({
+                id: typeof m.id === 'string' ? m.id : Math.random().toString(36).slice(2, 11),
+                userId: m.userId != null ? m.userId : null,
+                username: typeof m.username === 'string' ? m.username : 'Guest',
+                text: String(m.text || '').slice(0, 200),
+                createdAt: Number.isFinite(Number(m.createdAt)) ? Number(m.createdAt) : Date.now()
+            }))
+            .slice(-100);
+    } catch (e) {
+        console.error('[Chat] load history failed:', e && e.message);
+        chatHistory = [];
+    }
+}
+
+function saveChatHistorySync() {
+    try {
+        fs.mkdirSync(path.dirname(CHAT_HISTORY_FILE), { recursive: true });
+        fs.writeFileSync(CHAT_HISTORY_FILE, JSON.stringify(chatHistory.slice(-100), null, 2), 'utf8');
+    } catch (e) {
+        console.error('[Chat] save history failed:', e && e.message);
+    }
+}
+
 function userIdsMatch(a, b) {
     if (a == null || b == null) return false;
     const sa = String(a).trim();
@@ -2838,6 +2912,8 @@ function checkBanStatus(userId, ip) {
 loadTournamentsSync();
 loadCryptoWd();
 loadBansSync();
+loadChatHistorySync();
+loadLiveFeedMemorySync();
 
 function tournamentScore(metric, baseline, save) {
     const s = save.stats && typeof save.stats === 'object' ? save.stats : {};
@@ -3101,6 +3177,7 @@ io.on('connection', (socket) => {
 
         chatHistory.push(msgObj);
         if (chatHistory.length > 100) chatHistory.shift();
+        saveChatHistorySync();
         io.emit('chat:message', msgObj);
     });
 
@@ -4301,6 +4378,7 @@ function hasActiveOrWaitingBattleForUser(userId) {
 function rollCaseItem(caseData, userId, isBot = false) {
     const items = caseData.items;
     const total = items.reduce((s, i) => s + i.chance, 0);
+    const avgValue = Number(caseData && caseData.price) || 0;
     
     let cusForced = false;
     let cusWin = false;
@@ -4329,16 +4407,27 @@ function rollCaseItem(caseData, userId, isBot = false) {
         roll = highItems[highItems.length - 1];
         for (const item of highItems) { r -= item.chance; if (r <= 0) { roll = item; break; } }
     } else {
-        // Normal weighted random
-        let r = Math.random() * total;
-        roll = items[items.length - 1];
-        for (const item of items) { r -= item.chance; if (r <= 0) { roll = item; break; } }
+        // Normal weighted random with a small player-side lift:
+        // +4.5 percentage points to "winning-tier" outcomes (value > 0.8x case price).
+        const winTier = items.filter((i) => Number(i.value) > avgValue * 0.8);
+        const loseTier = items.filter((i) => !(Number(i.value) > avgValue * 0.8));
+        const winTierWeight = winTier.reduce((s, i) => s + i.chance, 0);
+        const baseWinTierChance = total > 0 ? winTierWeight / total : 0;
+        const boostedWinTierChance = Math.max(
+            0,
+            Math.min(1, baseWinTierChance + (!isBot && userId ? 0.045 : 0))
+        );
+        const pickWinTier = winTier.length > 0 && Math.random() < boostedWinTierChance;
+        const pool = pickWinTier ? winTier : (loseTier.length > 0 ? loseTier : items);
+        const poolTotal = pool.reduce((s, i) => s + i.chance, 0) || 1;
+        let r = Math.random() * poolTotal;
+        roll = pool[pool.length - 1];
+        for (const item of pool) { r -= item.chance; if (r <= 0) { roll = item; break; } }
     }
 
     // Update CUS state
     if (!isBot && userId) {
         const cus = getCusState(userId);
-        const avgValue = caseData.price;
         if (roll.value > avgValue * 1.5) cus.recordWin(true);
         else if (roll.value > avgValue * 0.8) cus.recordWin(false);
         else cus.recordLoss();

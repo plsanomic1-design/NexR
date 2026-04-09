@@ -302,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tile = document.createElement('div');
                 tile.className = 'mines-tile';
                 tile.dataset.i = i;
-                tile.innerHTML = '<span class="tile-mark">G</span>';
+                tile.innerHTML = '<span class="tile-mark">ZR$</span>';
                 tile.addEventListener('click', () => handleTileClick(i, tile));
                 minesGrid.appendChild(tile);
             }
@@ -322,14 +322,13 @@ document.addEventListener('DOMContentLoaded', () => {
             countInp.value   = session.bombs;
             earningsInp.value = (currentBet * parseFloat(mMultiplier)).toFixed(2);
             const revSet = new Set(mRevealedTiles);
-            const tiles  = minesGrid.querySelectorAll('.mines-tile');
             tiles.forEach((t, i) => {
                 t.className = 'mines-tile';
                 if (revSet.has(i)) {
                     t.classList.add('revealed', 'gem');
-                    t.innerHTML = '<span class="tile-mark">G</span>';
+                    t.innerHTML = '<span class="tile-mark">ZR$</span>';
                 } else {
-                    t.innerHTML = '<span class="tile-mark">G</span>';
+                    t.innerHTML = '<span class="tile-mark">ZR$</span>';
                 }
             });
             minesMsg.style.display = 'none';
@@ -409,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const tiles = minesGrid.querySelectorAll('.mines-tile');
                     tiles.forEach((t) => {
                         t.className = 'mines-tile';
-                        t.innerHTML = '<span class="tile-mark">G</span>';
+                        t.innerHTML = '<span class="tile-mark">ZR$</span>';
                     });
                 } catch(e) {
                     minesMsg.textContent = 'Error starting game';
@@ -426,6 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             tileEl.classList.add('loading');
             tileEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            if (typeof soundClick === 'function') soundClick();
             syncMinesCashoutButton();
             
             const currentGameId = mGameId;
@@ -446,12 +446,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(data.isBomb) {
                     mGrid = data.mGridFull || mGrid;
                     tileEl.classList.add('bomb');
-                    tileEl.innerHTML = '<span class="tile-mark">B</span>';
+                    tileEl.innerHTML = '<span class="tile-mark"><i class="fa-solid fa-bomb"></i></span>';
                     soundBomb();
                     endMines(false);
                 } else {
                     tileEl.classList.add('gem');
-                    tileEl.innerHTML = '<span class="tile-mark">G</span>';
+                    tileEl.innerHTML = '<span class="tile-mark">ZR$</span>';
                     soundGem();
                     mRevealed++;
                     mRevealedTiles.push(i);
@@ -472,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 minesMsg.style.color = 'var(--red)';
                 minesMsg.style.display = 'block';
                 tileEl.classList.remove('loading');
-                tileEl.innerHTML = '<span class="tile-mark">G</span>';
+                tileEl.innerHTML = '<span class="tile-mark">ZR$</span>';
                 syncMinesCashoutButton();
             }
         }
@@ -491,10 +491,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     tiles[i].classList.add('revealed');
                     if(mGrid[i]) {
                         tiles[i].classList.add('bomb');
-                        tiles[i].innerHTML = '<span class="tile-mark" style="opacity:0.4">B</span>';
+                        tiles[i].innerHTML = '<span class="tile-mark" style="opacity:0.4"><i class="fa-solid fa-bomb"></i></span>';
                     } else {
                         tiles[i].classList.add('gem');
-                        tiles[i].innerHTML = '<span class="tile-mark" style="opacity:0.4">G</span>';
+                        tiles[i].innerHTML = '<span class="tile-mark" style="opacity:0.4">ZR$</span>';
                     }
                 }
             }
@@ -503,6 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 minesMsg.textContent = `Won ${(currentBet * parseFloat(mMultiplier)).toFixed(2)}`;
                 minesMsg.style.color = 'var(--green)';
                 minesMsg.style.display = 'block';
+                if (typeof soundWin === 'function') soundWin();
                 
                 fetch('/api/game/record-result', {
                     method:'POST',
@@ -513,6 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 minesMsg.textContent = 'Busted!';
                 minesMsg.style.color = 'var(--red)';
                 minesMsg.style.display = 'block';
+                if (typeof soundLose === 'function') soundLose();
             }
         }
     }
@@ -695,11 +697,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if(data.isBomb) {
                     tileEl.classList.add('bomb');
-                    tileEl.innerHTML = '<span class="tile-mark">B</span>';
+                    tileEl.innerHTML = '<span class="tile-mark"><i class="fa-solid fa-bomb"></i></span>';
                     endTowers(false);
                 } else {
                     tileEl.classList.add('gem');
-                    tileEl.innerHTML = '<span class="tile-mark">S</span>';
+                    tileEl.innerHTML = '<span class="tile-mark">ZR$</span>';
                     tMulti = Math.pow(cfg.base, curRow+1);
                     curRow++;
                     tRevealedRows.push(curRow - 1);
@@ -753,7 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if(!el.classList.contains('bomb') && !el.classList.contains('gem')) {
                             if(tLogic[curRow][idx]) {
                                 el.classList.add('bomb');
-                                el.innerHTML = '<span class="tile-mark" style="opacity:0.5">B</span>';
+                                el.innerHTML = '<span class="tile-mark" style="opacity:0.5"><i class="fa-solid fa-bomb"></i></span>';
                             }
                         }
                     });
@@ -1766,7 +1768,7 @@ function playTone(freq, duration, type = 'sine', vol = 0.3, delay = 0) {
 }
 
 function soundWin() {
-    // Rising happy chord
+    if (window.sfx) { window.sfx.win(); return; }
     playTone(523, 0.15, 'sine', 0.35, 0);
     playTone(659, 0.15, 'sine', 0.3, 0.1);
     playTone(784, 0.3, 'sine', 0.35, 0.2);
@@ -1774,20 +1776,20 @@ function soundWin() {
 }
 
 function soundLose() {
-    // Descending buzz
+    if (window.sfx) { window.sfx.lose(); return; }
     playTone(300, 0.12, 'sawtooth', 0.3, 0);
     playTone(220, 0.12, 'sawtooth', 0.3, 0.12);
     playTone(150, 0.25, 'sawtooth', 0.3, 0.24);
 }
 
 function soundGem() {
-    // Soft pop/ping
+    if (window.sfx) { window.sfx.coin(); return; }
     playTone(880, 0.08, 'sine', 0.2, 0);
     playTone(1320, 0.12, 'sine', 0.15, 0.05);
 }
 
 function soundBomb() {
-    // Original boom character, lower pitch; one shared level for each layer
+    if (window.sfx) { window.sfx.lose(); return; }
     const v = 0.25;
     playTone(52, 0.05, 'sawtooth', v, 0);
     playTone(38, 0.3, 'square', v, 0.05);
@@ -1795,7 +1797,21 @@ function soundBomb() {
 }
 
 function soundClick() {
+    if (window.sfx) { window.sfx.click(); return; }
     playTone(600, 0.05, 'sine', 0.15, 0);
+}
+
+function showLoadingModal(text) {
+    const el = document.getElementById('loading-modal');
+    const txt = document.getElementById('loading-modal-text');
+    if (!el) return;
+    if (txt) txt.textContent = text || 'Processing...';
+    el.classList.add('show');
+}
+
+function hideLoadingModal() {
+    const el = document.getElementById('loading-modal');
+    if (el) el.classList.remove('show');
 }
 
 // ===== BALANCE HELPERS =====
@@ -1826,10 +1842,17 @@ const GSM = (() => {
 function showGameToast(msg, color) {
     const el = document.createElement('div');
     el.textContent = msg;
-    el.style.cssText = `position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;
-        background:#1c2333;border:1px solid ${color};color:${color};padding:14px 26px;
-        border-radius:10px;font-size:13px;font-weight:600;z-index:99999;pointer-events:none;
-        transition:opacity 0.35s,transform 0.35s;`;
+    el.style.cssText = `
+        position:fixed;bottom:34px;left:50%;transform:translateX(-50%) translateY(24px);opacity:0;
+        background:rgba(12,15,26,0.97);border:1px solid ${color};
+        color:${color};padding:13px 28px;
+        border-radius:12px;font-size:13px;font-weight:700;z-index:99999;pointer-events:none;
+        transition:opacity 0.3s cubic-bezier(0.34,1.56,0.64,1),transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+        box-shadow:0 8px 32px rgba(0,0,0,0.6),0 0 20px ${color}33;
+        backdrop-filter:blur(12px);
+        font-family:'Outfit','Inter',system-ui,sans-serif;
+        letter-spacing:0.01em;
+    `;
     document.body.appendChild(el);
     requestAnimationFrame(() => {
         el.style.opacity = '1';
@@ -1837,8 +1860,8 @@ function showGameToast(msg, color) {
     });
     setTimeout(() => {
         el.style.opacity = '0';
-        el.style.transform = 'translateX(-50%) translateY(10px)';
-        setTimeout(() => el.remove(), 400);
+        el.style.transform = 'translateX(-50%) translateY(12px)';
+        setTimeout(() => el.remove(), 350);
     }, 3800);
 }
 
@@ -1943,6 +1966,7 @@ function postLiveFeedRound(gameKey, bet, multiplier, grossPayout) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 username: getLiveFeedDisplayName(),
+                userId: (typeof robloxUserId !== 'undefined' ? robloxUserId : null),
                 gameKey,
                 bet: b,
                 multiplier: m,
@@ -2004,6 +2028,16 @@ function renderLiveFeedRows(events) {
         const payoutClass = payoutVal > 0 ? 'payout-pos' : 'payout-neg';
         const timeStr = ev.createdAt ? formatFeedTime(ev.createdAt) : '--:--';
         const user = typeof ev.username === 'string' ? ev.username : 'Guest';
+        
+        // Use user's roblox avatar if available, fallback to dicebear
+        const fallbackDicebear = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user)}&backgroundColor=2c2f4a`;
+        let avatarUrl = fallbackDicebear;
+        if (ev.userId && ev.userId === robloxUserId && typeof robloxAvatarUrl === 'string') {
+            avatarUrl = robloxAvatarUrl;
+        } else if (ev.userId) {
+            avatarUrl = robloxHeadshotUrl(ev.userId, 150);
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML =
             '<td><span class="feed-game-emoji" aria-hidden="true">' +
@@ -2011,9 +2045,7 @@ function renderLiveFeedRows(events) {
             '</span> <span class="feed-game-name">' +
             escapeFeedHtml(meta.name) +
             '</span></td>' +
-            '<td><div style="display:flex; align-items:center;"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=' +
-            encodeURIComponent(user) +
-            '&backgroundColor=2c2f4a" alt="" style="width:24px;height:24px;border-radius:50%;margin-right:8px;"> ' +
+            '<td><div style="display:flex; align-items:center;"><img src="' + avatarUrl + '" onerror="this.onerror=null;this.src=\'' + fallbackDicebear + '\'" alt="" style="width:24px;height:24px;border-radius:50%;margin-right:8px; border:1px solid rgba(255,255,255,0.1); object-fit:cover;"> ' +
             escapeFeedHtml(user) +
             '</div></td>' +
             '<td><span class="currency-inline">ZR$</span> ' +
@@ -2389,6 +2421,7 @@ function getSelectedDepGamePassId() {
 
 // ===== DEPOSIT MODAL =====
 function openDepositModal() {
+    if (window.sfx) window.sfx.swoosh();
     const backdrop = document.getElementById('deposit-backdrop');
     backdrop.classList.add('show');
     goDepPage(1);
@@ -2396,6 +2429,7 @@ function openDepositModal() {
 
 function closeDepositModal(event) {
     if(event && event.target !== event.currentTarget) return;
+    if (window.sfx) window.sfx.swooshClose();
     const backdrop = document.getElementById('deposit-backdrop');
     backdrop.classList.remove('show');
     const depErr = document.getElementById('dep-gamepass-error');
@@ -2420,17 +2454,8 @@ function updateDepGamePassUi() {
 }
 
 function showComingSoon() {
-    const toast = document.createElement('div');
-    toast.textContent = 'This payment method is coming soon!';
-    toast.style.cssText = `
-        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-        background: #20233b; border: 1px solid #2c2f4a;
-        color: white; padding: 12px 24px; border-radius: 10px;
-        font-size: 13px; font-weight: 600; z-index: 9999;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    `;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2500);
+    showGameToast('This payment method is coming soon! 🚀', 'var(--accent)');
+    if (window.sfx) window.sfx.notification();
 }
 
 async function confirmGamePassDeposit() {
@@ -2498,6 +2523,7 @@ async function confirmGamePassDeposit() {
         updateBalanceDisplay();
         updateProfViews();
         soundWin();
+        if (window.sfx) window.sfx.bigWin();
         const msg = document.getElementById('dep-success-msg');
         const credited = typeof j.credited === 'number' ? j.credited : 7;
         if(msg) msg.textContent = `+${credited.toFixed(2)} ZR$ added to your balance.`;
@@ -2522,6 +2548,7 @@ async function confirmGamePassDeposit() {
 
 // ===== WITHDRAW MODAL =====
 function openWithdrawModal() {
+    if (window.sfx) window.sfx.swoosh();
     const backdrop = document.getElementById('withdraw-backdrop');
     if(backdrop) {
         backdrop.classList.add('show');
@@ -2531,6 +2558,7 @@ function openWithdrawModal() {
 
 function closeWithdrawModal(event) {
     if(event && event.target !== event.currentTarget) return;
+    if (window.sfx) window.sfx.swooshClose();
     const backdrop = document.getElementById('withdraw-backdrop');
     if(backdrop) backdrop.classList.remove('show');
     
@@ -2727,7 +2755,7 @@ async function confirmWithdraw() {
         return;
     }
 
-    // Show processing spinner
+    showLoadingModal('Processing withdrawal...');
     goWdPage(3);
     if(btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
 
@@ -2762,14 +2790,19 @@ async function confirmWithdraw() {
         saveToStorage();
 
 
+        hideLoadingModal();
+        if (window.sfx) window.sfx.win();
         const msg = document.getElementById('wd-success-msg');
         if(msg) msg.textContent = `Success! The bot purchased your ${beforeTax} R$ gamepass. You will receive ${afterTax} R$ (after Roblox 30% tax) in your pending balance shortly.`;
         goWdPage(4);
 
     } catch(e) {
+        hideLoadingModal();
         goWdPage(2);
+        if (window.sfx) window.sfx.error();
         showErr('Network error: ' + (e && e.message ? e.message : 'Could not reach server.'));
     } finally {
+        hideLoadingModal();
         if(btn) { btn.disabled = false; btn.textContent = oldTxt || 'Withdraw Robux'; }
     }
 }
@@ -2818,6 +2851,7 @@ async function requestCryptoWithdraw() {
         return showErr("Please enter a valid Destination Tag.");
     }
 
+    showLoadingModal('Submitting crypto withdrawal...');
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Processing...';
@@ -2835,14 +2869,18 @@ async function requestCryptoWithdraw() {
             throw new Error(data.error || 'Failed to submit withdrawal request.');
         }
         
-        // Success
-        saveToStorage(); // Force local flush
-        goWdPage(1); // Return to index page
-        setTimeout(() => alert('Crypto Withdrawal Requested successfully! It is now pending admin review.'), 300);
+        hideLoadingModal();
+        if (window.sfx) window.sfx.notification();
+        saveToStorage();
+        goWdPage(1);
+        showGameToast('✅ Crypto withdrawal submitted — pending admin review!', 'var(--green)');
         
     } catch(e) {
+        hideLoadingModal();
+        if (window.sfx) window.sfx.error();
         showErr(e.message);
     } finally {
+        hideLoadingModal();
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = 'Request Withdrawal';
@@ -4388,27 +4426,53 @@ function addChatMessage(msg) {
 
     const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // SECURITY: Build DOM nodes with textContent so no user-supplied string can inject HTML/JS.
-    const header = document.createElement('div');
-    header.className = 'chat-msg-header';
+    const avatarObj = document.createElement('img');
+    avatarObj.className = 'chat-msg-avatar';
+    const fallbackDicebear = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(msg.username || 'System')}&backgroundColor=2c2f4a`;
+    if (msg.userId && msg.username !== 'System') {
+        if (msg.userId === robloxUserId && typeof robloxAvatarUrl === 'string') {
+            avatarObj.src = robloxAvatarUrl;
+        } else {
+            avatarObj.src = robloxHeadshotUrl(msg.userId, 150);
+        }
+    } else {
+        avatarObj.src = fallbackDicebear;
+    }
+    avatarObj.alt = 'avatar';
+    avatarObj.style.objectFit = 'cover';
+    avatarObj.onerror = function() {
+        this.onerror = null;
+        this.src = fallbackDicebear;
+    };
+    
+    const bodyDiv = document.createElement('div');
+    bodyDiv.className = 'chat-msg-body';
+
+    const meta = document.createElement('div');
+    meta.className = 'chat-msg-meta';
 
     const authorSpan = document.createElement('span');
-    authorSpan.className = 'chat-msg-author';
-    authorSpan.textContent = msg.username || 'Guest';     // ← safe, no XSS
+    authorSpan.className = 'chat-msg-name';
+    authorSpan.textContent = msg.username || 'Guest';
+    authorSpan.style.cursor = 'pointer';
     authorSpan.addEventListener('click', () => openTipFor(authorSpan.textContent));
+
+    if (msg.username === 'System') {
+        authorSpan.style.color = 'var(--accent)';
+    }
 
     const timeSpan = document.createElement('span');
     timeSpan.className = 'chat-msg-time';
-    timeSpan.textContent = time;                           // ← safe
+    timeSpan.textContent = time;
 
-    header.appendChild(authorSpan);
-    header.appendChild(timeSpan);
+    meta.appendChild(authorSpan);
+    meta.appendChild(timeSpan);
 
     const textDiv = document.createElement('div');
     textDiv.className = 'chat-msg-text';
-    textDiv.textContent = String(msg.text || '');          // ← safe, no XSS
+    textDiv.textContent = String(msg.text || '');
 
-    // For System rain messages, append a safe JOIN button via DOM (not innerHTML)
+    // For System rain messages, append a safe JOIN button via DOM
     const rawText = String(msg.text || '');
     const rainMatch = rawText.match(/(.+) started a Rain for ([\d\.]+) ZH\$!/);
     if (msg.username === 'System' && rainMatch) {
@@ -4421,8 +4485,11 @@ function addChatMessage(msg) {
         textDiv.appendChild(joinBtn);
     }
 
-    div.appendChild(header);
-    div.appendChild(textDiv);
+    bodyDiv.appendChild(meta);
+    bodyDiv.appendChild(textDiv);
+    
+    div.appendChild(avatarObj);
+    div.appendChild(bodyDiv);
 
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
@@ -4589,8 +4656,86 @@ function confirmSendTip() {
 
 // CHAT TOGGLE (MOBILE)
 document.querySelector('.mobile-chat-toggle')?.addEventListener('click', () => {
-    document.getElementById('global-chat')?.classList.toggle('active');
+    const chat = document.getElementById('global-chat');
+    const willOpen = !(chat && chat.classList.contains('mobile-open'));
+    chat?.classList.toggle('mobile-open');
+    document.body.classList.toggle('chat-mobile-open', willOpen);
+    document.body.classList.toggle('chat-hidden', !willOpen);
+    if (willOpen) {
+        setTimeout(() => document.getElementById('chat-input')?.focus(), 120);
+    }
 });
+
+document.querySelector('.tb-chat-toggle')?.addEventListener('click', () => {
+    if (!_isMobileViewport()) return;
+    const chat = document.getElementById('global-chat');
+    const isHidden = document.body.classList.contains('chat-hidden');
+    if (isHidden) {
+        chat?.classList.add('mobile-open');
+        document.body.classList.add('chat-mobile-open');
+    } else {
+        chat?.classList.remove('mobile-open');
+        document.body.classList.remove('chat-mobile-open');
+        document.documentElement.style.setProperty('--kb-offset', '0px');
+    }
+});
+
+document.querySelector('#global-chat .chat-header .tb-icon-btn')?.addEventListener('click', () => {
+    if (!_isMobileViewport()) return;
+    document.getElementById('global-chat')?.classList.remove('mobile-open');
+    document.body.classList.remove('chat-mobile-open');
+    document.documentElement.style.setProperty('--kb-offset', '0px');
+});
+
+function _isMobileViewport() {
+    return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function _updateKeyboardInset() {
+    if (!_isMobileViewport() || !window.visualViewport) {
+        document.documentElement.style.setProperty('--kb-offset', '0px');
+        return;
+    }
+    const kb = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+    document.documentElement.style.setProperty('--kb-offset', `${Math.round(kb)}px`);
+}
+
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', _updateKeyboardInset);
+    window.visualViewport.addEventListener('scroll', _updateKeyboardInset);
+}
+window.addEventListener('resize', _updateKeyboardInset);
+_updateKeyboardInset();
+
+chatInput?.addEventListener('focus', () => {
+    if (_isMobileViewport()) {
+        document.getElementById('global-chat')?.classList.add('mobile-open');
+        document.body.classList.add('chat-mobile-open');
+        document.body.classList.remove('chat-hidden');
+        _updateKeyboardInset();
+        setTimeout(() => chatInput.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 80);
+    }
+});
+
+chatInput?.addEventListener('blur', () => {
+    if (_isMobileViewport()) {
+        setTimeout(_updateKeyboardInset, 120);
+    }
+});
+
+let _lastHapticMs = 0;
+function _haptic(ms) {
+    const now = Date.now();
+    if (now - _lastHapticMs < 45) return;
+    _lastHapticMs = now;
+    if (navigator && typeof navigator.vibrate === 'function') navigator.vibrate(ms);
+}
+
+document.addEventListener('touchstart', (e) => {
+    const t = e.target.closest('.mines-tile, .tower-tile, .btn-primary, .tb-icon-btn, .nav-item, .dep-tier-btn, .bet-tab, .feed-tab, .cb-tab, #chat-send-btn');
+    if (!t) return;
+    _haptic(8);
+}, { passive: true });
 
 // ============================================================
 // ADMIN PANEL UI LOGIC
@@ -5355,7 +5500,14 @@ async function cbApiFetch(path, opts = {}) {
 async function cbLoadCases() {
     const { ok, data } = await cbApiFetch('/api/cases');
     if (!ok) return;
-    _cbCases = data.cases || [];
+    _cbCases = (data.cases || []).slice().sort((a, b) => {
+        const pa = Number(a && a.price);
+        const pb = Number(b && b.price);
+        const va = Number.isFinite(pa) ? pa : Number.MAX_SAFE_INTEGER;
+        const vb = Number.isFinite(pb) ? pb : Number.MAX_SAFE_INTEGER;
+        if (va !== vb) return va - vb;
+        return String((a && a.name) || '').localeCompare(String((b && b.name) || ''));
+    });
     cbRenderCasesGrid();
     cbRenderCreateCases();
 }
@@ -5483,10 +5635,14 @@ function cbRenderCreateCases() {
     if (!el || !_cbCases.length) return;
     if (!_cbCreateCaseId) _cbCreateCaseId = _cbCases[0].id;
     el.innerHTML = _cbCases.map(c => `
-        <div class="cb-create-case-option${_cbCreateCaseId===c.id?' selected':''}" style="--case-color:${c.color}" onclick="cbSelectCase('${c.id}',this)">
-            <img src="${c.image}" alt="${c.name}" onerror="this.style.display='none'">
-            <div class="cc-name">${c.name}</div>
-            <div class="cc-price">${c.price.toLocaleString()} ZR$</div>
+        <div class="cb-case-card cb-create-case-option${_cbCreateCaseId===c.id?' selected':''}" style="--case-color:${c.color}" onclick="cbSelectCase('${c.id}',this)">
+            <img class="cb-case-img" src="${c.image}" alt="${c.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 rx=%2210%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>%F0%9F%93%A6</text></svg>'">
+            <div class="cb-case-name">${c.name}</div>
+            <div class="cb-case-price">${c.price.toLocaleString()} <span>ZR$</span></div>
+            <div class="cb-case-items-preview">
+                ${c.items.slice(0, 5).map(i => `<span class="cb-item-rarity-dot rarity-${i.rarity}" title="${i.name}"></span>`).join('')}
+                ${c.items.length > 5 ? '<span class="cb-item-rarity-dot" style="background:none; border:none; color:var(--text-dim); font-size:9px;">+</span>' : ''}
+            </div>
         </div>
     `).join('');
     cbRenderPreviewReel();
