@@ -6159,14 +6159,10 @@ function cbBindSockets() {
 
                     const wrap = track.parentElement;
                     const targetIndex = Math.min(30, Math.max(0, track.children.length - 1));
-                    const firstEl = track.children[0];
-                    if (wrap && firstEl) {
-                        const itemW = firstEl.getBoundingClientRect().width || 122;
-                        // Keep the center marker aligned while preserving enough runway.
-                        const sidePad = Math.max(8, Math.round((wrap.clientWidth - itemW) / 2));
-                        track.style.paddingLeft = `${sidePad}px`;
-                        track.style.paddingRight = `${sidePad}px`;
-                    }
+                    // Keep spinner layout stable: avoid large dynamic paddings that can push
+                    // the whole track out of view on some modal sizes.
+                    track.style.paddingLeft = '8px';
+                    track.style.paddingRight = '8px';
                     
                     // wait slight random delay so they don't look perfectly synced
                     await new Promise(res => setTimeout(res, 50 + Math.random()*200));
