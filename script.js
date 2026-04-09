@@ -6160,8 +6160,14 @@ function cbBindSockets() {
                     // wait slight random delay so they don't look perfectly synced
                     await new Promise(res => setTimeout(res, 50 + Math.random()*200));
                     
-                    const itemWidth = 134;
-                    const targetVal = 30 * itemWidth;
+                    const wrap = track.parentElement;
+                    const targetEl = track.children[30];
+                    let rawTargetVal = 30 * 134;
+                    if (wrap && targetEl) {
+                        rawTargetVal = targetEl.offsetLeft + targetEl.offsetWidth / 2 - wrap.clientWidth / 2;
+                    }
+                    const maxShift = Math.max(0, track.scrollWidth - (wrap ? wrap.clientWidth : 0));
+                    const targetVal = Math.max(0, Math.min(rawTargetVal, maxShift));
                     
                     cbSoundEngine.whoosh();
                     track.classList.add('is-spinning-fast');
