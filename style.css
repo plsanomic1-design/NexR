@@ -1548,6 +1548,39 @@ input:checked + .slider:before { transform: translateX(14px); }
 .cb-result-item-img { min-height: 80px; display: flex; align-items: center; justify-content: center; font-size: 60px; margin-bottom: 14px; }
 .cb-result-name { font-family: var(--font-display); font-size: 20px; font-weight: 800; margin-bottom: 6px; }
 .cb-result-value { font-size: 28px; font-weight: 900; font-family: var(--font-display); background: var(--gradient-brand); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.cb-spin-item--win {
+    border-color: rgba(59,130,246,0.7) !important;
+    box-shadow: 0 0 0 1px rgba(59,130,246,0.35), 0 0 18px rgba(59,130,246,0.28);
+}
+.cb-spin-item--bigwin {
+    border-color: rgba(251,191,36,0.85) !important;
+    box-shadow: 0 0 0 1px rgba(251,191,36,0.45), 0 0 24px rgba(251,191,36,0.4);
+    animation: cbBigWinPulse 0.9s ease-out 2;
+}
+.cb-open-modal-inner.big-hit {
+    animation: cbBigHitFlash 0.75s ease-out;
+}
+.cb-open-result.big-hit .cb-result-item-img img {
+    animation: cbBigHitPop 0.7s cubic-bezier(0.34,1.56,0.64,1);
+}
+.cb-open-result.big-hit .cb-result-value {
+    text-shadow: 0 0 16px rgba(251,191,36,0.45);
+}
+@keyframes cbBigWinPulse {
+    0% { transform: scale(1); }
+    35% { transform: scale(1.04); }
+    100% { transform: scale(1); }
+}
+@keyframes cbBigHitFlash {
+    0% { box-shadow: 0 0 0 rgba(0,0,0,0); }
+    35% { box-shadow: inset 0 0 80px rgba(251,191,36,0.14), 0 0 35px rgba(251,191,36,0.25); }
+    100% { box-shadow: 0 0 0 rgba(0,0,0,0); }
+}
+@keyframes cbBigHitPop {
+    0% { transform: scale(0.86) rotate(-3deg); filter: brightness(1.05); }
+    55% { transform: scale(1.08) rotate(2deg); filter: brightness(1.2); }
+    100% { transform: scale(1) rotate(0deg); filter: brightness(1); }
+}
 .cb-tab-content { min-height: 200px; }
 .cb-sound-toggle { background: var(--bg-glass); border: 1px solid var(--border-subtle); color: var(--text-secondary); width: 32px; height: 32px; border-radius: 7px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; transition: var(--transition); }
 .cb-sound-toggle:hover { color: var(--text-primary); border-color: var(--accent-border); }

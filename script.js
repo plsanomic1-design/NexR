@@ -5761,6 +5761,8 @@ async function cbOpenCaseModal(caseId) {
 
     title.innerHTML = `<i class="fa-solid fa-box-open" style="color:#a78bfa;"></i> Opening: ${caseData.name}`;
     result.style.display = 'none';
+    result.classList.remove('big-hit');
+    if (modalInner) modalInner.classList.remove('big-hit');
     track.style.transition = 'none';
     track.style.transform = 'translate3d(0, 0, 0)';
     track.innerHTML = '';
@@ -5849,8 +5851,12 @@ async function cbOpenCaseModal(caseId) {
 
     // Highlight winning item
     const winEl = track.children[WIN_POS];
+    const isBigHit =
+        (winningItem && Number(winningItem.value) >= Number(caseData.price || 0) * 2) ||
+        (winningItem && (winningItem.rarity === 'epic' || winningItem.rarity === 'legendary'));
     if (winEl) {
         winEl.classList.add('cb-spin-item--win');
+        if (isBigHit) winEl.classList.add('cb-spin-item--bigwin');
     }
 
     // Screen shake on jackpot/legendary
@@ -5874,6 +5880,14 @@ async function cbOpenCaseModal(caseId) {
     const valEl = document.getElementById('cb-result-item-value');
     valEl.textContent = winningItem.value ? winningItem.value.toLocaleString() + ' ZR$' : 'No value';
     valEl.style.color = RARITY_COLORS[winningItem.rarity] || '#fff';
+    if (isBigHit) {
+        if (modalInner) {
+            modalInner.classList.remove('big-hit');
+            void modalInner.offsetWidth;
+            modalInner.classList.add('big-hit');
+        }
+        result.classList.add('big-hit');
+    }
 
     window._cbSpinning = false;
 }
