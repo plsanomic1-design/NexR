@@ -104,6 +104,9 @@ function coerceTxReferenceId(clientRef) {
     return crypto.randomUUID();
 }
 
+/** Last PostgREST error from getUserBalance (for 503 responses; no secrets). */
+let lastSupabaseBalanceError = '';
+
 function supabaseEnabled() {
     return Boolean(SUPABASE_URL && (SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY));
 }
@@ -356,22 +359,37 @@ async function getUserBalance(userId) {
     try {
         res = await supabaseFetch(`user_balances?user_id=eq.${uid}&select=balance_zr,balance_zh`);
     } catch (e) {
+        lastSupabaseBalanceError = String(e && e.message);
         console.error('getUserBalance network error:', e && e.message);
         return null;
     }
     if (!res.ok) {
+        let errText = '';
         try {
-            console.error('getUserBalance failed:', res.status, await res.text());
-        } catch (_) {}
+            errText = await readSupabaseErrorBody(res);
+        } catch (_) {
+            try {
+                errText = await res.text();
+            } catch (_e) {
+                errText = '';
+            }
+        }
+        lastSupabaseBalanceError = `HTTP ${res.status} ${errText}`.trim().slice(0, 800);
+        console.error('getUserBalance failed:', res.status, errText);
         return null;
     }
     let rows;
     try {
         rows = await res.json();
     } catch (e) {
+        lastSupabaseBalanceError = 'Invalid JSON from user_balances';
         return null;
     }
-    if (!Array.isArray(rows)) return null;
+    if (!Array.isArray(rows)) {
+        lastSupabaseBalanceError = 'user_balances response was not a JSON array';
+        return null;
+    }
+    lastSupabaseBalanceError = '';
     // Empty DB (e.g. new Supabase project): no row yet — treat as 0 so games/sync work; first write upserts via updateUserBalance.
     if (rows.length === 0) {
         return { balance_zr: 0, balance_zh: 0 };
@@ -644,34 +662,58 @@ async function persistAccountSave(userId, save, ignoreBalance = false) {
 }
 
 /**
- * Client account-sync (POST): update profile JSON only — does not wipe/replace the whole `transactions` table.
- * Avoids 503s when service role can insert profile rows but broad DELETE is blocked by RLS.
- * Balance is never taken from the client; callers use ignoreBalance on the full persist path when needed.
+ * Client account-sync (POST): upsert account_profile row without DELETE (many RLS policies allow INSERT/PATCH but not DELETE).
+ * Balance is never taken from the client.
  */
 async function persistAccountProfileOnly(userId, save) {
     if (!supabaseEnabled()) {
         return { ok: false, step: 'config', detail: 'Supabase not configured' };
     }
     const uid = encodeURIComponent(String(userId));
-    let delRes;
-    try {
-        delRes = await supabaseFetch(`transactions?user_id=eq.${uid}&type=eq.account_profile`, {
-            method: 'DELETE'
-        });
-    } catch (e) {
-        return { ok: false, step: 'transactions_profile_delete', detail: String(e && e.message) };
-    }
-    if (!delRes.ok) {
-        const detail = await readSupabaseErrorBody(delRes);
-        console.error('persistAccountProfileOnly DELETE failed:', delRes.status, detail);
-        return { ok: false, step: 'transactions_profile_delete', detail, status: delRes.status };
-    }
 
     let profileJson;
     try {
         profileJson = JSON.stringify(buildProfilePayload(save));
     } catch (e) {
         profileJson = '{}';
+    }
+
+    let selRes;
+    try {
+        selRes = await supabaseFetch(
+            `transactions?user_id=eq.${uid}&type=eq.account_profile&select=id&limit=5`
+        );
+    } catch (e) {
+        return { ok: false, step: 'transactions_profile_select', detail: String(e && e.message) };
+    }
+    if (!selRes.ok) {
+        const detail = await readSupabaseErrorBody(selRes);
+        console.error('persistAccountProfileOnly SELECT failed:', selRes.status, detail);
+        return { ok: false, step: 'transactions_profile_select', detail, status: selRes.status };
+    }
+
+    let existing = [];
+    try {
+        existing = await selRes.json();
+    } catch (e) {
+        existing = [];
+    }
+
+    if (Array.isArray(existing) && existing.length > 0 && existing[0].id != null) {
+        const rowId = encodeURIComponent(String(existing[0].id));
+        let patchRes;
+        try {
+            patchRes = await supabaseFetch(`transactions?id=eq.${rowId}`, {
+                method: 'PATCH',
+                headers: { Prefer: 'return=minimal' },
+                body: JSON.stringify({ game_name: profileJson })
+            });
+        } catch (e) {
+            return { ok: false, step: 'transactions_profile_patch', detail: String(e && e.message) };
+        }
+        if (patchRes.ok) return { ok: true };
+        const patchDetail = await readSupabaseErrorBody(patchRes);
+        console.warn('persistAccountProfileOnly PATCH failed, will try INSERT:', patchRes.status, patchDetail);
     }
 
     const profileRow = {
@@ -1750,7 +1792,9 @@ app.get('/api/account-sync', async (req, res) => {
         if (!save) {
             return res.status(503).json({
                 error:
-                    'Could not load account from the database. On Render, set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY; check Supabase RLS on user_balances and transactions.'
+                    'Could not read user_balances from Supabase (see lastDbError). On Render set SUPABASE_URL and the secret SUPABASE_SERVICE_ROLE_KEY (Project Settings → API). The anon key alone is often blocked by RLS.',
+                lastDbError: lastSupabaseBalanceError || undefined,
+                tableHint: 'Table public.user_balances with columns user_id, balance_zr, balance_zh (and RLS that allows the service role to read all rows).'
             });
         }
         res.setHeader('Content-Type', 'application/json');
@@ -4909,9 +4953,19 @@ hydrateCaseItemThumbnails()
         server.listen(PORT, () => {
             console.log(`Open http://localhost:${PORT}`);
             if (supabaseEnabled()) {
+                const sr = Boolean(SUPABASE_SERVICE_ROLE_KEY);
                 console.log(
-                    `Account data: Supabase (${SUPABASE_SERVICE_ROLE_KEY ? 'service_role (recommended on Render)' : 'anon key'} â€” user_balances + transactions)`
+                    `Account data: Supabase (${sr ? 'service_role key present' : 'WARNING: only anon key — set SUPABASE_SERVICE_ROLE_KEY on Render for RLS bypass'})`
                 );
+                void (async () => {
+                    try {
+                        const probe = await supabaseFetch('user_balances?select=user_id&limit=1');
+                        const snippet = probe.ok ? 'OK' : await readSupabaseErrorBody(probe);
+                        console.log(`[Supabase] REST probe GET user_balances → HTTP ${probe.status} ${probe.ok ? snippet : snippet}`);
+                    } catch (e) {
+                        console.error('[Supabase] REST probe failed:', e && e.message);
+                    }
+                })();
             } else {
                 console.log('Account data: Local JSON only (save/load endpoints available)');
             }
