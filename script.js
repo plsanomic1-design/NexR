@@ -504,12 +504,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 minesMsg.style.color = 'var(--green)';
                 minesMsg.style.display = 'block';
                 if (typeof soundWin === 'function') soundWin();
-                
-                fetch('/api/game/record-result', {
-                    method:'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, win: true, bigWin: mMultiplier >= 3.0 })
-                }).catch(()=>{});
             } else if (!win) {
                 minesMsg.textContent = 'Busted!';
                 minesMsg.style.color = 'var(--red)';
@@ -766,12 +760,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 tMsg.textContent = `Won ${(curBet * tMulti).toFixed(2)}`;
                 tMsg.style.color = 'var(--green)';
                 tMsg.style.display = 'block';
-                
-                 fetch('/api/game/record-result', {
-                    method:'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, win: true, bigWin: tMulti >= 3.0 })
-                }).catch(()=>{});
             } else if (!win) {
                 tMsg.textContent = 'Busted!';
                 tMsg.style.color = 'var(--red)';

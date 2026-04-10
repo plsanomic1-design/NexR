@@ -1654,6 +1654,23 @@ app.post('/api/game/towers/restore', express.json(), (req, res) => {
     res.json({ ok: false, restored: false, error: 'Session restoration disabled' });
 });
 
+/** Blackjack hand total (aces count 11 then downgrade while busting). Mirrors client getScore. */
+function bjHandScore(hand) {
+    if (!Array.isArray(hand)) return 0;
+    let score = 0;
+    let aces = 0;
+    for (const card of hand) {
+        if (!card || typeof card.score !== 'number') continue;
+        score += card.score;
+        if (card.value === 'A') aces++;
+    }
+    while (score > 21 && aces > 0) {
+        score -= 10;
+        aces--;
+    }
+    return score;
+}
+
 /** Build a standard 52-card deck and shuffle it server-side (Fisher-Yates). */
 function buildServerDeck() {
     const suits = [
@@ -1729,6 +1746,147 @@ app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
     });
 });
 
+app.post('/api/game/blackjack/hit', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId } = req.body || {};
+    await withUserLock(userId, async () => {
+        const g = activeBlackjackGames.get(String(userId));
+        if (!g) return res.status(400).json({ error: 'No active game' });
+        if (!Array.isArray(g.deck) || g.deck.length === 0) {
+            return res.status(400).json({ error: 'Deck empty' });
+        }
+        const card = g.deck.pop();
+        g.pHand.push(card);
+        const pScore = bjHandScore(g.pHand);
+        if (pScore > 21) {
+            activeBlackjackGames.delete(String(userId));
+            if (g.bet > 0 && supabaseEnabled()) {
+                await creditUserWin(userId, 0);
+            }
+            getCusState(userId).recordLoss();
+            return res.json({ card, bust: true, pScore });
+        }
+        return res.json({ card, bust: false, pScore });
+    });
+});
+
+app.post('/api/game/blackjack/stand', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId } = req.body || {};
+    await withUserLock(userId, async () => {
+        const g = activeBlackjackGames.get(String(userId));
+        if (!g) return res.status(400).json({ error: 'No active game' });
+        const bet = num(g.bet, 0);
+
+        while (bjHandScore(g.dHand) < 17 && g.deck.length > 0) {
+            g.dHand.push(g.deck.pop());
+        }
+
+        const pScore = bjHandScore(g.pHand);
+        const dScore = bjHandScore(g.dHand);
+        const pNatural = g.pHand.length === 2 && pScore === 21;
+        const dNatural = g.dHand.length === 2 && dScore === 21;
+
+        let outcome = 'push';
+        if (dScore > 21) {
+            outcome = 'win';
+        } else if (pNatural && dNatural) {
+            outcome = 'push';
+        } else if (pNatural) {
+            outcome = 'blackjack';
+        } else if (dNatural) {
+            outcome = 'lose';
+        } else if (pScore > dScore) {
+            outcome = 'win';
+        } else if (pScore < dScore) {
+            outcome = 'lose';
+        } else {
+            outcome = 'push';
+        }
+
+        activeBlackjackGames.delete(String(userId));
+
+        if (bet > 0 && supabaseEnabled()) {
+            if (outcome === 'blackjack') {
+                const r = await creditUserWin(userId, 2.5 * bet);
+                getCusState(userId).recordWin(true);
+                return res.json({
+                    outcome,
+                    dHand: g.dHand,
+                    pScore,
+                    dScore,
+                    newBalance: r.newBalance
+                });
+            }
+            if (outcome === 'win') {
+                const r = await creditUserWin(userId, 2 * bet);
+                getCusState(userId).recordWin(false);
+                return res.json({
+                    outcome,
+                    dHand: g.dHand,
+                    pScore,
+                    dScore,
+                    newBalance: r.newBalance
+                });
+            }
+            if (outcome === 'push') {
+                const r = await creditUserWin(userId, bet);
+                return res.json({
+                    outcome,
+                    dHand: g.dHand,
+                    pScore,
+                    dScore,
+                    newBalance: r.newBalance
+                });
+            }
+            const r = await creditUserWin(userId, 0);
+            getCusState(userId).recordLoss();
+            return res.json({
+                outcome,
+                dHand: g.dHand,
+                pScore,
+                dScore,
+                newBalance: r.newBalance
+            });
+        }
+
+        if (outcome === 'lose') getCusState(userId).recordLoss();
+        else if (outcome === 'blackjack') getCusState(userId).recordWin(true);
+        else if (outcome === 'win') getCusState(userId).recordWin(false);
+        res.json({ outcome, dHand: g.dHand, pScore, dScore });
+    });
+});
+
+app.post('/api/game/blackjack/result', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, outcome } = req.body || {};
+    if (String(outcome) !== 'blackjack') {
+        return res.status(400).json({ error: 'invalid outcome' });
+    }
+    await withUserLock(userId, async () => {
+        const g = activeBlackjackGames.get(String(userId));
+        if (!g) return res.status(400).json({ error: 'No active game' });
+        const pScore = bjHandScore(g.pHand);
+        if (g.pHand.length !== 2 || pScore !== 21) {
+            return res.status(400).json({ error: 'Not a natural blackjack' });
+        }
+        const dScore = bjHandScore(g.dHand);
+        const dNatural = g.dHand.length === 2 && dScore === 21;
+        const bet = num(g.bet, 0);
+        activeBlackjackGames.delete(String(userId));
+
+        if (bet > 0 && supabaseEnabled()) {
+            if (dNatural) {
+                await creditUserWin(userId, bet);
+                return res.json({ ok: true, outcome: 'push' });
+            }
+            await creditUserWin(userId, 2.5 * bet);
+            getCusState(userId).recordWin(true);
+            return res.json({ ok: true, outcome: 'blackjack' });
+        }
+        res.json({ ok: true, outcome: dNatural ? 'push' : 'blackjack' });
+    });
+});
 
 app.options('/api/live-feed', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
