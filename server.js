@@ -334,7 +334,7 @@ function getServerPlinkoMultiplier(rows, diff, idx) {
     return (arr && arr[idx] != null) ? arr[idx] : 0;
 }
 
-/** Legacy: fold flipBalance into balance and drop the field (single NexR$ balance). */
+/** Legacy: fold flipBalance into balance and drop the field (single RoBet balance). */
 function mergeFlipIntoBalance(save) {
     if (!save || typeof save !== 'object') return;
     if (typeof save.flipBalance === 'number' && save.flipBalance > 0) {
@@ -734,7 +734,7 @@ function parseRobloxUserIdStrict(val) {
 }
 
 /**
- * Split `total` NexR$ across `count` recipients in whole cents so the sum matches exactly (e.g. 100k / 2 => 50k each).
+ * Split `total` RoBet across `count` recipients in whole cents so the sum matches exactly (e.g. 100k / 2 => 50k each).
  * @param {number} total
  * @param {number} count
  * @returns {number[]}
@@ -1944,7 +1944,7 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
             if (!processedCryptoPayments.has(order_id) && !alreadyProcessed) {
                 processedCryptoPayments.add(order_id);
                 
-                // Reverse calculation: NexR$ = EUR / 0.007
+                // Reverse calculation: RoBet = EUR / 0.007
                 const depositAmount = Math.round(parseFloat(price_amount) / 0.007);
                 
                 if (userId && depositAmount > 0 && supabaseEnabled()) {
@@ -1970,14 +1970,14 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                             const result = await updateUserBalance(uid, newBal, 0); // we pass 0 here because it's merged naturally or zeroed
                             if (result.ok) {
                                 emitBalanceRemoteSync(io, uid, { balance: newBal, stats: {} });
-                                console.log(`Credited ${depositAmount} NexR$ (crypto) to user ${uid}`);
+                                console.log(`Credited ${depositAmount} RoBet (crypto) to user ${uid}`);
                                 const who = getOnlineUsernameByUserId(uid) || `User ${uid}`;
                                 const paidCoin = String(paymentData.pay_currency || '').toUpperCase();
                                 const paidAmount = Number(paymentData.pay_amount || 0);
                                 const paidText = Number.isFinite(paidAmount) && paidAmount > 0
                                     ? `${paidAmount} ${paidCoin || 'CRYPTO'}`
-                                    : `${depositAmount} NexR$ equivalent`;
-                                postDiscordAudit(`💰 ${who} deposited ${paidText}. Credited ${depositAmount.toLocaleString('en-US')} NexR$.`);
+                                    : `${depositAmount} RoBet equivalent`;
+                                postDiscordAudit(`💰 ${who} deposited ${paidText}. Credited ${depositAmount.toLocaleString('en-US')} RoBet.`);
                             }
                         }
                     } catch (e) {
@@ -1995,7 +1995,7 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
     res.status(200).send('OK');
 });
 
-/** Game pass deposit: Robux paid = NexR$ credited. Keys must match client GAME_PASS_DEPOSIT_TIERS. */
+/** Game pass deposit: Robux paid = RoBet credited. Keys must match client GAME_PASS_DEPOSIT_TIERS. */
 const GAME_PASS_CREDIT_BY_ID = {
     1784194501: 7,
     1783449405: 8,
@@ -2170,7 +2170,7 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     console.log(`[Deposit] user=${userId} gp=${gamePassId} credited=${credit} newBal=${save.balance}`);
     {
         const who = getOnlineUsernameByUserId(userId) || `User ${userId}`;
-        postDiscordAudit(`💰 ${who} deposited ${credit.toLocaleString('en-US')} NexR$ (Game Pass).`);
+        postDiscordAudit(`💰 ${who} deposited ${credit.toLocaleString('en-US')} RoBet (Game Pass).`);
     }
     res.json({ ok: true, save, credited: credit });
 });
@@ -2191,7 +2191,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
     zhAmount = parseInt(zhAmount, 10);
     
     if (!userId || !coin || !address || isNaN(zhAmount) || zhAmount < 1800) {
-        return res.status(400).json({ error: 'Invalid request. Minimum is 1800 NexR$.' });
+        return res.status(400).json({ error: 'Invalid request. Minimum is 1800 RoBet.' });
     }
     
     await withUserLock(userId, async () => {
@@ -2199,7 +2199,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
         const bal = await getUserBalance(userId);
         const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
         if (!bal || currentBalance < zhAmount) {
-            return res.status(400).json({ error: `Insufficient balance. You have ${Math.floor(currentBalance)} NexR$.` });
+            return res.status(400).json({ error: `Insufficient balance. You have ${Math.floor(currentBalance)} RoBet.` });
         }
 
         // Deduct directly via updateUserBalance (the single source of truth)
@@ -2211,7 +2211,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
         // Push balance update to any open tabs for this user
         emitBalanceRemoteSync(io, userId, { balance: newBalance, stats: {} });
 
-        // Fiat value estimation: 1 NexR$ = 0.007 EUR
+        // Fiat value estimation: 1 RoBet = 0.007 EUR
         const fiatValue = parseFloat((zhAmount * 0.007).toFixed(2));
 
         // Look up username from in-memory connected players (best-effort)
@@ -2243,7 +2243,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
         postDiscordAudit(
             `📤 ${wdUsername || `User ${userId}`} requested withdraw ${zhAmount.toLocaleString(
                 'en-US'
-            )} NexR$ (~${fiatLabel}) to ${String(coin || '').toUpperCase()}.`
+            )} RoBet (~${fiatLabel}) to ${String(coin || '').toUpperCase()}.`
         );
         
         res.json({ ok: true, request: wdReq });
@@ -2353,7 +2353,7 @@ initRobloxBot();
  *   2. Fetch product info for the gamepass (verifies it exists & gets price).
  *   3. Verify the gamepass is owned by the requesting Roblox user.
  *   4. Purchase the gamepass with the bot account.
- *   5. Deduct NexR$ from the user's Supabase balance.
+ *   5. Deduct RoBet from the user's Supabase balance.
  */
 app.post('/api/withdraw', express.json(), async (req, res) => {
     if (!botReady) {
@@ -2433,7 +2433,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(503).json({ error: 'Could not read your account balance. Try again.' });
     }
     if (currentBal.balance_zr < zrCoins) {
-        return res.status(400).json({ error: 'Insufficient NexR$ balance on server.' });
+        return res.status(400).json({ error: 'Insufficient RoBet balance on server.' });
     }
 
     // --- Step 4: Purchase the gamepass with the bot using custom fetch (noblox v9 removed native buy wrapper) ---
@@ -2469,7 +2469,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(400).json({ error: 'Bot could not purchase the gamepass: ' + msg });
     }
 
-    // --- Step 5: Deduct the NexR$ balance in Supabase & Persist Profile ---
+    // --- Step 5: Deduct the RoBet balance in Supabase & Persist Profile ---
     const newZr = Math.max(0, currentBal.balance_zr - zrCoins);
     const updateResult = await updateUserBalance(userId, newZr, currentBal.balance_zh);
     
@@ -2495,7 +2495,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
 
     {
         const who = getOnlineUsernameByUserId(userId) || `User ${userId}`;
-        postDiscordAudit(`📤 ${who} withdrew ${Number(zrCoins || 0).toLocaleString('en-US')} NexR$.`);
+        postDiscordAudit(`📤 ${who} withdrew ${Number(zrCoins || 0).toLocaleString('en-US')} RoBet.`);
     }
 
     return res.json({
@@ -2701,13 +2701,13 @@ function emitBalanceRemoteSync(io, rawUserId, save) {
 
 // ----- Tournaments (file-backed; baselines captured on first account sync during window) -----
 const TOURNAMENT_METRIC_LABELS = {
-    delta_wagered: 'Highest total wagered (NexR$ volume)',
+    delta_wagered: 'Highest total wagered (RoBet volume)',
     delta_rain_winnings: 'Highest rain winnings (ZH$)',
-    delta_deposited: 'Highest deposited (NexR$)',
-    delta_withdrawn: 'Highest withdrawn (NexR$)',
+    delta_deposited: 'Highest deposited (RoBet)',
+    delta_withdrawn: 'Highest withdrawn (RoBet)',
     delta_xp: 'Highest XP gained',
-    net_balance: 'Highest net NexR$ gained (balance increase)',
-    net_loss: 'Highest NexR$ lost from balance'
+    net_balance: 'Highest net RoBet gained (balance increase)',
+    net_loss: 'Highest RoBet lost from balance'
 };
 
 const VALID_TOURNAMENT_METRICS = new Set(Object.keys(TOURNAMENT_METRIC_LABELS));
@@ -3741,11 +3741,11 @@ io.on('connection', (socket) => {
 
             socket.emit('admin:action_result', {
                 ok: true,
-                msg: `Balance updated: NexR$ ${save.balance.toFixed(2)}`,
+                msg: `Balance updated: RoBet ${save.balance.toFixed(2)}`,
                 targetUserId: String(targetUserId),
                 skipAdminLookup: true
             });
-            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set balance of ${targetUserId} to NexR$${save.balance}`);
+            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set balance of ${targetUserId} to RoBet${save.balance}`);
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating balance.' });
         }
@@ -3869,7 +3869,7 @@ io.on('connection', (socket) => {
         let msg = r.msg || '';
         if (r.ok && r.winners && r.winners.length) {
             const cur = tournamentsState.list.find((x) => x.id === String(tournamentId));
-            const curLabel = cur && cur.prizeCurrency === 'zh' ? 'ZH$' : 'NexR$';
+            const curLabel = cur && cur.prizeCurrency === 'zh' ? 'ZH$' : 'RoBet';
             msg = `Finalized: ${r.winners.length} winner(s), top score ${r.topScore}. Each received ${r.winners[0].prize} ${curLabel}.`;
         } else if (r.ok && !msg) {
             msg = 'Tournament finalized.';
@@ -4049,7 +4049,7 @@ io.on('connection', (socket) => {
  * All case prize rows (every item in every case), sorted by in-game value ascending
  * (then case id, then item id), are mapped 1:1 onto this ladder. Names match Roblox
  * catalog titles; images are filled from the thumbnails API at startup.
- * Low NexR$ rewards use cheaper/free catalog items; high NexR$ rewards use famous limiteds.
+ * Low RoBet rewards use cheaper/free catalog items; high RoBet rewards use famous limiteds.
  */
 const CASE_ROBLOX_CATALOG_LADDER_ASC = [
     { assetId: 48474313, name: 'Red Roblox Cap' },
@@ -4463,7 +4463,7 @@ app.post('/api/cases/open', express.json(), async (req, res) => {
         const bal = await getUserBalance(uid);
         const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
         if (!bal || currentBalance < caseData.price) {
-            return res.status(400).json({ error: `Insufficient balance. Need ${caseData.price} NexR$.` });
+            return res.status(400).json({ error: `Insufficient balance. Need ${caseData.price} RoBet.` });
         }
 
         const newBalance = Math.round((currentBalance - caseData.price) * 100) / 100;
@@ -4508,7 +4508,7 @@ app.post('/api/battles/create', express.json(), async (req, res) => {
         const bal = await getUserBalance(uid);
         const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
         if (!bal || currentBalance < totalCost) {
-            return res.status(400).json({ error: `Need ${totalCost} NexR$ to create this battle.` });
+            return res.status(400).json({ error: `Need ${totalCost} RoBet to create this battle.` });
         }
 
         const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
@@ -4596,7 +4596,7 @@ app.post('/api/battles/:id/join', express.json(), async (req, res) => {
         const bal = await getUserBalance(uid);
         const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
         if (!bal || currentBalance < totalCost) {
-            return res.status(400).json({ error: `Need ${totalCost} NexR$ to join.` });
+            return res.status(400).json({ error: `Need ${totalCost} RoBet to join.` });
         }
 
         const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
@@ -4840,7 +4840,7 @@ app.get(['/', '/index.html'], (req, res) => {
                 stringArrayThreshold: 0.75
             }).getObfuscatedCode();
             
-            obfCache['index.html'] = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>NexR$</title><style>body{margin:0;background:#0f212e;overflow:hidden;font-family:'Inter',sans-serif}@keyframes _0x_spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style></head><body><div id="_0x4d12" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0f212e;z-index:9999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#00c896;"><svg width="80" height="80" viewBox="0 0 100 100" style="margin-bottom:20px;"><defs><linearGradient id="_0x_grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00c896"/><stop offset="100%" stop-color="#008f6b"/></linearGradient></defs><path d="M20 80 L20 20 L40 20 L70 55 L70 20 L80 20 L80 80 L60 80 L30 45 L30 80 Z" fill="url(#_0x_grad)"/></svg><div style="border:3px solid rgba(0,200,150,0.1);border-top:3px solid #00c896;border-radius:50%;width:40px;height:40px;animation:_0x_spin 1s linear infinite;margin-bottom:20px;"></div><h2 style="margin:0;font-size:24px;letter-spacing:1px;">NexR$</h2><p style="color:#64748b;font-size:14px;margin-top:8px;">Protected Document</p></div><script>${obfLoader}</script></body></html>`;
+            obfCache['index.html'] = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>RoBet</title><style>body{margin:0;background:#0f212e;overflow:hidden;font-family:'Inter',sans-serif}@keyframes _0x_spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style></head><body><div id="_0x4d12" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0f212e;z-index:9999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#00c896;"><svg width="80" height="80" viewBox="0 0 100 100" style="margin-bottom:20px;"><defs><linearGradient id="_0x_grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00c896"/><stop offset="100%" stop-color="#008f6b"/></linearGradient></defs><path d="M20 80 L20 20 L40 20 L70 55 L70 20 L80 20 L80 80 L60 80 L30 45 L30 80 Z" fill="url(#_0x_grad)"/></svg><div style="border:3px solid rgba(0,200,150,0.1);border-top:3px solid #00c896;border-radius:50%;width:40px;height:40px;animation:_0x_spin 1s linear infinite;margin-bottom:20px;"></div><h2 style="margin:0;font-size:24px;letter-spacing:1px;">RoBet</h2><p style="color:#64748b;font-size:14px;margin-top:8px;">Protected Document</p></div><script>${obfLoader}</script></body></html>`;
         }
         res.setHeader('Content-Type', 'text/html');
         res.send(obfCache['index.html']);

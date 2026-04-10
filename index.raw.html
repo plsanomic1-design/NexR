@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexR$</title>
+    <title>RoBet</title>
     <script>
         (function() {
             var noop = function() {};
@@ -43,19 +43,19 @@
                         <stop stop-color="#00e5b0"/>
                         <stop offset="1" stop-color="#00a87e"/>
                     </linearGradient>
-                    <filter id="nGlow">
+                    <filter id="rGlow">
                         <feGaussianBlur stdDeviation="1.5" result="blur"/>
                         <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                     </filter>
                 </defs>
                 <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
                 <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
-                <!-- N letterform -->
-                <g filter="url(#nGlow)">
-                    <path d="M11 10 L11 28 L14 28 L14 15 L26 28 L29 28 L29 10 L26 10 L26 23 L14 10 Z" fill="url(#brandGradNav)"/>
+                <!-- R letterform -->
+                <g filter="url(#rGlow)">
+                    <path d="M12 10 L12 28 L15 28 L15 22 L18 22 L23 28 L27 28 L21.5 21 C25 20 26 16 26 13 C26 9.5 23 10 18 10 L12 10 Z M15 13 L18 13 C21 13 22 14 22 16 C22 18 21 19 18 19 L15 19 Z" fill="url(#brandGradNav)"/>
                 </g>
             </svg>
-            <span class="sidebar-logo-word">Nex<span class="sidebar-logo-accent">R$</span></span>
+            <span class="sidebar-logo-word">Ro<span class="sidebar-logo-accent">Bet</span></span>
         </div>
 
         <div class="nav-links">
@@ -171,11 +171,11 @@
                         <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
                         <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
                         <g filter="url(#nGlowTop)">
-                            <path d="M11 10 L11 28 L14 28 L14 15 L26 28 L29 28 L29 10 L26 10 L26 23 L14 10 Z" fill="url(#brandGradTop)"/>
+                            <path d="M12 10 L12 28 L15 28 L15 22 L18 22 L23 28 L27 28 L21.5 21 C25 20 26 16 26 13 C26 9.5 23 10 18 10 L12 10 Z M15 13 L18 13 C21 13 22 14 22 16 C22 18 21 19 18 19 L15 19 Z" fill="url(#brandGradTop)"/>
                         </g>
                     </svg>
                 </span>
-                <span class="topbar-logo-text">Nex<span class="logo-highlight">R$</span></span>
+                <span class="topbar-logo-text">Ro<span class="logo-highlight">Bet</span></span>
             </div>
             <div class="top-nav-links">
                 <a href="#" class="active" data-view="home">Home</a>
@@ -188,10 +188,10 @@
                 <div class="balance-chip" onclick="openDepositModal()">
                     <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" class="tb-avatar" alt="avatar" title="View Profile" style="cursor:pointer;" onclick="document.querySelector('[data-view=profile]').click(); event.stopPropagation();">
                     <div class="tb-balance-info">
-                        <span class="tb-coin-label">NexR$</span>
+                        <span class="tb-coin-label">RoBet</span>
                         <span class="tb-coin-val" id="tb-balance">0.00</span>
                     </div>
-                    <div class="tb-coin-badge tb-coin-badge--hex" title="NexR$"><span class="tb-zr-mark">NexR$</span></div>
+                    <div class="tb-coin-badge tb-coin-badge--hex" title="RoBet"><span class="tb-zr-mark">RoBet</span></div>
                 </div>
                 <button type="button" class="tb-icon-btn tb-chat-toggle" title="Chat" onclick="document.body.classList.toggle('chat-hidden')"><i class="fa-solid fa-comments"></i><span class="tb-icon-label">Chat</span></button>
                 <button type="button" class="tb-icon-btn" title="Notifications"><i class="fa-regular fa-bell"></i></button>
@@ -209,7 +209,7 @@
         <div class="cb-header-title">
           <i class="fa-solid fa-box-open"></i>
           <h1>Case Battles</h1>
-          <span class="cb-subtitle">Open cases, battle players, win NexR$</span>
+          <span class="cb-subtitle">Open cases, battle players, win RoBet</span>
         </div>
         <div class="cb-header-actions">
           <button class="cb-btn cb-btn-create" id="cb-create-btn" onclick="cbOpenCreateModal()">
@@ -296,13 +296,13 @@
                             <label>Metric</label>
                             <div class="input-wrapper">
                                 <select id="admin-tournament-metric" style="width:100%;background:var(--bg-input);border:none;color:#fff;padding:10px 12px;border-radius:8px;font-family:inherit;">
-                                    <option value="delta_wagered">Highest total wagered (NexR$)</option>
-                                    <option value="delta_rain_winnings">Highest rain winnings (NexR$)</option>
-                                    <option value="delta_deposited">Highest deposited (NexR$)</option>
-                                    <option value="delta_withdrawn">Highest withdrawn (NexR$)</option>
+                                    <option value="delta_wagered">Highest total wagered (RoBet)</option>
+                                    <option value="delta_rain_winnings">Highest rain winnings (RoBet)</option>
+                                    <option value="delta_deposited">Highest deposited (RoBet)</option>
+                                    <option value="delta_withdrawn">Highest withdrawn (RoBet)</option>
                                     <option value="delta_xp">Highest XP gained</option>
-                                    <option value="net_balance">Highest net NexR$ gained (balance)</option>
-                                    <option value="net_loss">Highest NexR$ lost from balance</option>
+                                    <option value="net_balance">Highest net RoBet gained (balance)</option>
+                                    <option value="net_loss">Highest RoBet lost from balance</option>
                                 </select>
                             </div>
                         </div>
@@ -318,8 +318,8 @@
                             <label>Currency</label>
                             <div class="input-wrapper">
                                 <select id="admin-tournament-currency" style="width:100%;background:var(--bg-input);border:none;color:#fff;padding:10px 12px;border-radius:8px;font-family:inherit;">
-                                    <option value="zr">NexR$</option>
-                                    <option value="zh">NexR$</option>
+                                    <option value="zr">RoBet</option>
+                                    <option value="zh">RoBet</option>
                                 </select>
                             </div>
                         </div>
@@ -414,9 +414,9 @@
                     <h3 class="admin-section-title"><i class="fa-solid fa-coins"></i> Balance</h3>
                     <div class="admin-balance-row">
                         <div class="admin-balance-block">
-                            <label>NexR$ Balance</label>
+                            <label>RoBet Balance</label>
                             <div class="input-wrapper">
-                                <span class="input-icon" style="font-size:11px;font-weight:800;color:#93c5fd;">NexR$</span>
+                                <span class="input-icon" style="font-size:11px;font-weight:800;color:#93c5fd;">RoBet</span>
                                 <input type="number" id="admin-balance-zr" placeholder="0.00" min="0" step="0.01">
                             </div>
                         </div>
@@ -594,7 +594,7 @@
                     <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Robux</div>
                     <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
                 </div>
-                <h2>Deposit Robux for NexR$</h2>
+                <h2>Deposit Robux for RoBet</h2>
                 <div style="margin-top:20px;">
                     <p style="font-size:14px; font-weight:600; color:var(--accent);">Is this your account?</p>
                     <p style="font-size:13px; color:var(--text-secondary); margin-top:4px;">Please confirm this is the correct Roblox account</p>
@@ -619,7 +619,7 @@
                     <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <h2>Game pass deposit</h2>
-                <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Pick how much you want to add. Buy <strong>that</strong> game pass on Roblox, then press <strong>Verify purchase</strong>. We match Roblox ownership to your account and credit the same amount in NexR$ (wait a few seconds between verifications).</p>
+                <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Pick how much you want to add. Buy <strong>that</strong> game pass on Roblox, then press <strong>Verify purchase</strong>. We match Roblox ownership to your account and credit the same amount in RoBet (wait a few seconds between verifications).</p>
                 <label class="dep-gamepass-label">Choose an amount</label>
                 <div id="dep-tiers-grid" class="dep-tiers-grid">
                     <!-- Populated by script.js -->
@@ -648,7 +648,7 @@
                 </div>
             </div>
 
-            <!-- Page Crypto 1: Setup USD/NexR$ Amount and Coin -->
+            <!-- Page Crypto 1: Setup USD/RoBet Amount and Coin -->
             <div class="dep-page" id="dep-page-crypto1" style="display:none;">
                 <div class="modal-header">
                     <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Crypto</div>
@@ -672,7 +672,7 @@
                                 <input type="number" id="dep-fiat-amount" min="1.00" value="3.50" step="0.50" oninput="updateCryptoZhPreview()">
                             </div>
                         </div>
-                        <p style="margin-top: 8px; font-size: 13px; color: var(--text-secondary);">You will receive: <strong style="color:var(--green); font-size:15px;" id="dep-crypto-receive-zh">500</strong> <strong style="color:var(--green);">NexR$</strong></p>
+                        <p style="margin-top: 8px; font-size: 13px; color: var(--text-secondary);">You will receive: <strong style="color:var(--green); font-size:15px;" id="dep-crypto-receive-zh">500</strong> <strong style="color:var(--green);">RoBet</strong></p>
                     </div>
 
                     <div class="input-group">
@@ -767,7 +767,7 @@
                     </div>
                 </div>
 
-                <p style="text-align:center; font-size:13px; color:var(--text-secondary);">Your NexR$ will automatically be credited to your account once the network confirms your transaction. You can close this window at any time.</p>
+                <p style="text-align:center; font-size:13px; color:var(--text-secondary);">Your RoBet will automatically be credited to your account once the network confirms your transaction. You can close this window at any time.</p>
                 <div class="dep-actions" style="margin-top:22px;">
                     <button class="btn-primary" style="width:100%;" onclick="closeDepositModal()">Done</button>
                 </div>
@@ -811,7 +811,7 @@
                     <div class="dep-breadcrumb"><span onclick="goWdPage(1)">Withdraw</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Robux</div>
                     <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
                 </div>
-                <h2>Withdraw NexR$ for Robux</h2>
+                <h2>Withdraw RoBet for Robux</h2>
 
                 <!-- Step 1: Amount -->
                 <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:18px; margin-top:18px;">
@@ -819,10 +819,10 @@
                         <i class="fa-solid fa-circle-1"></i> &nbsp;Step 1 — Choose Amount
                     </div>
                     <div class="wd-amount-grid" role="group" aria-label="Withdraw amount conversion">
-                        <label for="wd-amount-input" class="wd-amt-label wd-amt-label--left">Amount (NexR$)</label>
+                        <label for="wd-amount-input" class="wd-amt-label wd-amt-label--left">Amount (RoBet)</label>
                         <label for="wd-before-tax" class="wd-amt-label wd-amt-label--right">Robux you price it at</label>
                         <div class="dep-amount-wrapper wd-input-wrap wd-amt-input-left">
-                            <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                            <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
                             <input type="number" id="wd-amount-input" value="15" min="11" class="wd-amount-input">
                             <div class="wd-quick-amt">
                                 <button type="button" onclick="addWdAmt(5)">+5</button>
@@ -836,7 +836,7 @@
                         <p class="wd-after-tax-line">After Roblox 30% tax you receive <strong><span id="wd-after-tax">7</span> R$</strong></p>
                     </div>
                     <div class="wd-avail-row" style="margin-top:12px;">
-                        <span>Available: <span id="wd-avail-bal">0.00</span> NexR$</span>
+                        <span>Available: <span id="wd-avail-bal">0.00</span> RoBet</span>
                         <span class="wd-avail-sep" aria-hidden="true">|</span>
                         <span>Min payout: 7 R$</span>
                     </div>
@@ -900,12 +900,12 @@
                     </div>
 
                     <div class="input-group">
-                        <label>Amount to Withdraw (NexR$)</label>
+                        <label>Amount to Withdraw (RoBet)</label>
                         <div class="input-wrapper">
-                            <span class="input-icon" style="font-size:14px; font-weight:bold; color:var(--green);">NexR$</span>
+                            <span class="input-icon" style="font-size:14px; font-weight:bold; color:var(--green);">RoBet</span>
                             <input type="number" id="wd-crypto-amount" value="500" min="500" step="100" onkeyup="updateCryptoWdPreview()" onchange="updateCryptoWdPreview()" style="width:100%; font-size:14px; padding-left:10px;">
                         </div>
-                        <p style="font-size:11px; color:var(--text-secondary); margin-top:6px;">Minimum: 500 NexR$. You will receive approx. <strong id="wd-crypto-fiat-preview" style="color:var(--green);">3.50 EUR</strong> worth of crypto.</p>
+                        <p style="font-size:11px; color:var(--text-secondary); margin-top:6px;">Minimum: 500 RoBet. You will receive approx. <strong id="wd-crypto-fiat-preview" style="color:var(--green);">3.50 EUR</strong> worth of crypto.</p>
                     </div>
 
                     <div class="input-group">
@@ -967,22 +967,22 @@
                                 <stop stop-color="#00e5b0"/>
                                 <stop offset="1" stop-color="#00a87e"/>
                             </linearGradient>
-                            <filter id="nGlowWelcome">
+                            <filter id="rGlowWelcome">
                                 <feGaussianBlur stdDeviation="1.5" result="blur"/>
                                 <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                             </filter>
                         </defs>
                         <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
                         <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
-                        <g filter="url(#nGlowWelcome)">
-                            <path d="M11 10 L11 28 L14 28 L14 15 L26 28 L29 28 L29 10 L26 10 L26 23 L14 10 Z" fill="url(#brandGradWelcome)"/>
+                        <g filter="url(#rGlowWelcome)">
+                            <path d="M12 10 L12 28 L15 28 L15 22 L18 22 L23 28 L27 28 L21.5 21 C25 20 26 16 26 13 C26 9.5 23 10 18 10 L12 10 Z M15 13 L18 13 C21 13 22 14 22 16 C22 18 21 19 18 19 L15 19 Z" fill="url(#brandGradWelcome)"/>
                         </g>
                     </svg>
                 </span>
                 <span style="font-size:18px; font-weight:800; margin-left:10px;">Nex<span style="color:var(--accent);">R$</span></span>
             </div>
             <h2 style="font-size:22px; font-weight:700; margin-bottom:10px;">Welcome</h2>
-            <p style="color:var(--text-secondary); font-size:14px; margin-bottom:6px; line-height:1.6;">Welcome to NexR$ - play games, manage balances, and connect your Roblox account.</p>
+            <p style="color:var(--text-secondary); font-size:14px; margin-bottom:6px; line-height:1.6;">Welcome to RoBet - play games, manage balances, and connect your Roblox account.</p>
             <p style="color:var(--accent); font-size:14px; margin-bottom:25px;">Enter your Roblox username to get started.</p>
 
             <div class="input-group">
@@ -1000,7 +1000,7 @@
             <div style="margin-top:25px; padding-top:20px; border-top:1px solid var(--border-color);">
                 <div style="display:flex; align-items:flex-start; gap:12px;">
                     <div style="min-width:32px; height:32px; background:#c0392b; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:10px; color:white; flex-shrink:0;">18+</div>
-                    <p style="font-size:11px; color:var(--text-secondary); line-height:1.6;">By logging in you acknowledge that you are at least +18 years of age, that any items you wager are not stolen, and that you agree with our <a href="terms.html" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">Terms of Service</a> and our <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">Privacy Policy</a>. NexR$ is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Roblox.</p>
+                    <p style="font-size:11px; color:var(--text-secondary); line-height:1.6;">By logging in you acknowledge that you are at least +18 years of age, that any items you wager are not stolen, and that you agree with our <a href="terms.html" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">Terms of Service</a> and our <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">Privacy Policy</a>. RoBet is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Roblox.</p>
                 </div>
             </div>
         </div>
@@ -1078,12 +1078,12 @@
                 <button type="button" class="modal-close" onclick="closeRainModal()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <p class="social-modal-lead">
-                Drop NexR$ into a timed pool. Everyone who joins splits it evenly â€” you canâ€™t join your own rain.
+                Drop RoBet into a timed pool. Everyone who joins splits it evenly â€” you canâ€™t join your own rain.
             </p>
 
             <div class="social-form-stack">
                 <div class="social-field">
-                    <label for="rain-amount">Amount to give (NexR$)</label>
+                    <label for="rain-amount">Amount to give (RoBet)</label>
                     <input type="number" id="rain-amount" value="100" min="10" class="social-input">
                 </div>
                 <div class="social-field">
@@ -1115,7 +1115,7 @@
                 <button type="button" class="modal-close" onclick="closeTipModal()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <p class="social-modal-lead">
-                Send NexR$ straight to another playerâ€™s balance using their username or Roblox user ID.
+                Send RoBet straight to another playerâ€™s balance using their username or Roblox user ID.
             </p>
 
             <div class="social-form-stack">
@@ -1124,7 +1124,7 @@
                     <input type="text" id="tip-recipient" placeholder="Username or Roblox ID" class="social-input" autocomplete="off">
                 </div>
                 <div class="social-field">
-                    <label for="tip-amount">Amount (NexR$)</label>
+                    <label for="tip-amount">Amount (RoBet)</label>
                     <input type="number" id="tip-amount" value="10" min="1" class="social-input">
                 </div>
             </div>
@@ -1139,15 +1139,15 @@
             <div id="view-home" class="view active">
                 <header class="home-hero">
                     <div class="home-hero__intro">
-                        <span class="home-hero__eyebrow">NexR$</span>
+                        <span class="home-hero__eyebrow">RoBet</span>
                         <h1 class="home-hero__title">Play &amp; wager</h1>
                         <p class="home-hero__sub">Choose a game below. Balance syncs when you link Roblox.</p>
                     </div>
                     <aside class="home-wallet-card" aria-label="Your balance">
                         <h3 class="home-wallet-card__title">Wallet</h3>
                         <div class="balance-item balance-item--hero">
-                            <div class="balance-icon zr"><span class="balance-zr-letter">NexR$</span></div>
-                            <span class="balance-name">NexR$</span>
+                            <div class="balance-icon zr"><span class="balance-zr-letter">RoBet</span></div>
+                            <span class="balance-name">RoBet</span>
                             <span class="balance-val" id="home-balance">0.00</span>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:8px;">
@@ -1257,7 +1257,7 @@
                         <div class="input-group">
                             <label>Bet amount</label>
                             <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
                                 <input type="number" id="bj-bet-input" value="25" min="1">
                                 <div class="input-actions">
                                     <button onclick="halfBetInput('bj-bet-input')">1/2</button>
@@ -1322,7 +1322,7 @@
                         <div class="input-group">
                             <label>Bet amount</label>
                             <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
                                 <input type="number" id="mines-bet-input" value="25" min="1">
                                 <div class="input-actions">
                                     <button onclick="halfBetInput('mines-bet-input')">1/2</button>
@@ -1348,7 +1348,7 @@
                         <div class="input-group">
                             <label>Total earnings</label>
                             <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
-                                <span class="input-icon currency-input-mark" style="color:var(--green)" aria-hidden="true">NexR$</span>
+                                <span class="input-icon currency-input-mark" style="color:var(--green)" aria-hidden="true">RoBet</span>
                                 <input type="text" id="mines-earnings" value="0.00" readonly style="color:var(--green)">
                             </div>
                         </div>
@@ -1376,7 +1376,7 @@
                         <div class="input-group">
                             <label>Bet amount</label>
                             <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
                                 <input type="number" id="towers-bet-input" value="25" min="1">
                                 <div class="input-actions">
                                     <button onclick="halfBetInput('towers-bet-input')">1/2</button>
@@ -1417,7 +1417,7 @@
                         <div class="input-group">
                             <label>Bet amount</label>
                             <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
                                 <input type="number" id="dice-bet-input" value="25" min="1">
                                 <div class="input-actions">
                                     <button onclick="halfBetInput('dice-bet-input')">1/2</button>
@@ -1429,7 +1429,7 @@
                         <div class="input-group">
                             <label>Total Profit (x<span id="dice-profit-multi">1.98</span>)</label>
                             <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
-                                <span class="input-icon currency-input-mark" style="color:var(--text-secondary)" aria-hidden="true">NexR$</span>
+                                <span class="input-icon currency-input-mark" style="color:var(--text-secondary)" aria-hidden="true">RoBet</span>
                                 <input type="text" id="dice-profit-input" value="49.50" readonly style="color:var(--text-secondary)">
                             </div>
                         </div>
@@ -1505,7 +1505,7 @@
                         <div class="input-group">
                             <label>Bet amount</label>
                             <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
                                 <input type="number" id="plinko-bet-input" value="25" min="1">
                                 <div class="input-actions">
                                     <button onclick="halfBetInput('plinko-bet-input')">1/2</button>
@@ -1550,7 +1550,7 @@
                         <div class="cf-create-card">
                             <div class="input-group" style="margin-bottom:0;">
                                 <div class="input-wrapper" style="width:140px;">
-                                    <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                    <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
                                     <input type="number" id="cf-create-amount" value="50" min="1">
                                 </div>
                             </div>
@@ -1611,7 +1611,7 @@
                             <div class="input-group">
                                 <label>Bet amount</label>
                                 <div class="input-wrapper">
-                                    <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                    <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
                                     <input type="number" id="crash-bet-input" value="30" min="1">
                                     <div class="input-actions">
                                         <button onclick="halfBetInput('crash-bet-input')">1/2</button>
@@ -1639,7 +1639,7 @@
                         <div class="bet-panel crash-players-panel">
                             <div class="crash-players-header">
                                 <span class="crash-players-count">0 Players</span>
-                                <span class="crash-players-total">0 <span class="currency-inline">NexR$</span></span>
+                                <span class="crash-players-total">0 <span class="currency-inline">RoBet</span></span>
                             </div>
                             <div class="crash-players-list" id="crash-players-list">
                                 <!-- Players injected by JS -->
@@ -1830,7 +1830,7 @@
           </div>
 
           <div class="cb-cost-preview">
-            Total Cost: <strong id="cb-create-cost">0 NexR$</strong>
+            Total Cost: <strong id="cb-create-cost">0 RoBet</strong>
           </div>
         </div>
         <div class="cb-modal-footer">
@@ -1850,7 +1850,7 @@
         <div style="margin-bottom: 28px; font-size: 17px; line-height: 1.5;">
           Are you sure you want to open <strong id="cb-confirm-name" style="color:var(--accent);">Case Name</strong>?
           <div style="margin-top: 14px; color: var(--text-secondary); font-size: 15px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">
-            Cost: <strong id="cb-confirm-cost" style="color:#fff; font-size: 18px;">0</strong> <span style="font-size: 12px; opacity: 0.8;">NexR$</span>
+            Cost: <strong id="cb-confirm-cost" style="color:#fff; font-size: 18px;">0</strong> <span style="font-size: 12px; opacity: 0.8;">RoBet</span>
           </div>
         </div>
         <div style="display: flex; gap: 16px; justify-content: center;">
@@ -1929,14 +1929,14 @@
                 <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
                 <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
                 <g filter="url(#nGlowFoot)">
-                  <path d="M11 10 L11 28 L14 28 L14 15 L26 28 L29 28 L29 10 L26 10 L26 23 L14 10 Z" fill="url(#brandGradFoot)"/>
+                  <path d="M12 10 L12 28 L15 28 L15 22 L18 22 L23 28 L27 28 L21.5 21 C25 20 26 16 26 13 C26 9.5 23 10 18 10 L12 10 Z M15 13 L18 13 C21 13 22 14 22 16 C22 18 21 19 18 19 L15 19 Z" fill="url(#brandGradFoot)"/>
                 </g>
               </svg>
             </span>
-            <div class="zr-footer__name">Nex<span class="logo-highlight">R$</span></div>
+            <div class="zr-footer__name">Ro<span class="logo-highlight">Bet</span></div>
           </div>
           <p class="zr-footer__desc">
-            NexR$ is an entertainment platform with internal virtual credits (<strong>NexR$</strong>). No real&#8209;money gambling.
+            RoBet is an entertainment platform with internal virtual credits (<strong>RoBet</strong>). No real&#8209;money gambling.
             Use at your own risk and only where permitted by your local laws.
           </p>
           <div class="zr-footer__social">
@@ -1960,7 +1960,7 @@
           <div class="zr-footer__col zr-footer__col--wide">
             <div class="zr-footer__colTitle">Disclaimer</div>
             <p class="zr-footer__fine">
-              NexR$ is <strong>not affiliated</strong> with, endorsed by, or sponsored by Roblox Corporation.
+              RoBet is <strong>not affiliated</strong> with, endorsed by, or sponsored by Roblox Corporation.
               &#8220;Roblox&#8221; and &#8220;Robux&#8221; are trademarks of Roblox Corporation and are used only for identification.
               All third&#8209;party marks belong to their respective owners.
             </p>
@@ -1968,7 +1968,7 @@
         </div>
       </div>
       <div class="zr-footer__bottom">
-        <span>&copy; <span id="zr-footer-year"></span> NexR$</span>
+        <span>&copy; <span id="zr-footer-year"></span> RoBet</span>
         <span class="zr-footer__bottomSep">&middot;</span>
         <a class="zr-footer__bottomLink" href="terms.html" target="_blank" rel="noopener">Terms</a>
         <span class="zr-footer__bottomSep">&middot;</span>
