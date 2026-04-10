@@ -83,8 +83,8 @@
             <a href="#" class="nav-item" data-view="coinflip" title="Coinflip">
                 <i class="fa-solid fa-coins"></i><span>Coinflip</span>
             </a>
-            <a href="#" class="nav-item" data-view="casebattles" title="Case Battles" id="nav-casebattles">
-                <i class="fa-solid fa-box-open"></i><span>Case Battles</span>
+            <a href="#" class="nav-item" data-view="casebattles" title="Cases" id="nav-casebattles">
+                <i class="fa-solid fa-box"></i><span>Cases</span>
             </a>
             <a href="#" class="nav-item" data-view="rooms" title="Voice Chat">
                 <i class="fa-solid fa-microphone-lines"></i><span>Voice Chat</span>
@@ -207,32 +207,28 @@
     <div id="view-casebattles" class="view">
       <div class="cb-header">
         <div class="cb-header-title">
-          <i class="fa-solid fa-box-open"></i>
-          <h1>Case Battles</h1>
-          <span class="cb-subtitle">Open cases, battle players, win RoBet</span>
+          <i class="fa-solid fa-box"></i>
+          <h1>Cases</h1>
+          <span class="cb-subtitle">Open cases, win RoBet</span>
         </div>
-        <div class="cb-header-actions">
-          <button class="cb-btn cb-btn-create" id="cb-create-btn" onclick="cbOpenCreateModal()">
-            <i class="fa-solid fa-plus"></i> Create Battle
-          </button>
-        </div>
+        
       </div>
 
       <!-- Tabs -->
-      <div class="cb-tabs">
+      <div class="cb-tabs" style="display:none;">
         <button class="cb-tab active" data-tab="battles" onclick="cbSwitchTab('battles',this)">Live Battles</button>
         <button class="cb-tab" data-tab="cases" onclick="cbSwitchTab('cases',this)">Open A Case</button>
       </div>
 
       <!-- Tab: Live Battles -->
-      <div id="cb-tab-battles" class="cb-tab-content">
+      <div id="cb-tab-battles" class="cb-tab-content" style="display:none;">
         <div id="cb-battles-list" class="cb-battles-list">
           <div class="cb-empty"><i class="fa-solid fa-ghost"></i><p>No active battles.<br>Create one to get started!</p></div>
         </div>
       </div>
 
       <!-- Tab: Cases -->
-      <div id="cb-tab-cases" class="cb-tab-content" style="display:none;">
+      <div id="cb-tab-cases" class="cb-tab-content" style="display:block;">
         <div id="cb-cases-grid" class="cb-cases-grid">
           <!-- populated by JS -->
         </div>
