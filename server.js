@@ -38,6 +38,8 @@ app.use((req, res, next) => {
     next();
 });
 
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 /** Create the HTTP server to attach Socket.io */
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -55,7 +57,11 @@ const CRYPTO_WD_FILE = path.join(ROOT, 'data', 'crypto_withdrawals.json');
 const CHAT_HISTORY_FILE = path.join(ROOT, 'data', 'chat_history.json');
 const LIVE_FEED_MEMORY_FILE = path.join(ROOT, 'data', 'live_feed_memory.json');
 
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
+let _supabaseUrl = (process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
+if (/\/rest\/v1\/?$/i.test(_supabaseUrl)) {
+    _supabaseUrl = _supabaseUrl.replace(/\/rest\/v1\/?$/i, '').replace(/\/$/, '');
+}
+const SUPABASE_URL = _supabaseUrl;
 const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY || '').trim();
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
@@ -144,6 +150,38 @@ function supabaseRestHeaders() {
         headers.Authorization = `Bearer ${key}`;
     }
     return headers;
+}
+
+/** Undici/Node often throws TypeError("fetch failed") with the real reason on `cause` (ENOTFOUND, cert, etc.). */
+function formatNodeFetchError(err) {
+    if (!err || typeof err !== 'object') return String(err);
+    const bits = [err.message || 'fetch failed'];
+    const c = err.cause;
+    if (c != null && typeof c === 'object') {
+        if (typeof c.message === 'string' && c.message) bits.push(c.message);
+        if (c.code) bits.push(`syscall_code=${c.code}`);
+        if (typeof c.errno === 'number') bits.push(`errno=${c.errno}`);
+    } else if (c != null) {
+        bits.push(String(c));
+    }
+    if (err.code && !bits.some((b) => String(b).includes(String(err.code)))) bits.push(`code=${err.code}`);
+    return bits.join(' — ').slice(0, 700);
+}
+
+function validateSupabaseUrlShape() {
+    const u = SUPABASE_URL;
+    if (!u) return 'SUPABASE_URL is empty.';
+    if (!/^https:\/\//i.test(u)) return 'SUPABASE_URL must start with https://';
+    try {
+        const parsed = new URL(u);
+        if (!parsed.hostname) return 'SUPABASE_URL has no hostname.';
+        if (parsed.pathname && parsed.pathname !== '/') {
+            return 'SUPABASE_URL should be only the project root, e.g. https://xxxx.supabase.co (no /rest/v1 — the server adds that).';
+        }
+    } catch (e) {
+        return 'SUPABASE_URL is not a valid URL.';
+    }
+    return '';
 }
 
 async function supabaseFetch(pathAndQuery, options = {}) {
@@ -359,8 +397,8 @@ async function getUserBalance(userId) {
     try {
         res = await supabaseFetch(`user_balances?user_id=eq.${uid}&select=balance_zr,balance_zh`);
     } catch (e) {
-        lastSupabaseBalanceError = String(e && e.message);
-        console.error('getUserBalance network error:', e && e.message);
+        lastSupabaseBalanceError = formatNodeFetchError(e);
+        console.error('getUserBalance network error:', lastSupabaseBalanceError);
         return null;
     }
     if (!res.ok) {
@@ -1794,7 +1832,9 @@ app.get('/api/account-sync', async (req, res) => {
                 error:
                     'Could not read user_balances from Supabase (see lastDbError). On Render set SUPABASE_URL and the secret SUPABASE_SERVICE_ROLE_KEY (Project Settings → API). The anon key alone is often blocked by RLS.',
                 lastDbError: lastSupabaseBalanceError || undefined,
-                tableHint: 'Table public.user_balances with columns user_id, balance_zr, balance_zh (and RLS that allows the service role to read all rows).'
+                tableHint:
+                    'If lastDbError is "fetch failed", the server never reached Supabase (bad SUPABASE_URL, DNS, TLS, or typo). It is not RLS. Copy Project URL from Supabase → Settings → API (https://xxxx.supabase.co).',
+                urlHint: validateSupabaseUrlShape() || undefined
             });
         }
         res.setHeader('Content-Type', 'application/json');
@@ -4958,12 +4998,14 @@ hydrateCaseItemThumbnails()
                     `Account data: Supabase (${sr ? 'service_role key present' : 'WARNING: only anon key — set SUPABASE_SERVICE_ROLE_KEY on Render for RLS bypass'})`
                 );
                 void (async () => {
+                    const shape = validateSupabaseUrlShape();
+                    if (shape) console.warn('[Supabase] SUPABASE_URL check:', shape);
                     try {
                         const probe = await supabaseFetch('user_balances?select=user_id&limit=1');
                         const snippet = probe.ok ? 'OK' : await readSupabaseErrorBody(probe);
                         console.log(`[Supabase] REST probe GET user_balances → HTTP ${probe.status} ${probe.ok ? snippet : snippet}`);
                     } catch (e) {
-                        console.error('[Supabase] REST probe failed:', e && e.message);
+                        console.error('[Supabase] REST probe failed:', formatNodeFetchError(e));
                     }
                 })();
             } else {
