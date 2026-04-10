@@ -371,7 +371,11 @@ async function getUserBalance(userId) {
     } catch (e) {
         return null;
     }
-    if (!Array.isArray(rows) || rows.length === 0) return null;
+    if (!Array.isArray(rows)) return null;
+    // Empty DB (e.g. new Supabase project): no row yet — treat as 0 so games/sync work; first write upserts via updateUserBalance.
+    if (rows.length === 0) {
+        return { balance_zr: 0, balance_zh: 0 };
+    }
     return {
         balance_zr: num(rows[0].balance_zr, 0),
         balance_zh: num(rows[0].balance_zh, 0)
