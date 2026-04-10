@@ -644,6 +644,66 @@ async function persistAccountSave(userId, save, ignoreBalance = false) {
 }
 
 /**
+ * Client account-sync (POST): update profile JSON only — does not wipe/replace the whole `transactions` table.
+ * Avoids 503s when service role can insert profile rows but broad DELETE is blocked by RLS.
+ * Balance is never taken from the client; callers use ignoreBalance on the full persist path when needed.
+ */
+async function persistAccountProfileOnly(userId, save) {
+    if (!supabaseEnabled()) {
+        return { ok: false, step: 'config', detail: 'Supabase not configured' };
+    }
+    const uid = encodeURIComponent(String(userId));
+    let delRes;
+    try {
+        delRes = await supabaseFetch(`transactions?user_id=eq.${uid}&type=eq.account_profile`, {
+            method: 'DELETE'
+        });
+    } catch (e) {
+        return { ok: false, step: 'transactions_profile_delete', detail: String(e && e.message) };
+    }
+    if (!delRes.ok) {
+        const detail = await readSupabaseErrorBody(delRes);
+        console.error('persistAccountProfileOnly DELETE failed:', delRes.status, detail);
+        return { ok: false, step: 'transactions_profile_delete', detail, status: delRes.status };
+    }
+
+    let profileJson;
+    try {
+        profileJson = JSON.stringify(buildProfilePayload(save));
+    } catch (e) {
+        profileJson = '{}';
+    }
+
+    const profileRow = {
+        user_id: String(userId),
+        amount: 0,
+        currency: 'zr',
+        type: 'account_profile',
+        status: 'ok',
+        game_name: profileJson,
+        reference_id: PROFILE_REF_UUID
+    };
+
+    let profRes;
+    try {
+        profRes = await supabaseFetch('transactions', {
+            method: 'POST',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify(profileRow)
+        });
+    } catch (e) {
+        return { ok: false, step: 'transactions_profile_insert', detail: String(e && e.message) };
+    }
+    if (!profRes.ok) {
+        const detail = await readSupabaseErrorBody(profRes);
+        console.error('persistAccountProfileOnly INSERT failed:', profRes.status, detail);
+        return { ok: false, step: 'transactions_profile_insert', detail, status: profRes.status };
+    }
+
+    return { ok: true };
+}
+
+/**
  * Full save object for the frontend (robloxUserId, balance, balanceZh, transactions, stats, â€¦).
  * @returns {Promise<object | null>}
  */
@@ -1059,6 +1119,9 @@ async function liveFeedListSupabase(limit) {
 const activeMinesGames = new Map();
 const activeTowersGames = new Map();
 const activeBlackjackGames = new Map();
+/** Case battles — entry fees, rolls, and payouts are server-side only */
+const caseBattles = new Map();
+const caseBattleStarting = new Set();
 const userCusStates = new Map();
 /** Comma-separated Roblox user IDs; set ADMIN_ROBLOX_IDS on Render (omit or leave empty to keep defaults below) */
 const _adminEnv = process.env.ADMIN_ROBLOX_IDS;
@@ -1685,7 +1748,10 @@ app.get('/api/account-sync', async (req, res) => {
     try {
         const save = await loadAccountFromSupabase(id);
         if (!save) {
-            return res.status(404).json({ error: 'no account' });
+            return res.status(503).json({
+                error:
+                    'Could not load account from the database. On Render, set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY; check Supabase RLS on user_balances and transactions.'
+            });
         }
         res.setHeader('Content-Type', 'application/json');
         res.status(200).send(JSON.stringify(save));
@@ -1735,10 +1801,10 @@ app.post('/api/account-sync', async (req, res) => {
             }
         }
 
-        const result = await persistAccountSave(userId, save, true);
+        const result = await persistAccountProfileOnly(userId, save);
         if (!result.ok) {
             return res.status(503).json({
-                error: 'Could not save account. Storage may be unavailable.',
+                error: 'Could not save account profile. Storage may be unavailable.',
                 step: result.step,
                 detail: result.detail
             });
@@ -4465,6 +4531,103 @@ function rollCaseItem(caseData, userId, isBot = false) {
     return { ...roll };
 }
 
+function battleToClient(b) {
+    const c = b.caseData;
+    return {
+        id: b.id,
+        caseId: b.caseId,
+        caseName: c.name,
+        caseImage: c.image,
+        casePrice: c.price,
+        rounds: b.rounds,
+        mode: b.mode,
+        maxPlayers: b.maxPlayers,
+        status: b.status,
+        players: b.players.map((p) => ({
+            userId: p.userId,
+            username: p.username,
+            isBot: p.isBot,
+            total: p.total,
+            rolls: p.rolls.map((x) => ({ item: x.item }))
+        })),
+        winner: b.winner || null,
+        isTie: Boolean(b.isTie),
+        payoutAmount: typeof b.payoutAmount === 'number' ? b.payoutAmount : 0
+    };
+}
+
+function serializeCaseBattlesList() {
+    return Array.from(caseBattles.values()).map(battleToClient);
+}
+
+function caseBattleEntryFee(b) {
+    return Math.round(b.caseData.price * b.rounds * 100) / 100;
+}
+
+async function startCaseBattleFlow(battleId) {
+    if (caseBattleStarting.has(battleId)) return;
+    const b = caseBattles.get(battleId);
+    if (!b || b.status !== 'waiting' || b.players.length < b.maxPlayers) return;
+    caseBattleStarting.add(battleId);
+    try {
+        b.status = 'active';
+        io.emit(`battle:${battleId}:started`, battleToClient(b));
+        io.emit('battles:list_update', serializeCaseBattlesList());
+
+        for (let round = 1; round <= b.rounds; round++) {
+            const results = [];
+            for (const p of b.players) {
+                const uidForRoll = p.isBot ? null : parseRobloxNumericId(p.userId);
+                const item = rollCaseItem(b.caseData, uidForRoll, p.isBot);
+                p.rolls.push({ item, round });
+                p.total = Math.round((p.total + (Number(item.value) || 0)) * 100) / 100;
+                results.push({ userId: p.userId, item, total: p.total });
+            }
+            io.emit(`battle:${battleId}:round`, { round, results });
+            await new Promise((r) => setTimeout(r, 5600));
+        }
+
+        const entry = caseBattleEntryFee(b);
+        const humans = b.players.filter((p) => !p.isBot);
+        const pot = Math.round(entry * humans.length * 100) / 100;
+
+        const best =
+            b.mode === 'crazy'
+                ? Math.min(...b.players.map((p) => p.total))
+                : Math.max(...b.players.map((p) => p.total));
+        const top = b.players.filter((p) => p.total === best);
+        const isTie = top.length > 1;
+        const winPlayer = isTie ? null : top[0];
+        b.status = 'done';
+        b.isTie = isTie;
+        b.payoutAmount = isTie ? 0 : pot;
+        b.winner =
+            winPlayer && !winPlayer.isBot
+                ? { userId: winPlayer.userId, username: winPlayer.username }
+                : winPlayer && winPlayer.isBot
+                  ? { userId: winPlayer.userId, username: winPlayer.username }
+                  : null;
+
+        if (isTie) {
+            for (const p of humans) {
+                const u = parseRobloxNumericId(p.userId);
+                if (u) await creditUserWin(u, entry);
+            }
+        } else if (winPlayer && !winPlayer.isBot) {
+            const wu = parseRobloxNumericId(winPlayer.userId);
+            if (wu) await creditUserWin(wu, pot);
+        }
+
+        b.endedAt = Date.now();
+        io.emit(`battle:${battleId}:done`, battleToClient(b));
+        io.emit('battles:list_update', serializeCaseBattlesList());
+    } catch (e) {
+        console.error('[CaseBattles] startCaseBattleFlow:', e && e.message);
+    } finally {
+        caseBattleStarting.delete(battleId);
+    }
+}
+
 // GET /api/cases â€” all case definitions
 app.get('/api/cases', (req, res) => {
     res.json({ cases: CASES_DATA });
@@ -4482,8 +4645,13 @@ app.post('/api/cases/open', express.json(), async (req, res) => {
     await withUserLock(uid, async () => {
         // Check and deduct balance from Supabase
         const bal = await getUserBalance(uid);
-        const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
-        if (!bal || currentBalance < caseData.price) {
+        if (!bal) {
+            return res.status(503).json({
+                error: 'Could not read balance from the database. Check Supabase URL/keys on the server.'
+            });
+        }
+        const currentBalance = bal.balance_zr + (bal.balance_zh || 0);
+        if (currentBalance < caseData.price) {
             return res.status(400).json({ error: `Insufficient balance. Need ${caseData.price} RoBet.` });
         }
 
@@ -4505,6 +4673,122 @@ app.post('/api/cases/open', express.json(), async (req, res) => {
         emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
         res.json({ ok: true, item, newBalance });
     });
+});
+
+// ----- Case battles (server-authoritative entry, rolls, payouts) -----
+app.get('/api/battles', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json({ battles: serializeCaseBattlesList() });
+});
+
+app.post('/api/battles/create', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, caseId, rounds, mode, maxPlayers } = req.body || {};
+    const uid = parseRobloxUserIdStrict(userId);
+    const caseData = CASES_DATA.find((c) => c.id === caseId);
+    const r = Math.min(10, Math.max(1, parseInt(String(rounds || 1), 10) || 1));
+    const mp = Math.min(8, Math.max(2, parseInt(String(maxPlayers || 2), 10) || 2));
+    const m = ['normal', 'crazy', 'team', 'group'].includes(String(mode)) ? String(mode) : 'normal';
+
+    if (!uid || !caseId || !caseData) {
+        return res.status(400).json({ error: 'Invalid request.' });
+    }
+    if (!supabaseEnabled()) {
+        return res.status(503).json({ error: 'Database not configured.' });
+    }
+
+    const entryFee = Math.round(caseData.price * r * 100) / 100;
+
+    await withUserLock(uid, async () => {
+        const deduct = await deductUserBet(uid, entryFee);
+        if (!deduct.ok) {
+            return res.status(400).json({ error: deduct.error || 'Could not deduct entry fee.' });
+        }
+        const id = `b_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+        const uname = getOnlineUsernameByUserId(uid) || `User${uid}`;
+        const battle = {
+            id,
+            caseId,
+            caseData,
+            rounds: r,
+            mode: m,
+            maxPlayers: mp,
+            status: 'waiting',
+            players: [{ userId: uid, username: uname, isBot: false, total: 0, rolls: [] }],
+            creatorUserId: uid,
+            winner: null,
+            isTie: false,
+            payoutAmount: 0,
+            endedAt: 0
+        };
+        caseBattles.set(id, battle);
+        emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+        io.emit('battles:list_update', serializeCaseBattlesList());
+        res.json({ battle: battleToClient(battle) });
+    });
+});
+
+app.post('/api/battles/:battleId/join', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const battleId = String(req.params.battleId || '');
+    const uid = parseRobloxUserIdStrict(req.body && req.body.userId);
+    const b = caseBattles.get(battleId);
+
+    if (!uid) return res.status(400).json({ error: 'Invalid user.' });
+    if (!b || b.status !== 'waiting') return res.status(400).json({ error: 'Battle is not open.' });
+    if (b.players.some((p) => String(p.userId) === String(uid))) {
+        return res.status(400).json({ error: 'Already in this battle.' });
+    }
+    if (b.players.length >= b.maxPlayers) return res.status(400).json({ error: 'Battle is full.' });
+    if (!supabaseEnabled()) return res.status(503).json({ error: 'Database not configured.' });
+
+    const entryFee = caseBattleEntryFee(b);
+
+    await withUserLock(uid, async () => {
+        const deduct = await deductUserBet(uid, entryFee);
+        if (!deduct.ok) {
+            return res.status(400).json({ error: deduct.error || 'Could not deduct entry fee.' });
+        }
+        const uname = getOnlineUsernameByUserId(uid) || `User${uid}`;
+        b.players.push({ userId: uid, username: uname, isBot: false, total: 0, rolls: [] });
+        emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+        io.emit(`battle:${battleId}:update`, battleToClient(b));
+        io.emit('battles:list_update', serializeCaseBattlesList());
+        if (b.players.length >= b.maxPlayers) {
+            void startCaseBattleFlow(battleId);
+        }
+        res.json({ ok: true, battle: battleToClient(b) });
+    });
+});
+
+app.post('/api/battles/:battleId/callbot', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const battleId = String(req.params.battleId || '');
+    const uid = parseRobloxUserIdStrict(req.body && req.body.userId);
+    const b = caseBattles.get(battleId);
+
+    if (!uid) return res.status(400).json({ error: 'Invalid user.' });
+    if (!b || b.status !== 'waiting') return res.status(400).json({ error: 'Battle is not open.' });
+    if (String(b.creatorUserId) !== String(uid)) {
+        return res.status(403).json({ error: 'Only the host can add bots.' });
+    }
+    if (b.players.length >= b.maxPlayers) return res.status(400).json({ error: 'Lobby is full.' });
+
+    const botNum = b.players.filter((p) => p.isBot).length + 1;
+    const botId = `bot_${battleId.slice(-12)}_${botNum}`;
+    b.players.push({
+        userId: botId,
+        username: `Bot ${botNum}`,
+        isBot: true,
+        total: 0,
+        rolls: []
+    });
+    io.emit(`battle:${battleId}:update`, battleToClient(b));
+    io.emit('battles:list_update', serializeCaseBattlesList());
+    if (b.players.length >= b.maxPlayers) {
+        void startCaseBattleFlow(battleId);
+    }
+    res.json({ ok: true, battle: battleToClient(b) });
 });
 
 const obfCache = {};
