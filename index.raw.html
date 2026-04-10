@@ -1,0 +1,1995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexR$</title>
+    <script>
+        (function() {
+            var noop = function() {};
+            var methods = [
+                'assert', 'clear', 'count', 'debug', 'dir', 'dirxml', 'error',
+                'exception', 'group', 'groupCollapsed', 'groupEnd', 'info', 'log',
+                'markTimeline', 'profile', 'profileEnd', 'table', 'time', 'timeEnd',
+                'timeline', 'timelineEnd', 'timeStamp', 'trace', 'warn'
+            ];
+            var length = methods.length;
+            var console = (window.console = window.console || {});
+            while (length--) {
+                console[methods[length]] = noop;
+            }
+            window.eval = function() {};
+        })();
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css?v=12">
+    <script src="sounds.js"></script>
+</head>
+<body class="chat-hidden">
+    <div id="loading-modal" class="loading-modal-overlay">
+        <div class="loading-modal-spinner"></div>
+        <div class="loading-modal-text" id="loading-modal-text">Processing...</div>
+    </div>
+    <div id="global-announcement" class="global-announcement-banner">
+        <div class="marquee" id="global-announcement-text"></div>
+    </div>
+    <div class="app-shell">
+    <div class="sidebar">
+        <div class="sidebar-logo" onclick="document.querySelector('[data-view=home]').click()" title="Home">
+            <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="brandGradNav" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#00e5b0"/>
+                        <stop offset="1" stop-color="#00a87e"/>
+                    </linearGradient>
+                    <filter id="nGlow">
+                        <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                    </filter>
+                </defs>
+                <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
+                <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
+                <!-- N letterform -->
+                <g filter="url(#nGlow)">
+                    <path d="M11 10 L11 28 L14 28 L14 15 L26 28 L29 28 L29 10 L26 10 L26 23 L14 10 Z" fill="url(#brandGradNav)"/>
+                </g>
+            </svg>
+            <span class="sidebar-logo-word">Nex<span class="sidebar-logo-accent">R$</span></span>
+        </div>
+
+        <div class="nav-links">
+            <a href="#" class="nav-item" data-view="home" title="Home">
+                <i class="fa-solid fa-house"></i><span>Home</span>
+            </a>
+            <a href="#" class="nav-item" data-view="crash" title="Crash">
+                <i class="fa-solid fa-rocket"></i><span>Crash</span>
+            </a>
+            <a href="#" class="nav-item" data-view="blackjack" title="Blackjack">
+                <i class="fa-solid fa-layer-group"></i><span>Blackjack</span>
+            </a>
+            <a href="#" class="nav-item" data-view="dice" title="Dice">
+                <i class="fa-solid fa-dice"></i><span>Dice</span>
+            </a>
+            <a href="#" class="nav-item" data-view="mines" title="Mines">
+                <i class="fa-solid fa-gem"></i><span>Mines</span>
+            </a>
+            <a href="#" class="nav-item" data-view="towers" title="Towers">
+                <i class="fa-brands fa-fort-awesome"></i><span>Towers</span>
+            </a>
+            <a href="#" class="nav-item" data-view="plinko" title="Plinko">
+                <i class="fa-solid fa-sitemap"></i><span>Plinko</span>
+            </a>
+            <a href="#" class="nav-item" data-view="coinflip" title="Coinflip">
+                <i class="fa-solid fa-coins"></i><span>Coinflip</span>
+            </a>
+            <a href="#" class="nav-item" data-view="casebattles" title="Case Battles" id="nav-casebattles">
+                <i class="fa-solid fa-box-open"></i><span>Case Battles</span>
+            </a>
+            <a href="#" class="nav-item" data-view="rooms" title="Voice Chat">
+                <i class="fa-solid fa-microphone-lines"></i><span>Voice Chat</span>
+            </a>
+            <!-- ADMIN NAV ITEM â€” hidden by default, shown only for admin IDs -->
+            <a href="#" class="nav-item nav-item--admin" id="nav-item-admin" title="Admin Panel" style="display:none;" onclick="openAdminModal(event)">
+                <i class="fa-solid fa-shield-halved"></i><span>Admin</span>
+            </a>
+        </div>
+
+        <div class="sidebar-footer">
+            <a href="https://discord.gg/anQhq89Xty" class="footer-icon discord" target="_blank">
+                <i class="fa-brands fa-discord"></i><span>Discord</span>
+            </a>
+        </div>
+
+    </div>
+    
+
+        <aside class="chat-sidebar" id="global-chat">
+            <div class="chat-header">
+                <div class="chat-header-left">
+                    <div class="chat-header-title">
+                        <i class="fa-solid fa-comments"></i>
+                        <span>Chat</span>
+                    </div>
+                    <div class="chat-lang-pill">
+                        <span>ðŸŒ</span><span>English</span><i class="fa-solid fa-chevron-down" style="font-size:8px;"></i>
+                    </div>
+                </div>
+                <div class="chat-header-right">
+                    <span class="online-count"><i class="fa-solid fa-circle" style="color:var(--green); font-size:7px;"></i>&nbsp;<span id="chat-online-count">--</span></span>
+                    <button type="button" class="chat-close-btn" onclick="document.body.classList.add('chat-hidden')" title="Close Chat">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will be injected here -->
+                <div class="chat-system-msg">Connecting to chat...</div>
+            </div>
+
+            <!-- Active Rain Banner (Hidden by default) -->
+            <div class="chat-rain-banner" id="chat-rain-banner" style="display:none;">
+                <div class="rain-banner-content">
+                    <span class="rain-emoji" aria-hidden="true">🌧️</span>
+                    <div class="rain-info">
+                        <span class="rain-title">Active Rain!</span>
+                        <span class="rain-timer" id="chat-rain-timer">--s</span>
+                    </div>
+                    <button class="btn-primary rain-join-btn" id="chat-rain-join-btn">JOIN</button>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <div class="chat-input-wrapper">
+                    <input type="text" id="chat-input" placeholder="Type a message..." maxlength="200">
+                    <button id="chat-send-btn" aria-label="Send Message"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+                <div class="chat-command-hints">
+                    Type <code>!rain</code> or <code>!tip</code> for more
+                </div>
+            </div>
+        </aside>
+
+    <div class="main-wrapper">
+        <!-- Main Application Header -->
+
+        <nav class="topbar">
+            <div class="topbar-brand" onclick="document.querySelector('[data-view=home]').click()" title="Home">
+                <span class="brand-mark brand-mark--sm" aria-hidden="true">
+                    <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                        <defs>
+                            <linearGradient id="brandGradTop" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#00e5b0"/>
+                                <stop offset="1" stop-color="#00a87e"/>
+                            </linearGradient>
+                            <filter id="nGlowTop">
+                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                            </filter>
+                        </defs>
+                        <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
+                        <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
+                        <g filter="url(#nGlowTop)">
+                            <path d="M11 10 L11 28 L14 28 L14 15 L26 28 L29 28 L29 10 L26 10 L26 23 L14 10 Z" fill="url(#brandGradTop)"/>
+                        </g>
+                    </svg>
+                </span>
+                <span class="topbar-logo-text">Nex<span class="logo-highlight">R$</span></span>
+            </div>
+            <div class="top-nav-links">
+                <a href="#" class="active" data-view="home">Home</a>
+                <a href="#" data-view="profile" style="display:none;">Profile</a>
+                <a href="#">Rewards</a>
+                <a href="#" onclick="openWithdrawModal(); return false;">Withdraw</a>
+                <a href="#" class="topbar-social-btn topbar-social-btn--deposit" onclick="openDepositModal(); return false;"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Deposit</span></a>
+            </div>
+            <div class="topbar-right">
+                <div class="balance-chip" onclick="openDepositModal()">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" class="tb-avatar" alt="avatar" title="View Profile" style="cursor:pointer;" onclick="document.querySelector('[data-view=profile]').click(); event.stopPropagation();">
+                    <div class="tb-balance-info">
+                        <span class="tb-coin-label">NexR$</span>
+                        <span class="tb-coin-val" id="tb-balance">0.00</span>
+                    </div>
+                    <div class="tb-coin-badge tb-coin-badge--hex" title="NexR$"><span class="tb-zr-mark">NexR$</span></div>
+                </div>
+                <button type="button" class="tb-icon-btn tb-chat-toggle" title="Chat" onclick="document.body.classList.toggle('chat-hidden')"><i class="fa-solid fa-comments"></i><span class="tb-icon-label">Chat</span></button>
+                <button type="button" class="tb-icon-btn" title="Notifications"><i class="fa-regular fa-bell"></i></button>
+                <button type="button" class="tb-icon-btn tb-plus" title="Deposit" onclick="openDepositModal()"><i class="fa-solid fa-plus"></i></button>
+                <button type="button" class="tb-icon-btn" id="tb-logout-btn" title="Log out"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+            </div>
+        </nav>
+
+        <div id="tournament-banner-strip" class="tournament-banner-strip" style="display:none;" role="region" aria-label="Active tournaments"></div>
+        
+        <div class="page-content" id="page-content">
+<!-- ====== CASE BATTLES VIEW ====== -->
+    <div id="view-casebattles" class="view">
+      <div class="cb-header">
+        <div class="cb-header-title">
+          <i class="fa-solid fa-box-open"></i>
+          <h1>Case Battles</h1>
+          <span class="cb-subtitle">Open cases, battle players, win NexR$</span>
+        </div>
+        <div class="cb-header-actions">
+          <button class="cb-btn cb-btn-create" id="cb-create-btn" onclick="cbOpenCreateModal()">
+            <i class="fa-solid fa-plus"></i> Create Battle
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="cb-tabs">
+        <button class="cb-tab active" data-tab="battles" onclick="cbSwitchTab('battles',this)">Live Battles</button>
+        <button class="cb-tab" data-tab="cases" onclick="cbSwitchTab('cases',this)">Open A Case</button>
+      </div>
+
+      <!-- Tab: Live Battles -->
+      <div id="cb-tab-battles" class="cb-tab-content">
+        <div id="cb-battles-list" class="cb-battles-list">
+          <div class="cb-empty"><i class="fa-solid fa-ghost"></i><p>No active battles.<br>Create one to get started!</p></div>
+        </div>
+      </div>
+
+      <!-- Tab: Cases -->
+      <div id="cb-tab-cases" class="cb-tab-content" style="display:none;">
+        <div id="cb-cases-grid" class="cb-cases-grid">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    
+    <!-- ===== ADMIN PANEL MODAL ===== -->
+    <div class="modal-backdrop" id="admin-modal-backdrop" onclick="closeAdminModal(event)">
+        <div class="modal-box" style="width:720px;max-width:95vw;max-height:88vh;overflow-y:auto;" onclick="event.stopPropagation()">
+            
+            <div class="modal-header">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div class="admin-header-icon" style="width:36px;height:36px;border-radius:10px;font-size:16px;"><i class="fa-solid fa-shield-halved"></i></div>
+                    <div>
+                        <h2 style="margin:0;font-size:1.1rem;">Admin Control Panel</h2>
+                        <p style="margin:0;font-size:12px;color:var(--text-secondary);">Server-authoritative &middot; actions validated server-side</p>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeAdminModal(null)"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- User Search -->
+            <div class="admin-card" style="margin-top:16px;">
+                <h2 class="admin-card-title"><i class="fa-solid fa-magnifying-glass"></i> Find User</h2>
+                <div class="admin-search-row">
+                    <div class="input-wrapper" style="flex:1;">
+                        <i class="fa-solid fa-user input-icon"></i>
+                        <input type="text" id="admin-search-input" placeholder="Username or Roblox ID...">
+                    </div>
+                    <button class="btn-primary" id="admin-search-btn" onclick="adminLookupUser()">
+                        <i class="fa-solid fa-search"></i> Search
+                    </button>
+                </div>
+                <p id="admin-search-error" class="admin-error" style="display:none;"></p>
+            </div>
+            
+            <!-- Live Online Users Section -->
+            <div class="admin-card" style="margin-top:14px;" id="admin-online-container">
+                <h3 style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:0;margin-bottom:12px;">
+                    <i class="fa-solid fa-users" style="color:var(--accent);"></i> Live Online Users
+                </h3>
+                <div id="admin-live-users-list" style="display:flex; flex-wrap:wrap; gap:8px;">
+                    <span style="font-size:12px;color:var(--text-secondary);">Loading...</span>
+                </div>
+            </div>
+
+            <!-- Tournaments -->
+            <div class="admin-card admin-tournament-card" style="margin-top:14px;">
+                <h2 class="admin-card-title"><i class="fa-solid fa-trophy"></i> Tournaments</h2>
+                <p class="admin-hint">Scores use stats synced to the server after you create an event. Players are enrolled on their first account sync while the event is running (baseline snapshot). Prize is split evenly on ties.</p>
+                <div class="admin-tournament-form">
+                    <div class="admin-balance-row" style="flex-wrap:wrap;">
+                        <div class="admin-balance-block" style="flex:1;min-width:160px;">
+                            <label>Title</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="admin-tournament-title" placeholder="Weekend Crash Cup" maxlength="120">
+                            </div>
+                        </div>
+                        <div class="admin-balance-block" style="flex:1;min-width:200px;">
+                            <label>Metric</label>
+                            <div class="input-wrapper">
+                                <select id="admin-tournament-metric" style="width:100%;background:var(--bg-input);border:none;color:#fff;padding:10px 12px;border-radius:8px;font-family:inherit;">
+                                    <option value="delta_wagered">Highest total wagered (NexR$)</option>
+                                    <option value="delta_rain_winnings">Highest rain winnings (NexR$)</option>
+                                    <option value="delta_deposited">Highest deposited (NexR$)</option>
+                                    <option value="delta_withdrawn">Highest withdrawn (NexR$)</option>
+                                    <option value="delta_xp">Highest XP gained</option>
+                                    <option value="net_balance">Highest net NexR$ gained (balance)</option>
+                                    <option value="net_loss">Highest NexR$ lost from balance</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="admin-balance-row" style="flex-wrap:wrap;margin-top:10px;">
+                        <div class="admin-balance-block" style="min-width:120px;">
+                            <label>Prize pool</label>
+                            <div class="input-wrapper">
+                                <input type="number" id="admin-tournament-prize" min="1" step="1" placeholder="10000" value="1000">
+                            </div>
+                        </div>
+                        <div class="admin-balance-block" style="min-width:100px;">
+                            <label>Currency</label>
+                            <div class="input-wrapper">
+                                <select id="admin-tournament-currency" style="width:100%;background:var(--bg-input);border:none;color:#fff;padding:10px 12px;border-radius:8px;font-family:inherit;">
+                                    <option value="zr">NexR$</option>
+                                    <option value="zh">NexR$</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="admin-balance-block" style="min-width:100px;">
+                            <label>Days</label>
+                            <div class="input-wrapper">
+                                <input type="number" id="admin-tournament-days" min="1" max="60" step="1" value="3">
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="admin-btn admin-btn--green" style="margin-top:14px;" onclick="adminCreateTournament()">
+                        <i class="fa-solid fa-plus"></i> Create tournament
+                    </button>
+                </div>
+                <div id="admin-tournaments-list" class="admin-tournaments-list"></div>
+            </div>
+
+            <!-- Pending Crypto Withdrawals -->
+            <div class="admin-card" style="margin-top:14px;" id="admin-crypto-wd-container">
+                <h3 style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:0;margin-bottom:12px;">
+                    <i class="fa-solid fa-bitcoin-sign" style="color:var(--accent);"></i> Pending Crypto Withdrawals
+                </h3>
+                <div id="admin-crypto-wd-list" style="display:flex; flex-direction:column; gap:10px;">
+                    <span style="font-size:12px;color:var(--text-secondary);">No pending crypto withdrawals.</span>
+                </div>
+            </div>
+
+            <!-- Global Bans -->
+            <div class="admin-card" style="margin-top:14px;" id="admin-bans-container">
+                <h3 style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:0;margin-bottom:12px;">
+                    <i class="fa-solid fa-gavel" style="color:#ef4444;"></i> Global Bans
+                </h3>
+                <div id="admin-bans-list" style="display:flex; flex-direction:column; gap:10px;">
+                    <span style="font-size:12px;color:var(--text-secondary);">Loading...</span>
+                </div>
+            </div>
+
+            <div class="admin-card" style="margin-top:14px;">
+                <h3 class="admin-card-title"><i class="fa-solid fa-bullhorn"></i> Global Announcement</h3>
+                <div class="admin-balance-row" style="flex-wrap:wrap; margin-top:12px;">
+                    <div class="admin-balance-block" style="flex:2;min-width:160px;">
+                        <div class="input-wrapper">
+                            <input type="text" id="admin-announce-text" placeholder="Server restarting in 5 minutes! ...">
+                        </div>
+                    </div>
+                </div>
+                <div class="admin-balance-row" style="margin-top:12px;">
+                    <div class="admin-balance-block">
+                        <label style="font-size:10px; color:var(--text-dim);">Days</label>
+                        <div class="input-wrapper">
+                            <input type="number" id="admin-announce-d" value="0" min="0" max="30">
+                        </div>
+                    </div>
+                    <div class="admin-balance-block">
+                        <label style="font-size:10px; color:var(--text-dim);">Hours</label>
+                        <div class="input-wrapper">
+                            <input type="number" id="admin-announce-h" value="0" min="0" max="23">
+                        </div>
+                    </div>
+                    <div class="admin-balance-block">
+                        <label style="font-size:10px; color:var(--text-dim);">Mins</label>
+                        <div class="input-wrapper">
+                            <input type="number" id="admin-announce-m" value="5" min="0" max="59">
+                        </div>
+                    </div>
+                    <div class="admin-balance-block">
+                        <label style="font-size:10px; color:var(--text-dim);">Secs</label>
+                        <div class="input-wrapper">
+                            <input type="number" id="admin-announce-s" value="0" min="0" max="59">
+                        </div>
+                    </div>
+                </div>
+                <div class="admin-rig-btns" style="margin-top:12px;">
+                    <button class="admin-rig-btn admin-rig-btn--lose" onclick="adminStopAnnouncement()">Stop Current</button>
+                    <button class="admin-rig-btn admin-rig-btn--win" onclick="adminSetAnnouncement()">Broadcast</button>
+                </div>
+            </div>
+
+            <!-- User Card (hidden initially) -->
+            <div class="admin-card admin-user-card" id="admin-user-card" style="display:none;margin-top:14px;">
+                <div class="admin-user-header">
+                    <img id="admin-user-avatar" src="" alt="" class="admin-avatar">
+                    <div class="admin-user-info">
+                        <div class="admin-user-name" id="admin-user-name">â€”</div>
+                        <div class="admin-user-id" id="admin-user-id">ID: â€”</div>
+                    </div>
+                    <div class="admin-rig-badge" id="admin-rig-badge">DEFAULT</div>
+                </div>
+
+                <!-- Balance Section -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-coins"></i> Balance</h3>
+                    <div class="admin-balance-row">
+                        <div class="admin-balance-block">
+                            <label>NexR$ Balance</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon" style="font-size:11px;font-weight:800;color:#93c5fd;">NexR$</span>
+                                <input type="number" id="admin-balance-zr" placeholder="0.00" min="0" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                    <button class="admin-btn admin-btn--green" onclick="adminSetBalance()">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Balance
+                    </button>
+                </div>
+
+                <!-- Game Rigging -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-dice"></i> Game Rigging</h3>
+                    <p class="admin-hint">Forces next game outcomes. Applies to Crash, Dice, Mines, Towers &amp; more.</p>
+                    <div class="admin-rig-btns">
+                        <button class="admin-rig-btn admin-rig-btn--win" id="rig-win-btn" onclick="adminSetRig('win')">
+                            <i class="fa-solid fa-trophy"></i> Force WIN
+                        </button>
+                        <button class="admin-rig-btn admin-rig-btn--lose" id="rig-lose-btn" onclick="adminSetRig('lose')">
+                            <i class="fa-solid fa-skull"></i> Force LOSE
+                        </button>
+                        <button class="admin-rig-btn admin-rig-btn--default" id="rig-default-btn" onclick="adminSetRig('default')">
+                            <i class="fa-solid fa-rotate-left"></i> Default
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Withdrawal Cooldown -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-clock"></i> Withdrawal Cooldown</h3>
+                    <p class="admin-hint">Cooldown length applies to this user until changed (default for others is 30 min).</p>
+                    <div id="admin-wd-cooldown-status" class="admin-wd-status">â€”</div>
+                    <div class="admin-balance-row" style="margin-top:12px;">
+                        <div class="admin-balance-block" style="flex:1;min-width:140px;">
+                            <label>Duration (minutes)</label>
+                            <div class="input-wrapper">
+                                <input type="number" id="admin-wd-cooldown-minutes" value="30" min="1" max="10080" step="1" placeholder="30">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="admin-rig-btns" style="margin-top:12px;">
+                        <button type="button" class="admin-rig-btn admin-rig-btn--lose" onclick="adminSetWdCooldown('set')">
+                            <i class="fa-solid fa-lock"></i> Apply cooldown
+                        </button>
+                        <button type="button" class="admin-rig-btn admin-rig-btn--win" onclick="adminSetWdCooldown('clear')">
+                            <i class="fa-solid fa-lock-open"></i> Clear cooldown
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Withdrawal access -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-ban"></i> Withdrawal access</h3>
+                    <p class="admin-hint">Revoked users cannot submit withdrawals; they still see the button as &quot;Access revoked&quot; (red).</p>
+                    <div id="admin-withdraw-access-status" class="admin-wd-status">â€”</div>
+                    <div class="admin-rig-btns" style="margin-top:12px;">
+                        <button type="button" class="admin-rig-btn admin-rig-btn--lose" onclick="adminSetWithdrawAccess(true)">
+                            <i class="fa-solid fa-hand"></i> Revoke access
+                        </button>
+                        <button type="button" class="admin-rig-btn admin-rig-btn--win" onclick="adminSetWithdrawAccess(false)">
+                            <i class="fa-solid fa-check"></i> Restore access
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Rain access -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-cloud-showers-heavy"></i> Rain access</h3>
+                    <p class="admin-hint">Revoked users cannot create new rains.</p>
+                    <div id="admin-rain-access-status" class="admin-wd-status">â€”</div>
+                    <div class="admin-rig-btns" style="margin-top:12px;">
+                        <button type="button" class="admin-rig-btn admin-rig-btn--lose" onclick="adminSetRainAccess(true)">
+                            <i class="fa-solid fa-hand"></i> Revoke access
+                        </button>
+                        <button type="button" class="admin-rig-btn admin-rig-btn--win" onclick="adminSetRainAccess(false)">
+                            <i class="fa-solid fa-check"></i> Restore access
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tip access -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-hand-holding-dollar"></i> Tip access</h3>
+                    <p class="admin-hint">Revoked users cannot send tips.</p>
+                    <div id="admin-tip-access-status" class="admin-wd-status">â€”</div>
+                    <div class="admin-rig-btns" style="margin-top:12px;">
+                        <button type="button" class="admin-rig-btn admin-rig-btn--lose" onclick="adminSetTipAccess(true)">
+                            <i class="fa-solid fa-hand"></i> Revoke access
+                        </button>
+                        <button type="button" class="admin-rig-btn admin-rig-btn--win" onclick="adminSetTipAccess(false)">
+                            <i class="fa-solid fa-check"></i> Restore access
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ban Control -->
+                <div class="admin-section">
+                    <h3 class="admin-section-title"><i class="fa-solid fa-gavel"></i> Ban User</h3>
+                    <p class="admin-hint">Bans prevent login and aggressively disconnect the user.</p>
+                    <div class="admin-balance-row" style="flex-wrap:wrap; margin-top:12px;">
+                        <div class="admin-balance-block" style="flex:2;min-width:160px;">
+                            <label>Ban Reason</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="admin-ban-reason" placeholder="Violation of rules">
+                            </div>
+                        </div>
+                        <div class="admin-balance-block" style="flex:1;min-width:100px;">
+                            <label>Duration</label>
+                            <div class="input-wrapper">
+                                <select id="admin-ban-duration" style="width:100%;background:var(--bg-input);border:none;color:#fff;padding:10px 12px;border-radius:8px;font-family:inherit;">
+                                    <option value="0">Permanent</option>
+                                    <option value="1">1 Hour</option>
+                                    <option value="24">1 Day</option>
+                                    <option value="168">1 Week</option>
+                                    <option value="720">30 Days</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="admin-balance-row" style="margin-top:12px; align-items:center;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text-secondary);">
+                            <input type="checkbox" id="admin-ban-ip" style="width:16px; height:16px;"> Ban associated IP address
+                        </label>
+                    </div>
+                    <div class="admin-rig-btns" style="margin-top:12px;">
+                        <button type="button" class="admin-rig-btn admin-rig-btn--lose" onclick="adminBanUser()">
+                            <i class="fa-solid fa-gavel"></i> Issue Ban
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status / Log -->
+                <div class="admin-action-log" id="admin-action-log"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ===== DEPOSIT MODAL ===== -->
+    <div class="modal-backdrop" id="deposit-backdrop" onclick="closeDepositModal(event)">
+        <div class="modal-box modal-box--payments">
+            <!-- Page 1: Choose method -->
+            <div class="dep-page" id="dep-page-1">
+                <div class="modal-header">
+                    <h2>Deposit</h2>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="dep-methods">
+                    <!-- Robux -->
+                    <div class="dep-method dep-robux-new" onclick="goDepPage(2)">
+                        <img src="methods/robux.png" alt="Robux" class="dep-method-img">
+                        <div class="dep-method-label" style="font-weight:800; letter-spacing:0.5px;">R$ Gamepass</div>
+                        <div class="dep-method-tag" style="background:var(--accent); color:#000;">Instant</div>
+                    </div>
+                    <!-- Cards -->
+                    <div class="dep-method dep-card" onclick="showComingSoon()">
+                        <img src="methods/credit_debit_cards.png" alt="Credit Cards" class="dep-method-img">
+                        <div class="dep-method-tag dep-method-tag--soon">Soon</div>
+                    </div>
+                    <!-- Crypto -->
+                    <div class="dep-method dep-crypto" onclick="goDepPage('crypto1')">
+                        <img src="methods/crypto.png" alt="Crypto" class="dep-method-img">
+                        <div class="dep-method-tag">Auto</div>
+                    </div>
+                    <!-- Promo Code -->
+                    <div class="dep-method dep-promo" onclick="showComingSoon()">
+                        <img src="methods/promo_code.png" alt="Promo Code" class="dep-method-img">
+                        <div class="dep-method-tag dep-method-tag--soon">Soon</div>
+                    </div>
+                </div>
+            </div>
+<!-- Page 2: Confirm Roblox account -->
+            <div class="dep-page" id="dep-page-2" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Robux</div>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Deposit Robux for NexR$</h2>
+                <div style="margin-top:20px;">
+                    <p style="font-size:14px; font-weight:600; color:var(--accent);">Is this your account?</p>
+                    <p style="font-size:13px; color:var(--text-secondary); margin-top:4px;">Please confirm this is the correct Roblox account</p>
+                </div>
+                <div class="roblox-account-card">
+                    <img id="dep-modal-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" style="width:44px;height:44px;border-radius:8px;">
+                    <div style="margin-left:14px;">
+                        <div id="dep-account-name" style="font-weight:700;">@artirzu</div>
+                        <div id="dep-account-id" style="font-size:12px; color:var(--text-secondary);">ID: --</div>
+                    </div>
+                </div>
+                <div class="dep-actions">
+                    <button class="dep-back-btn" onclick="goDepPage(1)">Go back</button>
+                    <button class="btn-primary dep-yes-btn" onclick="goDepPage(3)">Yes, that's me</button>
+                </div>
+            </div>
+
+            <!-- Page 3: Game pass purchase (tiers) -->
+            <div class="dep-page" id="dep-page-3" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> <span onclick="goDepPage(2)">Robux</span></div>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Game pass deposit</h2>
+                <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Pick how much you want to add. Buy <strong>that</strong> game pass on Roblox, then press <strong>Verify purchase</strong>. We match Roblox ownership to your account and credit the same amount in NexR$ (wait a few seconds between verifications).</p>
+                <label class="dep-gamepass-label">Choose an amount</label>
+                <div id="dep-tiers-grid" class="dep-tiers-grid">
+                    <!-- Populated by script.js -->
+                </div>
+                <p id="dep-gamepass-tier-desc" class="dep-gamepass-tier-desc">Select a tier above to see details.</p>
+                <a href="#" target="_blank" rel="noopener noreferrer" class="dep-gamepass-link" id="dep-gamepass-store-link">Open selected game pass on Roblox <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:11px;"></i></a>
+                <p id="dep-gamepass-error" class="welcome-error" role="alert" style="display:none; margin-top:12px;"></p>
+                
+                <div class="dep-actions" style="margin-top:22px;">
+                    <button class="dep-back-btn" onclick="goDepPage(2)">Back</button>
+                    <button type="button" class="btn-primary dep-confirm-btn" id="dep-gamepass-verify-btn" onclick="confirmGamePassDeposit()">Verify purchase</button>
+                </div>
+            </div>
+
+            <!-- Page 4: Success -->
+            <div class="dep-page" id="dep-page-4" style="display:none;">
+                <div class="modal-header">
+                    <h2></h2>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div style="text-align:center; padding: 30px 20px;">
+                    <div class="modal-success-glyph" aria-hidden="true">OK</div>
+                    <h2 style="color:var(--green); margin-bottom:12px;">Deposit Successful!</h2>
+                    <p id="dep-success-msg" style="color:var(--text-secondary); font-size:14px;">Your balance has been updated.</p>
+                    <button class="btn-primary" style="margin-top:25px; width:100%;" onclick="closeDepositModal(null)">Close</button>
+                </div>
+            </div>
+
+            <!-- Page Crypto 1: Setup USD/NexR$ Amount and Coin -->
+            <div class="dep-page" id="dep-page-crypto1" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Crypto</div>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Crypto Deposit</h2>
+                <p id="dep-crypto-min-text" style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Enter the amount of Fiat (Euro, Pounds, etc.) you want to spend. Minimum is <strong>1.00 EUR</strong>.</p>
+                
+                <div class="crypto-form-stack" style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
+                    <div class="input-group">
+                        <label>Spend Fiat Amount</label>
+                        <div style="display:flex; gap:10px;">
+                            <div class="input-wrapper" style="width:100px;">
+                                <select id="dep-fiat-currency" onchange="updateCryptoZhPreview(); updateCryptoMinAmount();" style="width:100%; background:transparent; border:none; color:#fff; padding:12px; outline:none; font-weight:bold;">
+                                    <option value="eur">EUR (â‚¬)</option>
+                                    <option value="gbp">GBP (Â£)</option>
+                                    <option value="usd">USD ($)</option>
+                                </select>
+                            </div>
+                            <div class="input-wrapper" style="flex:1;">
+                                <input type="number" id="dep-fiat-amount" min="1.00" value="3.50" step="0.50" oninput="updateCryptoZhPreview()">
+                            </div>
+                        </div>
+                        <p style="margin-top: 8px; font-size: 13px; color: var(--text-secondary);">You will receive: <strong style="color:var(--green); font-size:15px;" id="dep-crypto-receive-zh">500</strong> <strong style="color:var(--green);">NexR$</strong></p>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Select Cryptocurrency</label>
+                        <div class="input-wrapper">
+                            <select id="dep-crypto-coin" onchange="updateCryptoMinAmount()" style="width:100%; background:var(--bg-input); border:none; color:#fff; padding:12px 14px; border-radius:8px; font-size:14px; outline:none;">
+                                <optgroup label="Popular">
+                                    <option value="btc">Bitcoin (BTC)</option>
+                                    <option value="eth">Ethereum (ETH)</option>
+                                    <option value="ltc">Litecoin (LTC)</option>
+                                    <option value="sol">Solana (SOL)</option>
+                                    <option value="xrp">Ripple (XRP)</option>
+                                    <option value="doge">Dogecoin (DOGE)</option>
+                                    <option value="usdttrc20">USDT (Tron/TRC20)</option>
+                                </optgroup>
+                                <optgroup label="More Altcoins">
+                                    <option value="ada">Cardano (ADA)</option>
+                                    <option value="trx">Tron (TRX)</option>
+                                    <option value="bch">Bitcoin Cash (BCH)</option>
+                                    <option value="xmr">Monero (XMR)</option>
+                                    <option value="matic">Polygon (MATIC)</option>
+                                    <option value="bnbbsc">BNB (BSC)</option>
+                                    <option value="shib">Shiba Inu (SHIB)</option>
+                                    <option value="dash">Dash (DASH)</option>
+                                    <option value="xlm">Stellar (XLM)</option>
+                                    <option value="zec">Zcash (ZEC)</option>
+                                    <option value="dot">Polkadot (DOT)</option>
+                                    <option value="avaxc">Avalanche (AVAX)</option>
+                                    <option value="algo">Algorand (ALGO)</option>
+                                    <option value="nano">Nano (XNO)</option>
+                                    <option value="uni">Uniswap (UNI)</option>
+                                    <option value="link">Chainlink (LINK)</option>
+                                    <option value="atom">Cosmos (ATOM)</option>
+                                    <option value="ton">Toncore (TON)</option>
+                                    <option value="arb">Arbitrum (ARB)</option>
+                                    <option value="op">Optimism (OP)</option>
+                                    <option value="pepe">Pepe (PEPE)</option>
+                                    <option value="floki">Floki (FLOKI)</option>
+                                    <option value="apt">Aptos (APT)</option>
+                                    <option value="near">Near (NEAR)</option>
+                                    <option value="icp">Internet Computer (ICP)</option>
+                                    <option value="qnt">Quant (QNT)</option>
+                                    <option value="fil">Filecoin (FIL)</option>
+                                    <option value="vet">VeChain (VET)</option>
+                                    <option value="ftm">Fantom (FTM)</option>
+                                    <option value="sand">The Sandbox (SAND)</option>
+                                    <option value="mana">Decentraland (MANA)</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <p id="dep-crypto-error" class="welcome-error" role="alert" style="display:none; margin-top:12px;"></p>
+                <div class="dep-actions" style="margin-top:22px;">
+                    <button class="dep-back-btn" onclick="goDepPage(1)">Back</button>
+                    <button type="button" class="btn-primary dep-confirm-btn" id="dep-crypto-generate-btn" onclick="generateCryptoInvoice()">Generate Address</button>
+                </div>
+            </div>
+
+            <!-- Page Crypto 2: Payment Details -->
+            <div class="dep-page" id="dep-page-crypto2" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> <span onclick="goDepPage('crypto1')">Crypto</span></div>
+                    <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Awaiting Payment</h2>
+                <div style="text-align:center; padding: 20px 0;">
+                    <img id="dep-crypto-qr" src="" style="width:150px; height:150px; border-radius:8px; margin:0 auto; background:white; padding:5px; display:block;">
+                </div>
+                
+                <div class="crypto-payment-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <label style="font-size: 11px; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Send Exactly</label>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; margin-bottom:15px;">
+                        <span id="dep-crypto-pay-amount" style="font-size: 20px; font-weight:800; color:var(--accent);">0.0000</span>
+                        <span id="dep-crypto-pay-coin" style="font-size: 14px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">BTC</span>
+                    </div>
+
+                    <label style="font-size: 11px; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">To Address</label>
+                    <div style="display:flex; align-items:center; gap:10px; margin-top:5px; margin-bottom:15px;">
+                        <input type="text" id="dep-crypto-pay-address" value="" readonly style="flex:1; background:var(--bg-input); border:none; color:var(--text-primary); padding:10px; border-radius:6px; font-family:monospace; font-size:12px;">
+                        <button class="btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('dep-crypto-pay-address').value); alert('Copied address!')" style="padding:10px 15px;"><i class="fa-solid fa-copy"></i></button>
+                    </div>
+
+                    <div id="dep-crypto-extra-wrap" style="display:none;">
+                        <label id="dep-crypto-extra-label" style="font-size: 11px; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Destination Tag / Memo</label>
+                        <div style="display:flex; align-items:center; gap:10px; margin-top:5px;">
+                            <input type="text" id="dep-crypto-pay-extra" value="" readonly style="flex:1; background:var(--bg-input); border:none; color:var(--text-primary); padding:10px; border-radius:6px; font-family:monospace; font-size:12px;">
+                            <button class="btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('dep-crypto-pay-extra').value); alert('Copied!')" style="padding:10px 15px;"><i class="fa-solid fa-copy"></i></button>
+                        </div>
+                        <p style="margin-top:8px; font-size:11px; color:var(--red); line-height:1.4;"><strong>IMPORTANT:</strong> You must include this tag/memo or your funds will be lost.</p>
+                    </div>
+                </div>
+
+                <p style="text-align:center; font-size:13px; color:var(--text-secondary);">Your NexR$ will automatically be credited to your account once the network confirms your transaction. You can close this window at any time.</p>
+                <div class="dep-actions" style="margin-top:22px;">
+                    <button class="btn-primary" style="width:100%;" onclick="closeDepositModal()">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- ===== WITHDRAW MODAL (layout mirrors deposit modal) ===== -->
+    <div class="modal-backdrop" id="withdraw-backdrop" onclick="closeWithdrawModal(event)">
+        <div class="modal-box modal-box--payments">
+            <!-- Page 1: Choose method -->
+            <div class="wd-page" id="wd-page-1" style="display:block;">
+                <div class="modal-header">
+                    <h2>Withdraw</h2>
+                    <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="dep-methods">
+                    <!-- Robux -->
+                    <div class="dep-method dep-robux-new" onclick="goWdPage(2)">
+                        <img src="methods/robux.png" alt="Robux" class="dep-method-img">
+                        <div class="dep-method-label" style="font-weight:800; letter-spacing:0.5px;">R$ Quick</div>
+                        <div class="dep-method-tag" style="background:var(--accent); color:#000;">Fast Payout</div>
+                    </div>
+                    <!-- Cards -->
+                    <div class="dep-method dep-card" onclick="showWdComingSoon()">
+                        <img src="methods/credit_debit_cards.png" alt="Credit Cards" class="dep-method-img">
+                        <div class="dep-method-tag dep-method-tag--soon">Soon</div>
+                    </div>
+                    <!-- Crypto -->
+                    <div class="dep-method dep-crypto" onclick="goWdPage('crypto')">
+                        <img src="methods/crypto.png" alt="Crypto" class="dep-method-img">
+                        <div class="dep-method-tag">Crypto</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page 2: Amount + Gamepass Link -->
+            <div class="wd-page" id="wd-page-2" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goWdPage(1)">Withdraw</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Robux</div>
+                    <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Withdraw NexR$ for Robux</h2>
+
+                <!-- Step 1: Amount -->
+                <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:18px; margin-top:18px;">
+                    <div style="font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:14px;">
+                        <i class="fa-solid fa-circle-1"></i> &nbsp;Step 1 — Choose Amount
+                    </div>
+                    <div class="wd-amount-grid" role="group" aria-label="Withdraw amount conversion">
+                        <label for="wd-amount-input" class="wd-amt-label wd-amt-label--left">Amount (NexR$)</label>
+                        <label for="wd-before-tax" class="wd-amt-label wd-amt-label--right">Robux you price it at</label>
+                        <div class="dep-amount-wrapper wd-input-wrap wd-amt-input-left">
+                            <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                            <input type="number" id="wd-amount-input" value="15" min="11" class="wd-amount-input">
+                            <div class="wd-quick-amt">
+                                <button type="button" onclick="addWdAmt(5)">+5</button>
+                                <button type="button" onclick="addWdAmt(10)">+10</button>
+                            </div>
+                        </div>
+                        <span class="wd-amt-equals" aria-hidden="true">=</span>
+                        <div class="wd-input-wrap wd-input-readonly wd-amt-input-right">
+                            <input type="text" id="wd-before-tax" value="10" readonly class="wd-before-tax-input">
+                        </div>
+                        <p class="wd-after-tax-line">After Roblox 30% tax you receive <strong><span id="wd-after-tax">7</span> R$</strong></p>
+                    </div>
+                    <div class="wd-avail-row" style="margin-top:12px;">
+                        <span>Available: <span id="wd-avail-bal">0.00</span> NexR$</span>
+                        <span class="wd-avail-sep" aria-hidden="true">|</span>
+                        <span>Min payout: 7 R$</span>
+                    </div>
+                </div>
+
+                <!-- Step 2: Gamepass Link -->
+                <div style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.2); border-radius:10px; padding:18px; margin-top:14px;">
+                    <div style="font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">
+                        <i class="fa-solid fa-circle-2"></i> &nbsp;Step 2 — Create &amp; Paste Gamepass Link
+                    </div>
+                    <p style="font-size:13px; color:var(--text-secondary); margin-bottom:14px; line-height:1.6;">
+                        Go to <strong style="color:white;">Roblox → Create → Passes</strong>, create a new gamepass priced at exactly 
+                        <strong style="color:var(--accent);" id="wd-req-gamepass-price">10 R$</strong>, 
+                        then paste its link below. Our bot will instantly buy it from you.
+                    </p>
+                    <div class="input-wrapper" style="background:var(--bg-body); border-radius:8px; border:1px solid rgba(59,130,246,0.3); height:50px; display:flex; align-items:center;">
+                        <i class="fa-solid fa-link" style="color:var(--accent); margin-left:15px; flex-shrink:0;"></i>
+                        <input type="text" id="wd-gamepass-link" placeholder="https://www.roblox.com/game-pass/12345678/..." 
+                               style="flex:1; padding:0 15px; background:transparent; border:none; color:white; font-size:13px; font-family:inherit; outline:none;">
+                    </div>
+                </div>
+
+                <p id="wd-error-msg" class="welcome-error" role="alert" style="display:none; margin-top: 12px;"></p>
+
+                <button type="button" class="btn-primary btn-deposit-full" id="wd-continue-btn" onclick="confirmWithdraw()" style="margin-top:18px; width:100%; padding:15px;">
+                    <i class="fa-solid fa-bolt"></i> &nbsp;Withdraw — Bot Buys Instantly
+                </button>
+            </div>
+
+            <!-- Page Crypto: Crypto Withdrawal -->
+            <div class="wd-page" id="wd-page-crypto" style="display:none;">
+                <div class="modal-header">
+                    <div class="dep-breadcrumb"><span onclick="goWdPage(1)">Withdraw</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> Crypto</div>
+                    <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <h2>Crypto Withdrawal</h2>
+
+                <div class="crypto-form-stack" style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
+                    <div class="input-group">
+                        <label>Select Cryptocurrency</label>
+                        <div class="input-wrapper">
+                            <select id="wd-crypto-coin" onchange="updateCryptoWdPreview()" style="width:100%; background:var(--bg-input); border:none; color:#fff; padding:12px 14px; border-radius:8px; font-size:14px; outline:none;">
+                                <optgroup label="Popular">
+                                    <option value="btc">Bitcoin (BTC)</option>
+                                    <option value="eth">Ethereum (ETH)</option>
+                                    <option value="ltc">Litecoin (LTC)</option>
+                                    <option value="sol">Solana (SOL)</option>
+                                    <option value="xrp">Ripple (XRP)</option>
+                                    <option value="doge">Dogecoin (DOGE)</option>
+                                    <option value="usdttrc20">USDT (Tron/TRC20)</option>
+                                </optgroup>
+                                <optgroup label="More Altcoins">
+                                    <option value="trx">Tron (TRX)</option>
+                                    <option value="bch">Bitcoin Cash (BCH)</option>
+                                    <option value="matic">Polygon (MATIC)</option>
+                                    <option value="shib">Shiba Inu (SHIB)</option>
+                                    <option value="xlm">Stellar (XLM)</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Amount to Withdraw (NexR$)</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon" style="font-size:14px; font-weight:bold; color:var(--green);">NexR$</span>
+                            <input type="number" id="wd-crypto-amount" value="500" min="500" step="100" onkeyup="updateCryptoWdPreview()" onchange="updateCryptoWdPreview()" style="width:100%; font-size:14px; padding-left:10px;">
+                        </div>
+                        <p style="font-size:11px; color:var(--text-secondary); margin-top:6px;">Minimum: 500 NexR$. You will receive approx. <strong id="wd-crypto-fiat-preview" style="color:var(--green);">3.50 EUR</strong> worth of crypto.</p>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Destination Address</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-wallet input-icon"></i>
+                            <input type="text" id="wd-crypto-address" placeholder="Enter your wallet address" style="width:100%; font-size:13px; padding-left:10px;">
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Destination Tag / Memo (Optional)</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-tag input-icon"></i>
+                            <input type="text" id="wd-crypto-extra" placeholder="Only required for XRP, XLM, etc." style="width:100%; font-size:13px; padding-left:10px;">
+                        </div>
+                    </div>
+                </div>
+
+                <p id="wd-crypto-error-msg" class="welcome-error" role="alert" style="display:none; margin-top: 12px;"></p>
+
+                <div class="dep-actions" style="margin-top:22px;">
+                    <button class="dep-back-btn" onclick="goWdPage(1)">Back</button>
+                    <button type="button" class="btn-primary dep-confirm-btn" id="wd-crypto-submit-btn" onclick="requestCryptoWithdraw()">Request Withdrawal</button>
+                </div>
+            </div>
+
+            <!-- Page 3: Processing -->
+            <div class="wd-page wd-page-centered" id="wd-page-3" style="display:none;">
+                <div class="modal-header wd-page-centered-close">
+                    <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="wd-success-icon wd-success-icon--spin" aria-hidden="true">...</div>
+                <h3 class="wd-centered-title">Finding an available game pass…</h3>
+                <p class="wd-centered-text">Please wait while we locate a game pass for your withdrawal.</p>
+            </div>
+
+            <!-- Page 4: Success -->
+            <div class="wd-page wd-page-centered" id="wd-page-4" style="display:none;">
+                <div class="modal-header wd-page-centered-close">
+                    <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="wd-success-icon wd-success-icon--ok" aria-hidden="true">OK</div>
+                <h2 class="wd-success-heading">Withdrawal queued</h2>
+                <p id="wd-success-msg" class="wd-centered-text">Your withdrawal has been successfully queued and will arrive soon.</p>
+                <button type="button" class="btn-primary btn-deposit-full" onclick="closeWithdrawModal(null)">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== WELCOME MODAL ===== -->
+    <div class="modal-backdrop" id="welcome-backdrop">
+        <div class="modal-box" style="max-width:500px; padding:35px; position:relative;">
+            <div style="display:flex; align-items:center; margin-bottom:20px;">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                        <defs>
+                            <linearGradient id="brandGradWelcome" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#00e5b0"/>
+                                <stop offset="1" stop-color="#00a87e"/>
+                            </linearGradient>
+                            <filter id="nGlowWelcome">
+                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                            </filter>
+                        </defs>
+                        <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
+                        <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
+                        <g filter="url(#nGlowWelcome)">
+                            <path d="M11 10 L11 28 L14 28 L14 15 L26 28 L29 28 L29 10 L26 10 L26 23 L14 10 Z" fill="url(#brandGradWelcome)"/>
+                        </g>
+                    </svg>
+                </span>
+                <span style="font-size:18px; font-weight:800; margin-left:10px;">Nex<span style="color:var(--accent);">R$</span></span>
+            </div>
+            <h2 style="font-size:22px; font-weight:700; margin-bottom:10px;">Welcome</h2>
+            <p style="color:var(--text-secondary); font-size:14px; margin-bottom:6px; line-height:1.6;">Welcome to NexR$ - play games, manage balances, and connect your Roblox account.</p>
+            <p style="color:var(--accent); font-size:14px; margin-bottom:25px;">Enter your Roblox username to get started.</p>
+
+            <div class="input-group">
+                <label>Roblox Username</label>
+                <div class="input-wrapper" style="height:50px;">
+                    <i class="fa-solid fa-user input-icon"></i>
+                    <input type="text" id="welcome-username-input" placeholder="Enter your Roblox username" style="font-size:14px;">
+                </div>
+            </div>
+
+            <p id="welcome-username-error" class="welcome-error" role="alert" style="display:none;"></p>
+            <button type="button" class="btn-primary" id="welcome-continue-btn" style="width:100%; padding:15px; font-size:15px; font-weight:700; margin-top:8px;">Continue</button>
+            <p style="text-align:center; margin-top:12px; font-size:12px; color:var(--text-secondary);">We'll never ask for your Roblox password.</p>
+
+            <div style="margin-top:25px; padding-top:20px; border-top:1px solid var(--border-color);">
+                <div style="display:flex; align-items:flex-start; gap:12px;">
+                    <div style="min-width:32px; height:32px; background:#c0392b; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:10px; color:white; flex-shrink:0;">18+</div>
+                    <p style="font-size:11px; color:var(--text-secondary); line-height:1.6;">By logging in you acknowledge that you are at least +18 years of age, that any items you wager are not stolen, and that you agree with our <a href="terms.html" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">Terms of Service</a> and our <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">Privacy Policy</a>. NexR$ is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Roblox.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Roblox account confirmation (after username lookup) -->
+    <div class="modal-backdrop" id="roblox-confirm-backdrop" aria-hidden="true">
+        <div class="modal-box roblox-confirm-box">
+            <div class="roblox-confirm-top">
+                <div>
+                    <h2 class="roblox-confirm-title" id="roblox-confirm-title">Is this your account?</h2>
+                    <p class="roblox-confirm-sub" id="roblox-confirm-sub">Please confirm this is the correct Roblox account.</p>
+                </div>
+                <button type="button" class="modal-close" id="roblox-confirm-close" title="Close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="roblox-confirm-step-account">
+                <div class="roblox-confirm-body">
+                    <img class="roblox-confirm-avatar" id="roblox-confirm-avatar" src="" width="120" height="120" alt="">
+                    <div class="roblox-confirm-name" id="roblox-confirm-name"></div>
+                    <div class="roblox-confirm-id" id="roblox-confirm-id"></div>
+                </div>
+                <div class="roblox-confirm-actions">
+                    <button type="button" class="roblox-confirm-wrong" id="roblox-confirm-wrong">Wrong Account</button>
+                    <button type="button" class="btn-primary roblox-confirm-yes" id="roblox-confirm-yes">Yes, Continue</button>
+                </div>
+            </div>
+            <div id="roblox-confirm-step-verify" class="roblox-confirm-step-verify" hidden>
+                <p class="roblox-verify-lead">Copy the code below and paste it into your Roblox profile <strong>About</strong> (save). Then press Verify.</p>
+                <div class="roblox-verify-code-row">
+                    <code class="roblox-verify-code" id="roblox-verify-code" aria-live="polite"></code>
+                    <button type="button" class="roblox-verify-copy" id="roblox-verify-copy">Copy</button>
+                </div>
+                <p class="roblox-verify-path">On Roblox: open <strong>Profile</strong>, then the menu (<span class="menu-dots" aria-hidden="true">...</span>) or <strong>Edit</strong>, then <strong>About</strong>.</p>
+                <p id="roblox-verify-error" class="welcome-error" role="alert" style="display:none;"></p>
+                <div class="roblox-confirm-actions roblox-verify-actions">
+                    <button type="button" class="roblox-confirm-wrong" id="roblox-verify-back">Back</button>
+                    <button type="button" class="btn-primary roblox-confirm-yes" id="roblox-verify-btn">Verify</button>
+                </div>
+                <button type="button" class="roblox-verify-newcode" id="roblox-verify-newcode">New code</button>
+            </div>
+        </div>
+    </div><!-- /#roblox-confirm-backdrop -->
+    <!-- Forced Deposit Tracker Lock Screen -->
+    <div class="modal-backdrop" id="forced-inventory-lock" style="display:none; z-index:99999; backdrop-filter: blur(15px); background: rgba(10, 12, 16, 0.95);">
+        <div class="modal-box" style="text-align:center; padding:40px; box-shadow: 0 0 50px rgba(255, 60, 60, 0.15); border: 1px solid rgba(255,0,0,0.2);">
+            <div style="font-size: 48px; color: var(--red); margin-bottom: 20px;"><i class="fa-solid fa-lock"></i></div>
+            <h2 style="font-size: 24px; margin-bottom: 15px; color: white;">Action Required</h2>
+            <p style="color: var(--text-secondary); font-size: 15px; line-height: 1.6; margin-bottom: 25px;">
+                You have active deposit tier items in your Roblox inventory. To prevent exploits and verify ownership, you <strong>must completely delete them from your Roblox inventory</strong> before you can access the casino.
+            </p>
+            <div id="forced-lock-list" style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 15px; margin-bottom: 25px; text-align: left; font-size: 13px; color: var(--text-primary); max-height: 150px; overflow-y: auto;">
+                <!-- dynamic list inserted via JS -->
+            </div>
+            <p id="forced-lock-error" class="welcome-error" style="display:none; margin-bottom:15px;"></p>
+            <button type="button" class="btn-primary" id="forced-lock-btn" onclick="forcedVerifyDeletion()" style="width: 100%; padding: 16px; font-weight: bold; font-size: 16px;">
+                I've deleted them, Verify Deletion
+            </button>
+            <p style="margin-top:20px; font-size: 12px; color: var(--text-secondary);">
+                Once you delete the items and click Verify, you'll be able to continue playing (and re-buy the same tiers later).
+            </p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- ===== RAIN CONFIG MODAL ===== -->
+    <div class="modal-backdrop modal-backdrop--social" id="rain-backdrop">
+        <div class="modal-box modal-box--social modal-box--rain">
+            <div class="social-modal-accent social-modal-accent--rain" aria-hidden="true"></div>
+            <div class="modal-header social-modal-header">
+                <div class="social-modal-title-row">
+                    <span class="social-modal-icon social-modal-icon--rain"><i class="fa-solid fa-cloud-showers-heavy"></i></span>
+                    <h2>Start a Rain</h2>
+                </div>
+                <button type="button" class="modal-close" onclick="closeRainModal()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="social-modal-lead">
+                Drop NexR$ into a timed pool. Everyone who joins splits it evenly â€” you canâ€™t join your own rain.
+            </p>
+
+            <div class="social-form-stack">
+                <div class="social-field">
+                    <label for="rain-amount">Amount to give (NexR$)</label>
+                    <input type="number" id="rain-amount" value="100" min="10" class="social-input">
+                </div>
+                <div class="social-field">
+                    <label for="rain-duration">Duration (seconds)</label>
+                    <input type="number" id="rain-duration" value="60" min="30" max="3600" class="social-input">
+                </div>
+                <div class="social-field">
+                    <label for="rain-min-wager">Min wager to join <span class="social-optional">(optional)</span></label>
+                    <input type="number" id="rain-min-wager" value="0" min="0" placeholder="0 = none" class="social-input">
+                    <p class="social-field-hint">Players must have wagered at least this much to join.</p>
+                </div>
+            </div>
+
+            <button type="button" class="btn-primary social-modal-submit social-modal-submit--rain" id="rain-confirm-btn" onclick="confirmStartRain()">
+                <i class="fa-solid fa-cloud-showers-heavy" aria-hidden="true"></i> Start the rain
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== TIP MODAL ===== -->
+    <div class="modal-backdrop modal-backdrop--social" id="tip-backdrop">
+        <div class="modal-box modal-box--social modal-box--tip">
+            <div class="social-modal-accent social-modal-accent--tip" aria-hidden="true"></div>
+            <div class="modal-header social-modal-header">
+                <div class="social-modal-title-row">
+                    <span class="social-modal-icon social-modal-icon--tip"><i class="fa-solid fa-hand-holding-dollar"></i></span>
+                    <h2>Tip a player</h2>
+                </div>
+                <button type="button" class="modal-close" onclick="closeTipModal()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="social-modal-lead">
+                Send NexR$ straight to another playerâ€™s balance using their username or Roblox user ID.
+            </p>
+
+            <div class="social-form-stack">
+                <div class="social-field">
+                    <label for="tip-recipient">Recipient</label>
+                    <input type="text" id="tip-recipient" placeholder="Username or Roblox ID" class="social-input" autocomplete="off">
+                </div>
+                <div class="social-field">
+                    <label for="tip-amount">Amount (NexR$)</label>
+                    <input type="number" id="tip-amount" value="10" min="1" class="social-input">
+                </div>
+            </div>
+
+            <button type="button" class="btn-primary social-modal-submit social-modal-submit--tip" id="tip-confirm-btn" onclick="confirmSendTip()">
+                <i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Send tip
+            </button>
+        </div>
+    </div>
+
+
+            <div id="view-home" class="view active">
+                <header class="home-hero">
+                    <div class="home-hero__intro">
+                        <span class="home-hero__eyebrow">NexR$</span>
+                        <h1 class="home-hero__title">Play &amp; wager</h1>
+                        <p class="home-hero__sub">Choose a game below. Balance syncs when you link Roblox.</p>
+                    </div>
+                    <aside class="home-wallet-card" aria-label="Your balance">
+                        <h3 class="home-wallet-card__title">Wallet</h3>
+                        <div class="balance-item balance-item--hero">
+                            <div class="balance-icon zr"><span class="balance-zr-letter">NexR$</span></div>
+                            <span class="balance-name">NexR$</span>
+                            <span class="balance-val" id="home-balance">0.00</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <button type="button" class="btn-primary btn-deposit-full" id="home-deposit-btn" onclick="openDepositModal()">Add funds</button>
+                            <div class="home-social-actions">
+                                <button type="button" class="home-social-btn home-social-btn--tip" onclick="openWithdrawModal()"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i> Withdraw</button>
+                            </div>
+                        </div>
+                    </aside>
+                </header>
+
+                <section class="home-games-block" aria-labelledby="home-games-heading">
+                    <div class="home-section-head">
+                        <h2 id="home-games-heading">Games</h2>
+                        <span class="home-section-hint">Tap a tile to open</span>
+                    </div>
+                <div class="games-grid games-grid--mosaic">
+                    <div class="game-card crash" onclick="document.querySelector('[data-view=crash]').click()">
+                        <div class="game-card-visual crash-visual" aria-hidden="true"></div>
+                        <div class="badge badge-popular">Popular</div>
+
+                        <h3 class="card-title">CRASH</h3>
+                    </div>
+                    <div class="game-card blackjack" onclick="document.querySelector('[data-view=blackjack]').click()">
+                        <div class="game-card-visual bj-visual" aria-hidden="true"></div>
+                        <div class="badge badge-new">New Release</div>
+
+                        <h3 class="card-title">BLACKJACK</h3>
+                    </div>
+                    <div class="game-card dice" onclick="document.querySelector('[data-view=dice]').click()">
+                        <div class="game-card-visual dice-visual" aria-hidden="true"></div>
+                        <div class="badge badge-popular">Popular</div>
+
+                        <h3 class="card-title">DICE</h3>
+                    </div>
+                    <div class="game-card mines" onclick="document.querySelector('[data-view=mines]').click()">
+                        <div class="game-card-visual mines-visual" aria-hidden="true"></div>
+                        <div class="badge badge-popular">Popular</div>
+
+                        <h3 class="card-title">MINES</h3>
+                    </div>
+                    <div class="game-card towers" onclick="document.querySelector('[data-view=towers]').click()">
+                        <div class="game-card-visual towers-card-visual" aria-hidden="true"></div>
+                        <div class="badge badge-popular">Popular</div>
+
+                        <h3 class="card-title">TOWERS</h3>
+                    </div>
+                    <div class="game-card plinko-card" onclick="document.querySelector('[data-view=plinko]').click()">
+                        <div class="game-card-visual plinko-card-visual" aria-hidden="true"></div>
+                        <div class="badge badge-new">New Release</div>
+
+                        <h3 class="card-title">PLINKO</h3>
+                    </div>
+                    <div class="game-card coinflip-card" onclick="document.querySelector('[data-view=coinflip]').click()">
+                        <div class="game-card-visual coinflip-card-visual" aria-hidden="true"></div>
+                        <div class="badge badge-popular">Popular</div>
+
+                        <h3 class="card-title">COINFLIP</h3>
+                    </div>
+                    <div class="game-card casebattles-card" onclick="document.querySelector('[data-view=casebattles]').click()">
+                        <div class="game-card-visual casebattles-card-visual" aria-hidden="true"></div>
+                        <div class="badge badge-new">New Release</div>
+
+                        <h3 class="card-title">CASE BATTLES</h3>
+                    </div>
+                </div>
+                </section>
+
+                <section class="live-feed-section" aria-labelledby="live-feed-heading">
+                    <div class="feed-header">
+                        <h2 id="live-feed-heading">Activity</h2>
+                        <span class="feed-header-hint">Recent rounds</span>
+                    </div>
+                    <div class="feed-tabs">
+                        <button class="feed-tab active">All Games</button>
+                        <button class="feed-tab">High wins</button>
+                        <button class="feed-tab">Lucky wins</button>
+                    </div>
+                    
+                    <p style="color:var(--text-secondary); font-size:12px; margin-top:-10px; margin-bottom:12px; padding:0 12px; font-weight:600;"><i class="fa-solid fa-circle-info"></i> Note: You can only see yourself in the live feed.</p>
+
+                    <table class="feed-table">
+                        <thead>
+                            <tr>
+                                <th>Game</th>
+                                <th>Username</th>
+                                <th>Amount</th>
+                                <th>Multiplier</th>
+                                <th>Payout</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="live-feed-body">
+                            <!-- populated by JS -->
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+            <div id="view-blackjack" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <input type="number" id="bj-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="halfBetInput('bj-bet-input')">1/2</button>
+                                    <button onclick="doubleBetInput('bj-bet-input')">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bj-actions">
+                            <button class="bj-action-btn" id="bj-hit-btn" disabled>Hit <i class="fa-solid fa-hand-pointer"></i></button>
+                            <button class="bj-action-btn" id="bj-stand-btn" disabled>Stand <i class="fa-solid fa-hand"></i></button>
+                            <button class="bj-action-btn" id="bj-double-btn" disabled>Double <i class="fa-solid fa-check-double"></i></button>
+                            <button class="bj-action-btn" id="bj-split-btn" disabled>Split <i class="fa-solid fa-arrows-split-up-and-left"></i></button>
+                        </div>
+                        
+                        <div style="margin-top:20px; display:flex; align-items:center; gap:10px;">
+                            <label class="switch">
+                                <input type="checkbox">
+                                <span class="slider round"></span>
+                            </label>
+                            <span style="font-size:12px; color:var(--text-secondary);">Basic Strategy Hints <i class="fa-solid fa-info-circle"></i></span>
+                        </div>
+
+                        <button class="btn-primary" id="bj-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Place bet</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area bj-area">
+                        <div class="bj-table">
+                            <div class="bj-center-text">
+                                <div class="bj-pays">BLACKJACK PAYS 3 TO 2</div>
+                                <div class="bj-ins">INSURANCE PAYS 2 TO 1</div>
+                            </div>
+                            
+                            <div class="dealer-area">
+                                <div class="hand-score" id="bj-dealer-score" style="display:none;">0</div>
+                                <div class="cards-container" id="bj-dealer-cards">
+                                    <!-- Cards go here -->
+                                </div>
+                            </div>
+                            
+                            <div class="player-area">
+                                <div class="cards-container" id="bj-player-cards">
+                                    <!-- Cards go here -->
+                                </div>
+                                <div class="hand-score" id="bj-player-score" style="display:none;">0</div>
+                            </div>
+
+                            <div class="bj-message" id="bj-message" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-mines" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <input type="number" id="mines-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="halfBetInput('mines-bet-input')">1/2</button>
+                                    <button onclick="doubleBetInput('mines-bet-input')">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Mines</label>
+                            <div class="input-wrapper">
+                                <input type="number" id="mines-count-input" value="3" min="1" max="24" style="padding-left:15px;">
+                                <div class="input-actions" style="margin-right: -4px;">
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 1">1</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 3">3</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 5">5</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 10">10</button>
+                                    <button class="mine-qty-btn" onclick="document.getElementById('mines-count-input').value = 24">24</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Total earnings</label>
+                            <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
+                                <span class="input-icon currency-input-mark" style="color:var(--green)" aria-hidden="true">NexR$</span>
+                                <input type="text" id="mines-earnings" value="0.00" readonly style="color:var(--green)">
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="mines-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Start new game</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area mines-area">
+                        <div class="mines-grid" id="mines-grid">
+                            <!-- JS generates 25 tiles -->
+                        </div>
+                        <div class="mines-message" id="mines-message" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-towers" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <input type="number" id="towers-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="halfBetInput('towers-bet-input')">1/2</button>
+                                    <button onclick="doubleBetInput('towers-bet-input')">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Difficulty</label>
+                            <div class="towers-diff-tabs" id="towers-diff-tabs">
+                                <button class="diff-btn active" data-diff="easy">Easy</button>
+                                <button class="diff-btn" data-diff="normal">Normal</button>
+                                <button class="diff-btn" data-diff="hard">Hard</button>
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="towers-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Start new game</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area towers-area">
+                        <div class="towers-grid-container" id="towers-grid-container">
+                            <!-- JS generates tower rows -->
+                        </div>
+                        <div class="towers-message" id="towers-message" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-dice" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <input type="number" id="dice-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="halfBetInput('dice-bet-input')">1/2</button>
+                                    <button onclick="doubleBetInput('dice-bet-input')">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Total Profit (x<span id="dice-profit-multi">1.98</span>)</label>
+                            <div class="input-wrapper" style="background: rgba(0,0,0,0.2);">
+                                <span class="input-icon currency-input-mark" style="color:var(--text-secondary)" aria-hidden="true">NexR$</span>
+                                <input type="text" id="dice-profit-input" value="49.50" readonly style="color:var(--text-secondary)">
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" id="dice-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Place bet</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area dice-area">
+                        <div class="dice-slider-container">
+                            <div class="dice-history-bars" id="dice-history">
+                                <!-- Previous rolls -->
+                            </div>
+                            
+                            <div class="slider-track-bg"></div>
+                            <div class="slider-track-fill" id="dice-track-fill"></div>
+                            <input type="range" min="2" max="98" value="50" class="dice-slider" id="dice-slider">
+                            
+                            <div class="dice-slider-labels">
+                                <span>0</span>
+                                <span>25</span>
+                                <span>50</span>
+                                <span>75</span>
+                                <span>100</span>
+                            </div>
+                            <div class="dice-result-marker" id="dice-result-marker">00.00</div>
+                        </div>
+
+                        <div class="dice-controls-row">
+                            <div class="dice-ctrl-box">
+                                <label>Multiplier</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="dice-multi-input" value="1.98" step="0.01">
+                                    <i class="fa-solid fa-xmark input-icon"></i>
+                                </div>
+                            </div>
+                            <div class="dice-ctrl-box">
+                                <label>Roll Over</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="dice-target-input" value="50">
+                                    <i class="fa-solid fa-arrows-rotate input-icon" style="cursor:pointer;" id="dice-toggle-dir"></i>
+                                </div>
+                            </div>
+                            <div class="dice-ctrl-box">
+                                <label>Win Chance</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="dice-chance-input" value="50">
+                                    <i class="fa-solid fa-percent input-icon"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dice-message" id="dice-message" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-plinko" class="view">
+                <div class="game-layout">
+                    <!-- Betting Panel -->
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Difficulty</label>
+                            <div class="towers-diff-tabs" id="plinko-diff-tabs" style="display:flex; gap:5px; margin-bottom: 5px;">
+                                <button class="diff-btn active" data-diff="easy">Easy</button>
+                                <button class="diff-btn" data-diff="normal">Normal</button>
+                                <button class="diff-btn" data-diff="hard">Hard</button>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                <input type="number" id="plinko-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="halfBetInput('plinko-bet-input')">1/2</button>
+                                    <button onclick="doubleBetInput('plinko-bet-input')">2x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Amount of rows</label>
+                            <div class="input-wrapper" style="padding: 4px;">
+                                <input type="number" id="plinko-rows-input" value="10" readonly style="margin-left: 10px; width: 40px; border: none; background: transparent; color: white;">
+                                <div class="plinko-row-btns input-actions" style="margin-left: auto;">
+                                    <button class="row-btn" data-r="8">8</button>
+                                    <button class="row-btn active" style="background:var(--bg-panel); color:white;" data-r="10">10</button>
+                                    <button class="row-btn" data-r="12">12</button>
+                                    <button class="row-btn" data-r="14">14</button>
+                                    <button class="row-btn" data-r="16">16</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="btn-secondary" id="plinko-play-btn" style="width:100%; margin-top: auto; padding: 15px; cursor: not-allowed; opacity: 0.7;" disabled>Closed for maintenance</button>
+                    </div>
+                    
+                    <!-- Game Area -->
+                    <div class="game-area plinko-area">
+                        <canvas id="plinko-canvas" width="600" height="400"></canvas>
+                        <div id="plinko-buckets" class="plinko-buckets"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-coinflip" class="view">
+                <div class="coinflip-layout">
+                    <header class="coinflip-header">
+                        <div>
+                            <h2 style="font-size: 28px; font-weight: 800; display:flex; align-items:center; gap: 10px;">
+                                <i class="fa-solid fa-coins" style="color:var(--accent);"></i> Coinflip
+                            </h2>
+                            <p style="color:var(--text-secondary); margin-top:5px;">PVP. Winner takes all. 5% house fee.</p>
+                        </div>
+                        <div class="cf-create-card">
+                            <div class="input-group" style="margin-bottom:0;">
+                                <div class="input-wrapper" style="width:140px;">
+                                    <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                    <input type="number" id="cf-create-amount" value="50" min="1">
+                                </div>
+                            </div>
+                            <button class="btn-primary" id="cf-create-btn-main" onclick="createCoinflip()" style="width:100%; padding:15px;">Create Flip</button>
+                        </div>
+                    </header>
+
+                    <div class="cf-lobby-grid" id="cf-lobby-grid">
+                        <div class="chat-system-msg" style="grid-column: 1 / -1; padding: 40px;">No active coinflips. Create one to start!</div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-rooms" class="view">
+                <div class="voice-layout">
+                    <header class="voice-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;">
+                        <div>
+                            <h2 style="font-size: 28px; font-weight: 800; display:flex; align-items:center; gap: 10px;">
+                                <i class="fa-solid fa-microphone-lines" style="color:var(--accent);"></i> Voice Chat
+                            </h2>
+                            <p style="color:var(--text-secondary); margin-top:5px;">Connect with other players in real-time. Peer-to-peer audio.</p>
+                        </div>
+                        <div class="voice-controls" style="display:flex; gap: 10px;">
+                            <button class="btn-primary voice-connect-btn" id="voice-connect-btn">
+                                <i class="fa-solid fa-plug"></i> Connect to Voice
+                            </button>
+                            <button class="btn-secondary voice-icon-btn hidden" id="voice-mute-btn" title="Mute Microphone" style="display:none; padding: 12px 18px;">
+                                <i class="fa-solid fa-microphone"></i>
+                            </button>
+                            <button class="btn-secondary voice-icon-btn hidden" id="voice-deaf-btn" title="Deafen Audio" style="display:none; padding: 12px 18px;">
+                                <i class="fa-solid fa-headphones"></i>
+                            </button>
+                            <button class="btn-secondary voice-icon-btn hidden" id="voice-disconnect-btn" title="Disconnect" style="display:none; padding: 12px 18px; color: var(--red);">
+                                <i class="fa-solid fa-phone-slash"></i>
+                            </button>
+                        </div>
+                    </header>
+
+                    <div id="voice-status-banner" style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); text-align:center; margin-bottom:25px; color:var(--text-secondary); font-size:14px;">
+                        You are currently disconnected. Click "Connect to Voice" to join the lobby.
+                    </div>
+
+                    <div id="voice-participants-grid" class="voice-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px;">
+                        <!-- Generated by voice.js -->
+                    </div>
+                </div>
+            </div>
+            <div id="view-crash" class="view">
+                <!-- Crash Game â€” Stake-style dark layout -->
+                <div class="crash-layout">
+
+                    <!-- Left: Bet Panel -->
+                    <div class="crash-bet-col">
+                        <div class="bet-panel">
+                            <div class="bet-tabs">
+                                <button class="bet-tab active">Manual</button>
+                            </div>
+
+                            <div class="input-group">
+                                <label>Bet amount</label>
+                                <div class="input-wrapper">
+                                    <span class="input-icon currency-input-mark" aria-hidden="true">NexR$</span>
+                                    <input type="number" id="crash-bet-input" value="30" min="1">
+                                    <div class="input-actions">
+                                        <button onclick="halfBetInput('crash-bet-input')">1/2</button>
+                                        <button onclick="doubleBetInput('crash-bet-input')">2x</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label>Auto cashout at</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="crash-auto-input" value="2.00" step="0.10" placeholder="e.g. 2.00">
+                                    <div class="input-actions">
+                                        <button onclick="document.getElementById('crash-auto-input').value = ''">Off</button>
+                                        <button onclick="document.getElementById('crash-auto-input').value = '2.00'">2x</button>
+                                        <button onclick="document.getElementById('crash-auto-input').value = '10.00'">10x</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary" id="crash-play-btn" style="width:100%; margin-top:auto; padding:15px;">Join next game</button>
+                        </div>
+
+                        <!-- Players in round -->
+                        <div class="bet-panel crash-players-panel">
+                            <div class="crash-players-header">
+                                <span class="crash-players-count">0 Players</span>
+                                <span class="crash-players-total">0 <span class="currency-inline">NexR$</span></span>
+                            </div>
+                            <div class="crash-players-list" id="crash-players-list">
+                                <!-- Players injected by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Game Canvas + HUD -->
+                    <div class="crash-canvas-col">
+                        <!-- History bar -->
+                        <div class="crash-history-bar">
+                            <div class="crash-history" id="crash-history">
+                                <span class="history-pill win">10.41x</span>
+                                <span class="history-pill mid">2.01x</span>
+                                <span class="history-pill win">7.91x</span>
+                                <span class="history-pill lose">1.12x</span>
+                                <span class="history-pill mid">3.16x</span>
+                                <span class="history-pill lose">1.00x</span>
+                            </div>
+                            <div class="crash-net-status">
+                                <i class="fa-solid fa-wifi" style="color:var(--green);"></i>
+                                <span>Live</span>
+                            </div>
+                        </div>
+
+                        <!-- Main display area -->
+                        <div class="crash-area">
+                            <div class="crash-multiplier-wrap">
+                                <div id="crash-multi-display">1.00x</div>
+                                <div id="crash-status-text">Waiting for next round...</div>
+                            </div>
+                            <canvas id="crash-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-profile" class="view">
+                <div class="profile-new-layout">
+                    <!-- Banner & Identity -->
+                    <div class="prof-header">
+                        <div class="prof-banner"></div>
+                        <div class="prof-identity">
+                            <img id="profile-main-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=artirzu&backgroundColor=2c2f4a" class="prof-avatar" alt="Avatar">
+                            <div class="prof-info">
+                                <div id="prof-username-disp" class="prof-uname">artirzu</div>
+                                <div class="prof-uid">UID: <span id="prof-uid-val">8cd7d3d0...</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Glassmorphic Stat Row -->
+                    <div class="prof-stats-grid">
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Rain Winnings</div>
+                            <div id="prof-rain" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Total deposited</div>
+                            <div id="prof-deposited" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Total withdrawn</div>
+                            <div id="prof-withdrawn" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">Total wagered</div>
+                            <div id="prof-wagered" class="prof-stat-val">0</div>
+                        </div>
+                        <div class="prof-stat-card">
+                            <div class="prof-stat-label">XP Balance</div>
+                            <div id="prof-xp" class="prof-stat-val">0</div>
+                        </div>
+                    </div>
+                    <div style="color:var(--text-secondary); font-size:12px; text-align:center; margin-bottom: 25px;">Stat update in 3m 45s</div>
+
+                    <!-- Tabs & Content -->
+                    <div class="prof-content-area">
+                        <div class="profile-tabs centered-tabs" style="display:flex; gap:25px; font-weight: 600; font-size: 14px;">
+                            <button class="prof-tab active" data-ptab="transactions">Transactions</button>
+                            <button class="prof-tab" data-ptab="deposits">Deposits</button>
+                            <button class="prof-tab" data-ptab="withdrawals">Withdrawals</button>
+                        </div>
+
+                        <div class="prof-tab-boards">
+                            <!-- Transactions -->
+                            <div class="ptab-content" id="ptab-transactions" style="display:block;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                                    <h2 style="font-size:22px; font-weight:600;">Transactions</h2>
+                                    <select class="prof-select" style="background:var(--bg-panel); color:var(--text-secondary); border:1px solid rgba(255,255,255,0.05); padding:10px 15px; border-radius:6px; outline:none; font-family:inherit; min-width:120px; font-size:13px; font-weight:600;">
+                                        <option>Games</option>
+                                    </select>
+                                </div>
+                                <div class="table-wrap">
+                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                    </div>
+                                    <div id="prof-tx-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                        <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No transactions yet.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Deposits -->
+                            <div class="ptab-content" id="ptab-deposits" style="display:none;">
+                                <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Deposits</h2>
+                                <div class="table-wrap">
+                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                    </div>
+                                    <div id="prof-dep-list" style="display:flex; flex-direction:column; gap:12px; min-height: 250px;">
+                                        <div style="text-align:center; padding: 40px; color:var(--text-secondary); font-size:13px;">No deposits yet.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Withdrawals -->
+                            <div class="ptab-content" id="ptab-withdrawals" style="display:none;">
+                                <h2 style="font-size:22px; font-weight:600; margin-bottom:20px;">Withdrawals</h2>
+                                <div class="table-wrap">
+                                    <div style="display:grid; grid-template-columns: 2fr 3fr 3fr 2fr; color:var(--text-secondary); font-size:12px; padding-bottom:15px; margin-bottom:10px;">
+                                        <div>ID</div><div>Description</div><div>Date and time</div><div style="text-align:right;">Amount</div>
+                                    </div>
+                                    
+                                    <h3 style="font-size:14px; margin: 10px 0; color:var(--accent);">Crypto Withdrawals</h3>
+                                    <div id="prof-crypto-wd-list" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 20px;">
+                                        <div style="text-align:center; padding: 20px; color:var(--text-secondary); font-size:13px;">No crypto withdrawals yet.</div>
+                                    </div>
+                                    
+                                    <h3 style="font-size:14px; margin: 10px 0; color:var(--text-primary);">Gamepass Withdrawals</h3>
+                                    <div id="prof-wd-list" style="display:flex; flex-direction:column; gap:12px; min-height: 150px;">
+                                        <div style="text-align:center; padding: 20px; color:var(--text-secondary); font-size:13px;">No withdrawals yet.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- /#view-profile -->
+    <!-- ====== CASE CREATE MODAL ====== -->
+    <div id="cb-create-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+      <div class="cb-modal" style="max-width:700px;">
+        <div class="cb-modal-header">
+          <h2><i class="fa-solid fa-swords"></i> Create Battle</h2>
+          <button class="cb-modal-close" onclick="document.getElementById('cb-create-modal').style.display='none'">&times;</button>
+        </div>
+        <div class="cb-modal-body">
+
+          <!-- Battle Format Selection -->
+          <label class="cb-label">Battle Format</label>
+          <div class="cb-format-pills" id="cb-format-pills">
+            <button class="cb-format-pill active" data-fmt="1v1"       onclick="cbSelectFormat('1v1',this)">1v1</button>
+            <button class="cb-format-pill"        data-fmt="2v2"       onclick="cbSelectFormat('2v2',this)">2v2</button>
+            <button class="cb-format-pill"        data-fmt="3v3"       onclick="cbSelectFormat('3v3',this)">3v3</button>
+            <button class="cb-format-pill"        data-fmt="1v1v1"     onclick="cbSelectFormat('1v1v1',this)">1v1v1</button>
+            <button class="cb-format-pill"        data-fmt="1v1v1v1"   onclick="cbSelectFormat('1v1v1v1',this)">1v1v1v1</button>
+            <button class="cb-format-pill"        data-fmt="1v1v1v1v1" onclick="cbSelectFormat('1v1v1v1v1',this)">1v1v1v1v1</button>
+          </div>
+
+          <!-- Lobby Slots Preview -->
+          <div class="cb-lobby-preview" id="cb-lobby-preview"></div>
+
+          <!-- Case Selection -->
+          <label class="cb-label">Select Case</label>
+          <div id="cb-create-cases" class="cb-create-cases-grid"></div>
+
+          <!-- Item Preview Reel -->
+          <div class="cb-preview-reel-wrap" id="cb-preview-reel-wrap" style="display:none;"></div>
+
+          <!-- Rounds & Mode -->
+          <div class="cb-create-row">
+            <div class="cb-create-field">
+              <label class="cb-label">Rounds</label>
+              <div class="cb-round-btns">
+                <button class="cb-round-btn active" data-rounds="1" onclick="cbSelectRounds(1,this)">1</button>
+                <button class="cb-round-btn" data-rounds="2" onclick="cbSelectRounds(2,this)">2</button>
+                <button class="cb-round-btn" data-rounds="3" onclick="cbSelectRounds(3,this)">3</button>
+                <button class="cb-round-btn" data-rounds="5" onclick="cbSelectRounds(5,this)">5</button>
+              </div>
+            </div>
+            <div class="cb-create-field">
+              <label class="cb-label">Win Condition</label>
+              <div class="cb-mode-btns">
+                <button class="cb-mode-btn active" data-mode="normal" onclick="cbSelectMode('normal',this)" title="Highest total wins">Normal</button>
+                <button class="cb-mode-btn" data-mode="crazy" onclick="cbSelectMode('crazy',this)" title="Lowest total wins">Crazy</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="cb-cost-preview">
+            Total Cost: <strong id="cb-create-cost">0 NexR$</strong>
+          </div>
+        </div>
+        <div class="cb-modal-footer">
+          <button class="cb-btn cb-btn-create" id="cb-create-confirm" onclick="cbConfirmCreate()">
+            <i class="fa-solid fa-swords"></i> Create Battle
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- ====== CASE CONFIRM MODAL ====== -->
+    <div id="cb-confirm-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+      <div class="cb-modal cb-open-modal-inner" style="max-width: 440px; text-align: center; padding: 32px;">
+        <div class="cb-modal-header" style="padding-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 24px;">
+          <h2 style="font-size: 20px;"><i class="fa-solid fa-circle-question" style="color:#a78bfa; margin-right: 8px;"></i> Confirm Open</h2>
+          <button class="cb-modal-close" onclick="document.getElementById('cb-confirm-modal').style.display='none'">&times;</button>
+        </div>
+        <div style="margin-bottom: 28px; font-size: 17px; line-height: 1.5;">
+          Are you sure you want to open <strong id="cb-confirm-name" style="color:var(--accent);">Case Name</strong>?
+          <div style="margin-top: 14px; color: var(--text-secondary); font-size: 15px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">
+            Cost: <strong id="cb-confirm-cost" style="color:#fff; font-size: 18px;">0</strong> <span style="font-size: 12px; opacity: 0.8;">NexR$</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 16px; justify-content: center;">
+            <button class="cb-btn cb-btn-create" id="cb-confirm-yes-btn" style="flex:1; padding: 14px; font-weight: 600;"><i class="fa-solid fa-check"></i> Yes, Open</button>
+            <button class="cb-btn" style="flex:1; background: #2c2f4a; padding: 14px; font-weight: 600;" onclick="document.getElementById('cb-confirm-modal').style.display='none'"><i class="fa-solid fa-xmark"></i> Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== CASE OPEN MODAL (spinner) ====== -->
+    <div id="cb-open-modal" class="cb-modal-backdrop" style="display:none;" onclick="if(event.target===this&&!window._cbSpinning)this.style.display='none'">
+      <div class="cb-modal cb-open-modal-inner" id="cb-open-modal-inner">
+        <div class="cb-modal-header" style="padding-bottom:16px;">
+          <h2 id="cb-open-modal-title"><i class="fa-solid fa-box-open" style="color:#a78bfa;"></i> Opening Case...</h2>
+          <div class="cb-modal-header-controls">
+            <button class="cb-sound-toggle" id="cb-sound-toggle-btn" onclick="cbToggleSound()" title="Toggle sound">
+              <i class="fa-solid fa-volume-high"></i>
+            </button>
+            <button class="cb-modal-close" onclick="if(!window._cbSpinning)document.getElementById('cb-open-modal').style.display='none'">&times;</button>
+          </div>
+        </div>
+        <!-- Full-width spinner -->
+        <div class="cb-spinner-wrap" id="cb-spinner-wrap" style="margin:0 20px 10px;">
+          <div class="cb-spinner-arrow"></div>
+          <div class="cb-spinner-track" id="cb-spinner-track"></div>
+        </div>
+        <div id="cb-open-result" class="cb-open-result" style="display:none;">
+          <div id="cb-result-item-img-wrap" class="cb-result-item-img"></div>
+          <div id="cb-result-item-name" class="cb-result-name"></div>
+          <div id="cb-result-item-value" class="cb-result-value"></div>
+          <button class="cb-btn cb-btn-create" style="margin-top:20px;" onclick="document.getElementById('cb-open-modal').style.display='none'"><i class="fa-solid fa-check"></i> Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== BATTLE ROOM MODAL ====== -->
+    <div id="cb-battle-modal" class="cb-modal-backdrop" style="display:none;">
+      <div class="cb-modal cb-battle-modal-inner">
+        <!-- Header row 1: title + close -->
+        <div class="cb-modal-header" style="align-items:flex-start; padding-bottom:10px;">
+          <div style="min-width:0;">
+            <h2 id="cb-battle-title"><i class="fa-solid fa-swords" style="color:#a78bfa;"></i> Battle</h2>
+            <div class="cb-battle-meta" id="cb-battle-meta" style="margin-top:6px;"></div>
+          </div>
+          <div class="cb-modal-header-controls">
+            <button class="cb-sound-toggle" id="cb-battle-sound-btn" onclick="cbToggleSound()" title="Toggle sound">
+              <i class="fa-solid fa-volume-high"></i>
+            </button>
+            <button class="cb-modal-close" id="cb-battle-close-btn" onclick="cbCloseBattleModal()">&times;</button>
+          </div>
+        </div>
+        <!-- Team-grouped players area (filled by JS) -->
+        <div id="cb-battle-players" class="cb-battle-players"></div>
+        <div id="cb-battle-actions" class="cb-battle-actions"></div>
+        <div id="cb-battle-winner" class="cb-battle-winner" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- ===== SITE FOOTER (Legal / Links) ===== -->
+    <footer class="zr-footer" aria-label="Site footer">
+      <div class="zr-footer__inner">
+        <div class="zr-footer__brand">
+          <div class="zr-footer__logo">
+            <span class="brand-mark" aria-hidden="true">
+              <svg width="34" height="34" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                <defs>
+                  <linearGradient id="brandGradFoot" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#00e5b0"/>
+                    <stop offset="1" stop-color="#00a87e"/>
+                  </linearGradient>
+                  <filter id="nGlowFoot">
+                    <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                  </filter>
+                </defs>
+                <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
+                <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
+                <g filter="url(#nGlowFoot)">
+                  <path d="M11 10 L11 28 L14 28 L14 15 L26 28 L29 28 L29 10 L26 10 L26 23 L14 10 Z" fill="url(#brandGradFoot)"/>
+                </g>
+              </svg>
+            </span>
+            <div class="zr-footer__name">Nex<span class="logo-highlight">R$</span></div>
+          </div>
+          <p class="zr-footer__desc">
+            NexR$ is an entertainment platform with internal virtual credits (<strong>NexR$</strong>). No real&#8209;money gambling.
+            Use at your own risk and only where permitted by your local laws.
+          </p>
+          <div class="zr-footer__social">
+            <a class="zr-footer__socialBtn" href="https://discord.gg/anQhq89Xty" target="_blank" rel="noopener" aria-label="Discord">
+              <i class="fa-brands fa-discord"></i>
+            </a>
+          </div>
+        </div>
+
+        <div class="zr-footer__cols">
+          <div class="zr-footer__col">
+            <div class="zr-footer__colTitle">About</div>
+            <a class="zr-footer__link" href="terms.html" target="_blank" rel="noopener">Terms of Service</a>
+            <a class="zr-footer__link" href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+          </div>
+          <div class="zr-footer__col">
+            <div class="zr-footer__colTitle">Help</div>
+            <a class="zr-footer__link" href="https://discord.gg/anQhq89Xty" target="_blank" rel="noopener">Support (Discord)</a>
+            <a class="zr-footer__link" href="privacy.html#cookies" target="_blank" rel="noopener">Cookies</a>
+          </div>
+          <div class="zr-footer__col zr-footer__col--wide">
+            <div class="zr-footer__colTitle">Disclaimer</div>
+            <p class="zr-footer__fine">
+              NexR$ is <strong>not affiliated</strong> with, endorsed by, or sponsored by Roblox Corporation.
+              &#8220;Roblox&#8221; and &#8220;Robux&#8221; are trademarks of Roblox Corporation and are used only for identification.
+              All third&#8209;party marks belong to their respective owners.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="zr-footer__bottom">
+        <span>&copy; <span id="zr-footer-year"></span> NexR$</span>
+        <span class="zr-footer__bottomSep">&middot;</span>
+        <a class="zr-footer__bottomLink" href="terms.html" target="_blank" rel="noopener">Terms</a>
+        <span class="zr-footer__bottomSep">&middot;</span>
+        <a class="zr-footer__bottomLink" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
+      </div>
+    </footer>
+
+    <!-- Small bottom spacer so footer isn't cramped -->
+    <div class="zr-footer-bottom-spacer"></div>
+
+        </div> <!-- /#page-content -->
+    </div> <!-- /.main-wrapper -->
+    </div> <!-- /.app-shell -->
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+    <script src="voice.js"></script>
+</body>
+</html>
+
+
+
+
+

@@ -302,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tile = document.createElement('div');
                 tile.className = 'mines-tile';
                 tile.dataset.i = i;
-                tile.innerHTML = '<span class="tile-mark">ZR$</span>';
+                tile.innerHTML = '<span class="tile-mark">NexR$</span>';
                 tile.addEventListener('click', () => handleTileClick(i, tile));
                 minesGrid.appendChild(tile);
             }
@@ -326,9 +326,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 t.className = 'mines-tile';
                 if (revSet.has(i)) {
                     t.classList.add('revealed', 'gem');
-                    t.innerHTML = '<span class="tile-mark">ZR$</span>';
+                    t.innerHTML = '<span class="tile-mark">NexR$</span>';
                 } else {
-                    t.innerHTML = '<span class="tile-mark">ZR$</span>';
+                    t.innerHTML = '<span class="tile-mark">NexR$</span>';
                 }
             });
             minesMsg.style.display = 'none';
@@ -408,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const tiles = minesGrid.querySelectorAll('.mines-tile');
                     tiles.forEach((t) => {
                         t.className = 'mines-tile';
-                        t.innerHTML = '<span class="tile-mark">ZR$</span>';
+                        t.innerHTML = '<span class="tile-mark">NexR$</span>';
                     });
                 } catch(e) {
                     minesMsg.textContent = 'Error starting game';
@@ -451,7 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     endMines(false);
                 } else {
                     tileEl.classList.add('gem');
-                    tileEl.innerHTML = '<span class="tile-mark">ZR$</span>';
+                    tileEl.innerHTML = '<span class="tile-mark">NexR$</span>';
                     soundGem();
                     mRevealed++;
                     mRevealedTiles.push(i);
@@ -472,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 minesMsg.style.color = 'var(--red)';
                 minesMsg.style.display = 'block';
                 tileEl.classList.remove('loading');
-                tileEl.innerHTML = '<span class="tile-mark">ZR$</span>';
+                tileEl.innerHTML = '<span class="tile-mark">NexR$</span>';
                 syncMinesCashoutButton();
             }
         }
@@ -494,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         tiles[i].innerHTML = '<span class="tile-mark" style="opacity:0.4"><i class="fa-solid fa-bomb"></i></span>';
                     } else {
                         tiles[i].classList.add('gem');
-                        tiles[i].innerHTML = '<span class="tile-mark" style="opacity:0.4">ZR$</span>';
+                        tiles[i].innerHTML = '<span class="tile-mark" style="opacity:0.4">NexR$</span>';
                     }
                 }
             }
@@ -701,7 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     endTowers(false);
                 } else {
                     tileEl.classList.add('gem');
-                    tileEl.innerHTML = '<span class="tile-mark">ZR$</span>';
+                    tileEl.innerHTML = '<span class="tile-mark">NexR$</span>';
                     tMulti = Math.pow(cfg.base, curRow+1);
                     curRow++;
                     tRevealedRows.push(curRow - 1);
@@ -1154,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(bet <= 0 || bet > roBalance) {
                 e.stopImmediatePropagation();
                 const warn = document.createElement('div');
-                warn.textContent = bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough ZR$!';
+                warn.textContent = bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough NexR$!';
                 warn.style.cssText='position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2a1515;border:1px solid var(--red);color:var(--red);padding:12px 24px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;';
                 document.body.appendChild(warn);
                 setTimeout(()=>warn.remove(), 2000);
@@ -1630,7 +1630,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(bet <= 0 || bet > roBalance) {
                     e.stopImmediatePropagation();
                     const warn = document.createElement('div');
-                    warn.textContent = bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough ZR$!';
+                    warn.textContent = bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough NexR$!';
                     warn.style.cssText='position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2a1515;border:1px solid var(--red);color:var(--red);padding:12px 24px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;';
                     document.body.appendChild(warn);
                     setTimeout(()=>warn.remove(), 2000);
@@ -1680,7 +1680,7 @@ window.doubleBetInput = function(inputId) {
 };
 
 // ===== GLOBAL BALANCE SYSTEM =====
-let _roBalance = 0.00;    // ZR$ (main currency)
+let _roBalance = 0.00;    // NexR$ (main currency)
 Object.defineProperty(window, 'roBalance', {
     get: () => _roBalance,
     set: () => { /* silently block console manipulation */ },
@@ -1716,7 +1716,7 @@ function closeTipModal() {
     if (modal) modal.classList.remove('show');
 }
 
-function getZephrsChatUser() {
+function getNexrsChatUser() {
     return {
         name: currentUsername || 'Guest',
         level: Math.max(1, Math.floor((userStats.xp || 0) / 100) + 1)
@@ -1826,9 +1826,9 @@ function awardWin(amount)  { /* server-authoritative — no client-side balance 
 // Saves active game state to localStorage so the player can continue after a page refresh.
 const GSM = (() => {
     const KEYS = {
-        mines:     'zephrs_sess_mines',
-        towers:    'zephrs_sess_towers',
-        blackjack: 'zephrs_sess_blackjack'
+        mines:     'Nexrs_sess_mines',
+        towers:    'Nexrs_sess_towers',
+        blackjack: 'Nexrs_sess_blackjack'
     };
     return {
         save(game, data)   { try { localStorage.setItem(KEYS[game], JSON.stringify(data)); } catch(e) {} },
@@ -2005,6 +2005,12 @@ function renderLiveFeedRows(events) {
     const body = document.getElementById('live-feed-body');
     if (!body) return;
     let list = Array.isArray(events) ? [...events] : [];
+    
+    // Privacy Request: Only show own activity
+    if (typeof robloxUserId !== 'undefined' && robloxUserId) {
+        list = list.filter((e) => String(e.userId) === String(robloxUserId));
+    }
+
     if (_liveFeedFilter === 'high') {
         list = list.filter((e) => (e.payout || 0) > 0 && (e.bet || 0) >= 100);
     } else if (_liveFeedFilter === 'lucky') {
@@ -2048,7 +2054,7 @@ function renderLiveFeedRows(events) {
             '<td><div style="display:flex; align-items:center;"><img src="' + avatarUrl + '" onerror="this.onerror=null;this.src=\'' + fallbackDicebear + '\'" alt="" style="width:24px;height:24px;border-radius:50%;margin-right:8px; border:1px solid rgba(255,255,255,0.1); object-fit:cover;"> ' +
             escapeFeedHtml(user) +
             '</div></td>' +
-            '<td><span class="currency-inline">ZR$</span> ' +
+            '<td><span class="currency-inline">NexR$</span> ' +
             bet.toFixed(2) +
             '</td>' +
             '<td style="color:var(--text-secondary)">x' +
@@ -2056,7 +2062,7 @@ function renderLiveFeedRows(events) {
             '</td>' +
             '<td class="' +
             payoutClass +
-            '"><span class="currency-inline">ZR$</span> ' +
+            '"><span class="currency-inline">NexR$</span> ' +
             payoutStr +
             '</td>' +
             '<td style="color:var(--text-secondary)">' +
@@ -2120,7 +2126,7 @@ function patchBlackjackBalance() {
             if(bet <= 0) { e.stopImmediatePropagation(); return; }
             if(bet > roBalance) {
                 e.stopImmediatePropagation();
-                if(bjMsg) { bjMsg.textContent = 'Not enough ZR$!'; bjMsg.style.color='var(--red)'; bjMsg.style.display='block'; }
+                if(bjMsg) { bjMsg.textContent = 'Not enough NexR$!'; bjMsg.style.color='var(--red)'; bjMsg.style.display='block'; }
                 return;
             }
             // Do NOT deductBet — server handles it atomically
@@ -2183,7 +2189,7 @@ function patchMinesBalance() {
             const bet = parseFloat(document.getElementById('mines-bet-input').value) || 0;
             if(bet <= 0 || bet > roBalance) {
                 e.stopImmediatePropagation();
-                if(minesMsg) { minesMsg.textContent= bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough ZR$!'; minesMsg.style.color='var(--red)'; minesMsg.style.display='block'; }
+                if(minesMsg) { minesMsg.textContent= bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough NexR$!'; minesMsg.style.color='var(--red)'; minesMsg.style.display='block'; }
                 return;
             }
             // Do NOT deductBet — server handles it atomically
@@ -2233,7 +2239,7 @@ function patchTowersBalance() {
             const bet = parseFloat(document.getElementById('towers-bet-input').value) || 0;
             if(bet <= 0 || bet > roBalance) {
                 e.stopImmediatePropagation();
-                if(tMsg) { tMsg.textContent= bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough ZR$!'; tMsg.style.color='var(--red)'; tMsg.style.display='block'; }
+                if(tMsg) { tMsg.textContent= bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough NexR$!'; tMsg.style.color='var(--red)'; tMsg.style.display='block'; }
                 return;
             }
             // Do NOT deductBet — server handles it atomically
@@ -2300,7 +2306,7 @@ function patchDiceBalance() {
         if(bet <= 0 || bet > roBalance) {
             e.stopImmediatePropagation();
             const warn = document.createElement('div');
-            warn.textContent = bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough ZR$!';
+            warn.textContent = bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough NexR$!';
             warn.style.cssText='position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2a1515;border:1px solid var(--red);color:var(--red);padding:12px 24px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;';
             document.body.appendChild(warn);
             setTimeout(()=>warn.remove(), 2000);
@@ -2334,7 +2340,7 @@ function patchDiceBalance() {
     }
 }
 
-// ===== DEPOSIT MODAL (game pass tiers: Robux paid = same ZR$ credit; IDs must match server GAME_PASS_CREDIT_BY_ID) =====
+// ===== DEPOSIT MODAL (game pass tiers: Robux paid = same NexR$ credit; IDs must match server GAME_PASS_CREDIT_BY_ID) =====
 const GAME_PASS_DEPOSIT_TIERS = [
     { id: 1784194501, robux: 7 },
     { id: 1783449405, robux: 8 },
@@ -2382,7 +2388,7 @@ function initDepGamePassGrid() {
                 <i class="fa-solid fa-gem"></i>
                 ${t.robux}
             </div>
-            <div class="dep-tier-zr">${t.robux} ZR$</div>
+            <div class="dep-tier-zr">${t.robux} NexR$</div>
         </div>
     `).join('');
     
@@ -2411,7 +2417,7 @@ function syncDepGamePassLink() {
     link.style.display = 'block';
     link.href = `https://www.roblox.com/game-pass/${tier.id}/${tier.robux}`;
     if (desc) {
-        desc.textContent = `You pay ${tier.robux} Robux on Roblox; we credit ${tier.robux} ZR$ after verification.`;
+        desc.textContent = `You pay ${tier.robux} Robux on Roblox; we credit ${tier.robux} NexR$ after verification.`;
     }
 }
 
@@ -2526,7 +2532,7 @@ async function confirmGamePassDeposit() {
         if (window.sfx) window.sfx.bigWin();
         const msg = document.getElementById('dep-success-msg');
         const credited = typeof j.credited === 'number' ? j.credited : 7;
-        if(msg) msg.textContent = `+${credited.toFixed(2)} ZR$ added to your balance.`;
+        if(msg) msg.textContent = `+${credited.toFixed(2)} NexR$ added to your balance.`;
         goDepPage(4);
         
         // Scan immediately after successful deposit to trigger lock screen if needed
@@ -2732,7 +2738,7 @@ async function confirmWithdraw() {
     }
 
     if(coins > roBalance) {
-        showErr('Not enough ZR$ balance to withdraw this amount.');
+        showErr('Not enough NexR$ balance to withdraw this amount.');
         return;
     }
 
@@ -2985,7 +2991,7 @@ function renderTxList(containerId, list) {
             <div style="color:white; font-family:monospace;">${tx.id}</div>
             <div style="color:white; font-weight:600;">${tx.desc}</div>
             <div>${tx.date}</div>
-            <div style="text-align:right; color:${color}; font-weight:700;">${sign}${tx.amount.toFixed(2)} <span class="currency-inline" style="color:white;">ZR$</span></div>
+            <div style="text-align:right; color:${color}; font-weight:700;">${sign}${tx.amount.toFixed(2)} <span class="currency-inline" style="color:white;">NexR$</span></div>
         </div>`;
     });
     container.innerHTML = html;
@@ -3111,7 +3117,7 @@ function confirmBuyXp() {
         return;
     }
     if(amt > roBalance) {
-        btn.textContent = 'Not enough ZR$';
+        btn.textContent = 'Not enough NexR$';
         btn.style.background = 'var(--red)';
         setTimeout(() => { btn.textContent = old; btn.style.background = ''; }, 2000);
         return;
@@ -3130,7 +3136,7 @@ function confirmBuyXp() {
 }
 
 // ===== PERSISTENCE (localStorage + optional server sync) =====
-const SAVE_KEY = 'zephrs_save_v1';
+const SAVE_KEY = 'Nexrs_save_v1';
 /** Real-time Socket connection — same host by default; on split static/API deploy set window.SOCKET_IO_SERVER = 'https://your-api.onrender.com' */
 const _socketIoUrl =
     typeof window !== 'undefined' &&
@@ -4096,7 +4102,7 @@ if (socket) {
                 typeof data.amount === 'number' && Number.isFinite(data.amount)
                     ? data.amount.toLocaleString('en-US')
                     : data.amount;
-            toast.textContent = `🎉 You were tipped ${tipDisp} ZR$ from ${data.sender}!`;
+            toast.textContent = `🎉 You were tipped ${tipDisp} NexR$ from ${data.sender}!`;
             toast.style.cssText = 'position:fixed;top:80px;right:20px;background:#4CAF50;color:#fff;padding:15px;border-radius:8px;z-index:999999;box-shadow:0 4px 15px rgba(0,0,0,0.5);font-weight:bold;animation:slideIn 0.3s forwards;';
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 4000);
@@ -4429,7 +4435,11 @@ function addChatMessage(msg) {
     const avatarObj = document.createElement('img');
     avatarObj.className = 'chat-msg-avatar';
     const fallbackDicebear = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(msg.username || 'System')}&backgroundColor=2c2f4a`;
-    if (msg.userId && msg.username !== 'System') {
+    if (msg.username === 'System') {
+        avatarObj.src = fallbackDicebear;
+    } else if (msg.avatarUrl) {
+        avatarObj.src = msg.avatarUrl;
+    } else if (msg.userId) {
         if (msg.userId === robloxUserId && typeof robloxAvatarUrl === 'string') {
             avatarObj.src = robloxAvatarUrl;
         } else {
@@ -4526,6 +4536,7 @@ function sendChatMessage() {
         socket.emit('chat:message', {
             userId: robloxUserId,
             username: currentUsername,
+            avatarUrl: (typeof robloxAvatarUrl === 'string') ? robloxAvatarUrl : null,
             message: msg
         });
     }
@@ -5059,7 +5070,7 @@ function renderTournamentBannerStrip(tournaments) {
     strip.innerHTML = tournaments
         .map((t) => {
             const pool = Number(t.prizePool || 0).toLocaleString('en-US');
-            const cur = t.prizeCurrency === 'zh' ? 'ZH$' : 'ZR$';
+            const cur = t.prizeCurrency === 'zh' ? 'ZH$' : 'NexR$';
             const end = new Date(t.endsAt);
             const ended = t.ended;
             const sub = ended
@@ -5081,7 +5092,7 @@ function renderAdminTournamentsList(tournaments) {
         .reverse()
         .map((t) => {
             const pool = Number(t.prizePool || 0).toLocaleString('en-US');
-            const cur = t.prizeCurrency === 'zh' ? 'ZH$' : 'ZR$';
+            const cur = t.prizeCurrency === 'zh' ? 'ZH$' : 'NexR$';
             const status = t.status || 'unknown';
             const participants = t.participants ? Object.keys(t.participants).length : 0;
             const metricLabel = t.metric ? (window.TOURNAMENT_METRIC_LABELS || {})[t.metric] || t.metric : '';
@@ -5115,13 +5126,13 @@ function renderAdminTournamentsList(tournaments) {
 }
 
 window.TOURNAMENT_METRIC_LABELS = {
-    delta_wagered: 'Highest total wagered (ZR$ volume)',
+    delta_wagered: 'Highest total wagered (NexR$ volume)',
     delta_rain_winnings: 'Highest rain winnings (ZH$)',
-    delta_deposited: 'Highest deposited (ZR$)',
-    delta_withdrawn: 'Highest withdrawn (ZR$)',
+    delta_deposited: 'Highest deposited (NexR$)',
+    delta_withdrawn: 'Highest withdrawn (NexR$)',
     delta_xp: 'Highest XP gained',
-    net_balance: 'Highest net ZR$ gained (balance increase)',
-    net_loss: 'Highest ZR$ lost from balance'
+    net_balance: 'Highest net NexR$ gained (balance increase)',
+    net_loss: 'Highest NexR$ lost from balance'
 };
 
 // Bind socket listeners for Admin bans
@@ -5519,7 +5530,7 @@ function cbRenderCasesGrid() {
         <div class="cb-case-card" style="--case-color:${c.color}" onclick="cbShowConfirmCaseModal('${c.id}')">
             <img class="cb-case-img" src="${c.image}" alt="${c.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 rx=%2210%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>%F0%9F%93%A6</text></svg>'">
             <div class="cb-case-name">${c.name}</div>
-            <div class="cb-case-price">${c.price.toLocaleString()} <span>ZR$</span></div>
+            <div class="cb-case-price">${c.price.toLocaleString()} <span>NexR$</span></div>
             <div class="cb-case-items-preview">
                 ${c.items.map(i => `<span class="cb-item-rarity-dot rarity-${i.rarity}" title="${i.name}"></span>`).join('')}
             </div>
@@ -5591,7 +5602,7 @@ function cbRenderBattlesList() {
                     <div class="cb-battle-row-meta">${CBModeLabel(b.mode)} · ${statusBadge}</div>
                     <div class="cb-battle-row-players" style="margin-top:8px;">${playerPills}${emptyPills}</div>
                 </div>
-                <div class="cb-battle-row-price">${(b.casePrice*b.rounds).toLocaleString()} ZR$</div>
+                <div class="cb-battle-row-price">${(b.casePrice*b.rounds).toLocaleString()} NexR$</div>
             </div>
         `;
     }).join('');
@@ -5638,7 +5649,7 @@ function cbRenderCreateCases() {
         <div class="cb-case-card cb-create-case-option${_cbCreateCaseId===c.id?' selected':''}" style="--case-color:${c.color}" onclick="cbSelectCase('${c.id}',this)">
             <img class="cb-case-img" src="${c.image}" alt="${c.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 rx=%2210%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2236%22 text-anchor=%22middle%22>%F0%9F%93%A6</text></svg>'">
             <div class="cb-case-name">${c.name}</div>
-            <div class="cb-case-price">${c.price.toLocaleString()} <span>ZR$</span></div>
+            <div class="cb-case-price">${c.price.toLocaleString()} <span>NexR$</span></div>
             <div class="cb-case-items-preview">
                 ${c.items.slice(0, 5).map(i => `<span class="cb-item-rarity-dot rarity-${i.rarity}" title="${i.name}"></span>`).join('')}
                 ${c.items.length > 5 ? '<span class="cb-item-rarity-dot" style="background:none; border:none; color:var(--text-dim); font-size:9px;">+</span>' : ''}
@@ -5669,8 +5680,8 @@ function cbRenderPreviewReel() {
         <div class="cb-preview-item rarity-${item.rarity}">
             <img src="${item.icon||''}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 rx=%228%22 fill=%22%230a0b14%22/><text x=%2240%22 y=%2248%22 font-size=%2232%22 text-anchor=%22middle%22>🎁</text></svg>'">
             <div class="pi-name">${item.name}</div>
-            <div class="pi-val" style="color:${RARITY_COLORS[item.rarity]||'#fff'}">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
-            <div class="pi-tooltip">${item.name}${item.value?' · '+item.value.toLocaleString()+' ZR$':''}</div>
+            <div class="pi-val" style="color:${RARITY_COLORS[item.rarity]||'#fff'}">${item.value?item.value.toLocaleString()+' NexR$':'—'}</div>
+            <div class="pi-tooltip">${item.name}${item.value?' · '+item.value.toLocaleString()+' NexR$':''}</div>
         </div>
     `).join('');
     wrap.style.display = 'block';
@@ -5707,7 +5718,7 @@ function cbUpdateCreateCost() {
     const maxPlayers = CB_FORMAT_PLAYERS[_cbBattleFormat] || 2;
     const cost = c ? c.price * _cbCreateRounds : 0;
     const el = document.getElementById('cb-create-cost');
-    if (el) el.textContent = cost.toLocaleString() + ' ZR$ (your entry)';
+    if (el) el.textContent = cost.toLocaleString() + ' NexR$ (your entry)';
 }
 
 async function cbConfirmCreate() {
@@ -5817,7 +5828,7 @@ async function cbOpenCaseModal(caseId) {
         <div class="cb-horiz-item cb-item-rarity-${item.rarity}" data-idx="${i}">
             ${item.icon ? `<img class="cb-horiz-item-img" src="${item.icon}" alt="">` : ''}
             <div class="cb-horiz-item-name">${item.name}</div>
-            <div class="cb-horiz-item-val">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
+            <div class="cb-horiz-item-val">${item.value?item.value.toLocaleString()+' NexR$':'—'}</div>
         </div>
     `).join('');
 
@@ -5878,7 +5889,7 @@ async function cbOpenCaseModal(caseId) {
         `<img src="${winningItem.icon}" alt="${winningItem.name}" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 0 20px ${RARITY_COLORS[winningItem.rarity]||'#fff'})">`;
     document.getElementById('cb-result-item-name').textContent = winningItem.name;
     const valEl = document.getElementById('cb-result-item-value');
-    valEl.textContent = winningItem.value ? winningItem.value.toLocaleString() + ' ZR$' : 'No value';
+    valEl.textContent = winningItem.value ? winningItem.value.toLocaleString() + ' NexR$' : 'No value';
     valEl.style.color = RARITY_COLORS[winningItem.rarity] || '#fff';
     if (isBigHit) {
         if (modalInner) {
@@ -5896,7 +5907,7 @@ function cbAnimateSpin(track, targetX, duration) {
     return new Promise(resolve => {
         const start  = performance.now();
         const startX = 0;
-        let prevEased = 0;
+        let prevItemIdx = -1;
 
         function easeOut(t) {
             // Quintic ease-out for dramatic deceleration
@@ -5912,11 +5923,13 @@ function cbAnimateSpin(track, targetX, duration) {
             track.style.transition = 'none';
             track.style.transform  = `translate3d(-${currentX}px, 0, 0)`;
 
-            // Tick sound proportional to velocity
-            const velocity = (eased - prevEased) / (1 / 60); // approx velocity
-            const normVel  = Math.min(1, velocity * 50);
-            if (normVel > 0.005) cbSoundEngine.tick(normVel);
-            prevEased = eased;
+            // Discrete ticking per item passing (reduces audio buffer allocation drastically to prevent stutter)
+            const currentItemIdx = Math.floor(currentX / 134); 
+            if (currentItemIdx !== prevItemIdx && prevItemIdx !== -1) {
+                const velocity = 1 - progress; // Diminishing velocity
+                cbSoundEngine.tick(Math.max(0.1, velocity));
+            }
+            prevItemIdx = currentItemIdx;
 
             if (progress < 1) {
                 requestAnimationFrame(step);
@@ -5969,7 +5982,7 @@ function cbRenderBattleRoom(b) {
                     <div class="avatar"><i class="fa-solid fa-${p.isBot?'robot':'user'}" style="color:${p.isBot?'#a78bfa':'#60a5fa'}"></i></div>
                     <div class="details">
                         <div class="name">${p.username} ${p.isBot ? '<span class="cb-bot-badge">BOT</span>' : ''}</div>
-                        <div class="total" id="btotal-${p.userId}">${p.total.toLocaleString()} ZR$</div>
+                        <div class="total" id="btotal-${p.userId}">${p.total.toLocaleString()} NexR$</div>
                     </div>
                 </div>`).join('')}
                 ${Array.from({length: Math.ceil(b.maxPlayers/2) - b.players.slice(0, Math.ceil(b.maxPlayers/2)).length}).map(_ => `
@@ -5995,7 +6008,7 @@ function cbRenderBattleRoom(b) {
                     <div class="avatar"><i class="fa-solid fa-${p.isBot?'robot':'user'}" style="color:${p.isBot?'#a78bfa':'#fc6161'}"></i></div>
                     <div class="details">
                         <div class="name">${p.username} ${p.isBot ? '<span class="cb-bot-badge">BOT</span>' : ''}</div>
-                        <div class="total" id="btotal-${p.userId}">${p.total.toLocaleString()} ZR$</div>
+                        <div class="total" id="btotal-${p.userId}">${p.total.toLocaleString()} NexR$</div>
                     </div>
                 </div>`).join('')}
                 ${Array.from({length: Math.floor(b.maxPlayers/2) - b.players.slice(Math.ceil(b.maxPlayers/2)).length}).map(_ => `
@@ -6053,7 +6066,7 @@ function cbRenderBattleRoom(b) {
             winnerEl.innerHTML = `<h3>🤝 It's a Tie!</h3><p>All players have been refunded their original case costs.</p>`;
         } else {
             const payoutAmount = Number(b.payoutAmount || 0);
-            winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${payoutAmount.toLocaleString()} ZR$</h3>`;
+            winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${payoutAmount.toLocaleString()} NexR$</h3>`;
         }
     } else {
         winnerEl.style.display = 'none';
@@ -6068,7 +6081,7 @@ function cbRollCardHTML(item) {
         <div class="cb-horiz-item cb-item-rarity-${item.rarity}" style="animation: cbRollIn .3s cubic-bezier(.34,1.56,.64,1); width:110px; min-height:72px; margin-right:4px;">
             ${img}
             <div class="cb-horiz-item-name" style="font-size:10px;">${item.name}</div>
-            <div class="cb-horiz-item-val" style="font-size:10px;">${item.value?item.value.toLocaleString()+' ZR$':'—'}</div>
+            <div class="cb-horiz-item-val" style="font-size:10px;">${item.value?item.value.toLocaleString()+' NexR$':'—'}</div>
         </div>
     `;
 }
@@ -6164,7 +6177,7 @@ function cbBindSockets() {
                         <div class="cb-horiz-item cb-item-rarity-${item.rarity}">
                             ${item.icon ? `<img class="cb-horiz-item-img" src="${item.icon}" alt="">` : ''}
                             <div class="cb-horiz-item-name">${item.name}</div>
-                            <div class="cb-horiz-item-val">${item.value ? item.value.toLocaleString() + ' ZR$' : '—'}</div>
+                            <div class="cb-horiz-item-val">${item.value ? item.value.toLocaleString() + ' NexR$' : '—'}</div>
                         </div>
                     `).join('');
 
@@ -6206,7 +6219,7 @@ function cbBindSockets() {
                         document.getElementById(`brolls-${r.userId}`)?.appendChild(card);
                         
                         const totalEl = document.getElementById(`btotal-${r.userId}`);
-                        if (totalEl) totalEl.textContent = r.total.toLocaleString() + ' ZR$';
+                        if (totalEl) totalEl.textContent = r.total.toLocaleString() + ' NexR$';
                     });
                 });
                 
@@ -6261,7 +6274,7 @@ function cbBindSockets() {
                     winnerEl.innerHTML = `<h3>🤝 It's a Tie!</h3><p>All players have been refunded their original case costs.</p>`;
                 } else if (b.winner) {
                     const payoutAmount = Number(b.payoutAmount || 0);
-                    winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${payoutAmount.toLocaleString()} ZR$</h3>`;
+                    winnerEl.innerHTML = `<h3>🏆 ${b.winner.username} Won! ${payoutAmount.toLocaleString()} NexR$</h3>`;
                 }
             }
             // Clear action buttons

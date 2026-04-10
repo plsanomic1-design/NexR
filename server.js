@@ -7,7 +7,7 @@
  *
  * Account data: Supabase (user_balances + transactions). Set SUPABASE_URL and SUPABASE_ANON_KEY.
  * On Render/production, set SUPABASE_SERVICE_ROLE_KEY so the server can read any row (admin search, tips by name).
- * Never expose the service role to the browser — server env only.
+ * Never expose the service role to the browser â€” server env only.
  * Node 18+ recommended (global fetch).
  */
 require('dotenv').config();
@@ -26,7 +26,7 @@ if (typeof fetch === 'undefined') {
 }
 
 const app = express();
-/** Render, Fly, Heroku, etc. sit behind a reverse proxy — required for correct req.ip and WebSocket upgrades */
+/** Render, Fly, Heroku, etc. sit behind a reverse proxy â€” required for correct req.ip and WebSocket upgrades */
 app.set('trust proxy', 1);
 
 app.use((req, res, next) => {
@@ -125,8 +125,8 @@ function supabaseServerRestHeaders() {
 
 /**
  * Supabase REST auth headers.
- * - Legacy `anon` keys are JWTs (`eyJ...`) — send `Authorization: Bearer` + `apikey`.
- * - New publishable keys (`sb_publishable_...`) are NOT JWTs — use only `apikey`.
+ * - Legacy `anon` keys are JWTs (`eyJ...`) â€” send `Authorization: Bearer` + `apikey`.
+ * - New publishable keys (`sb_publishable_...`) are NOT JWTs â€” use only `apikey`.
  *   Sending Bearer with a publishable string can cause 401 / invalid JWT errors.
  * @see https://supabase.com/docs/guides/api/api-keys
  */
@@ -288,7 +288,7 @@ function num(v, fallback = 0) {
 }
 
 // =====================================================================
-// PER-USER ASYNC MUTEX — prevents race conditions / multi-tab dupes
+// PER-USER ASYNC MUTEX â€” prevents race conditions / multi-tab dupes
 // =====================================================================
 const _userLocks = new Map();
 async function withUserLock(userId, fn) {
@@ -334,7 +334,7 @@ function getServerPlinkoMultiplier(rows, diff, idx) {
     return (arr && arr[idx] != null) ? arr[idx] : 0;
 }
 
-/** Legacy: fold flipBalance into balance and drop the field (single ZR$ balance). */
+/** Legacy: fold flipBalance into balance and drop the field (single NexR$ balance). */
 function mergeFlipIntoBalance(save) {
     if (!save || typeof save !== 'object') return;
     if (typeof save.flipBalance === 'number' && save.flipBalance > 0) {
@@ -379,7 +379,7 @@ async function getUserBalance(userId) {
 
 /**
  * Upsert user_balances without relying on PostgREST `on_conflict` (needs UNIQUE on user_id).
- * Flow: SELECT row → PATCH if exists, else INSERT.
+ * Flow: SELECT row â†’ PATCH if exists, else INSERT.
  * @returns {Promise<{ ok: true } | { ok: false, step: string, detail: string, status?: number }>}
  */
 async function updateUserBalance(userId, balanceZr, legacyBalanceZh = 0) {
@@ -639,7 +639,7 @@ async function persistAccountSave(userId, save, ignoreBalance = false) {
 }
 
 /**
- * Full save object for the frontend (robloxUserId, balance, balanceZh, transactions, stats, …).
+ * Full save object for the frontend (robloxUserId, balance, balanceZh, transactions, stats, â€¦).
  * @returns {Promise<object | null>}
  */
 async function loadAccountFromSupabase(userId) {
@@ -663,13 +663,13 @@ async function loadAccountFromSupabase(userId) {
         );
     } catch (e) {
         console.error('loadAccountFromSupabase txs network error:', e && e.message);
-        return baseSave; // ← fallback: balance is known, just no tx history
+        return baseSave; // â† fallback: balance is known, just no tx history
     }
     if (!txRes.ok) {
         try {
             console.error('loadAccountFromSupabase txs failed:', txRes.status, await txRes.text());
         } catch (_) {}
-        return baseSave; // ← fallback: balance is known, just no tx history
+        return baseSave; // â† fallback: balance is known, just no tx history
     }
 
     let all;
@@ -734,7 +734,7 @@ function parseRobloxUserIdStrict(val) {
 }
 
 /**
- * Split `total` ZR$ across `count` recipients in whole cents so the sum matches exactly (e.g. 100k / 2 => 50k each).
+ * Split `total` NexR$ across `count` recipients in whole cents so the sum matches exactly (e.g. 100k / 2 => 50k each).
  * @param {number} total
  * @param {number} count
  * @returns {number[]}
@@ -770,7 +770,7 @@ async function loadOrCreateAccountSave(rawUserId) {
     };
 }
 
-/** CDN URL from Roblox thumbnails API — works in <img>; www.roblox.com headshot URLs often fail off-site. */
+/** CDN URL from Roblox thumbnails API â€” works in <img>; www.roblox.com headshot URLs often fail off-site. */
 function fetchRobloxAvatarHeadshotUrl(userId) {
     const path = `/v1/users/avatar-headshot?userIds=${encodeURIComponent(userId)}&size=420x420&format=Png&isCircular=true`;
     return new Promise((resolve) => {
@@ -906,7 +906,7 @@ function formatTxDateServer() {
 app.use(express.json({ limit: '2mb' }));
 
 /**
- * Recent wager outcomes for the home “Live feed”.
+ * Recent wager outcomes for the home â€œLive feedâ€.
  * Uses Supabase table `live_feed_events` when configured; otherwise an in-memory buffer (lost on restart).
  *
  * Example SQL:
@@ -1112,7 +1112,7 @@ function getCusState(userId) {
 }
 
 // =====================================================================
-// SERVER-SIDE BET DEDUCTION & WIN CREDIT — prevents multi-tab exploit
+// SERVER-SIDE BET DEDUCTION & WIN CREDIT â€” prevents multi-tab exploit
 // =====================================================================
 
 /**
@@ -1176,7 +1176,7 @@ app.post('/api/game/dice', express.json(), async (req, res) => {
     const { userId, target, isOver, bet } = req.body;
     
     await withUserLock(userId, async () => {
-        // SECURITY: multi is computed SERVER-SIDE from target/isOver — client value ignored entirely.
+        // SECURITY: multi is computed SERVER-SIDE from target/isOver â€” client value ignored entirely.
         const betVal = num(bet, 0);
         const targetVal = parseFloat(target);
         if (!Number.isFinite(targetVal) || targetVal <= 0 || targetVal >= 100) {
@@ -1210,7 +1210,7 @@ app.post('/api/game/dice', express.json(), async (req, res) => {
         }
         roll = parseFloat(roll.toFixed(2));
         const win = isOver ? (roll > targetVal) : (roll < targetVal);
-        // Credit win (or just sync balance on loss) — all tabs get updated via socket
+        // Credit win (or just sync balance on loss) â€” all tabs get updated via socket
         if (betVal > 0 && supabaseEnabled()) {
             const winAmount = win ? betVal * serverMulti : 0;
             await creditUserWin(userId, winAmount);
@@ -1358,7 +1358,7 @@ app.post('/api/game/towers/click', express.json(), (req, res) => {
         if (isBomb) {
             getCusState(userId).recordLoss();
             activeTowersGames.delete(String(userId));
-            // Bet was deducted at start — sync the true balance to all tabs
+            // Bet was deducted at start â€” sync the true balance to all tabs
             if (supabaseEnabled()) await creditUserWin(userId, 0);
         } else {
             // SECURITY: Track progress server-side
@@ -1444,7 +1444,7 @@ app.post('/api/game/mines/click', express.json(), (req, res) => {
         if (isBomb) {
             getCusState(userId).recordLoss();
             activeMinesGames.delete(String(userId));
-            // Bet was deducted at start — sync true balance to all tabs
+            // Bet was deducted at start â€” sync true balance to all tabs
             if (supabaseEnabled()) await creditUserWin(userId, 0);
         } else {
             // SECURITY: Track safely clicked tiles server-side
@@ -1470,7 +1470,7 @@ app.post('/api/game/mines/cashout', express.json(), async (req, res) => {
             getCusState(userId).recordWin(multi >= 3.0);
             return res.json({ logic: g.logic, winAmount, multiplier: multi, newBalance: result.newBalance });
         }
-        // No tiles revealed or no bet — just sync balance (loss already deducted at start)
+        // No tiles revealed or no bet â€” just sync balance (loss already deducted at start)
         if (supabaseEnabled()) await creditUserWin(userId, 0);
         res.json({ logic: g.logic });
     });
@@ -1535,7 +1535,7 @@ function buildServerDeck() {
 
 app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    // SECURITY: Deck is generated SERVER-SIDE — client deck is ignored entirely.
+    // SECURITY: Deck is generated SERVER-SIDE â€” client deck is ignored entirely.
     const { userId, bet } = req.body;
     await withUserLock(userId, async () => {
         const betVal = num(bet, 0);
@@ -1709,7 +1709,7 @@ app.post('/api/account-sync', async (req, res) => {
     if (!save.stats || typeof save.stats !== 'object') {
         save.stats = {};
     }
-    // SECURITY: Strip any balance fields — client CANNOT set balance via account-sync.
+    // SECURITY: Strip any balance fields â€” client CANNOT set balance via account-sync.
     // Balance is ONLY ever written by deductUserBet / creditUserWin on the server.
     delete save.balance;
     delete save.balanceZh;
@@ -1944,7 +1944,7 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
             if (!processedCryptoPayments.has(order_id) && !alreadyProcessed) {
                 processedCryptoPayments.add(order_id);
                 
-                // Reverse calculation: ZR$ = EUR / 0.007
+                // Reverse calculation: NexR$ = EUR / 0.007
                 const depositAmount = Math.round(parseFloat(price_amount) / 0.007);
                 
                 if (userId && depositAmount > 0 && supabaseEnabled()) {
@@ -1970,14 +1970,14 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                             const result = await updateUserBalance(uid, newBal, 0); // we pass 0 here because it's merged naturally or zeroed
                             if (result.ok) {
                                 emitBalanceRemoteSync(io, uid, { balance: newBal, stats: {} });
-                                console.log(`Credited ${depositAmount} ZR$ (crypto) to user ${uid}`);
+                                console.log(`Credited ${depositAmount} NexR$ (crypto) to user ${uid}`);
                                 const who = getOnlineUsernameByUserId(uid) || `User ${uid}`;
                                 const paidCoin = String(paymentData.pay_currency || '').toUpperCase();
                                 const paidAmount = Number(paymentData.pay_amount || 0);
                                 const paidText = Number.isFinite(paidAmount) && paidAmount > 0
                                     ? `${paidAmount} ${paidCoin || 'CRYPTO'}`
-                                    : `${depositAmount} ZR$ equivalent`;
-                                postDiscordAudit(`💰 ${who} deposited ${paidText}. Credited ${depositAmount.toLocaleString('en-US')} ZR$.`);
+                                    : `${depositAmount} NexR$ equivalent`;
+                                postDiscordAudit(`💰 ${who} deposited ${paidText}. Credited ${depositAmount.toLocaleString('en-US')} NexR$.`);
                             }
                         }
                     } catch (e) {
@@ -1995,7 +1995,7 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
     res.status(200).send('OK');
 });
 
-/** Game pass deposit: Robux paid = ZR$ credited. Keys must match client GAME_PASS_DEPOSIT_TIERS. */
+/** Game pass deposit: Robux paid = NexR$ credited. Keys must match client GAME_PASS_DEPOSIT_TIERS. */
 const GAME_PASS_CREDIT_BY_ID = {
     1784194501: 7,
     1783449405: 8,
@@ -2091,7 +2091,7 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         return res.status(400).json({ error: 'Missing userId.' });
     }
 
-    // ── Validate gamepass ID ──
+    // â”€â”€ Validate gamepass ID â”€â”€
     const gamePassId = parseInt(String(body.gamePassId != null ? body.gamePassId : ''), 10);
     if (!gamePassId || gamePassId < 1) {
         return res.status(400).json({ error: 'Missing or invalid gamePassId.' });
@@ -2101,7 +2101,7 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         return res.status(400).json({ error: 'That game pass is not enabled for deposits.' });
     }
 
-    // ── Per-gamepass cooldown (prevents spam-clicking the same tier) ──
+    // â”€â”€ Per-gamepass cooldown (prevents spam-clicking the same tier) â”€â”€
     if (isDepositLocked(userId, gamePassId)) {
         return res.status(429).json({
             error: 'You just deposited this tier. Wait a few seconds before trying again.'
@@ -2112,7 +2112,7 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         return res.status(503).json({ error: 'Account storage is not configured or unavailable.' });
     }
 
-    // ── Ask Roblox: does this user actually own this game pass right now? ──
+    // â”€â”€ Ask Roblox: does this user actually own this game pass right now? â”€â”€
     const own = await fetchUserOwnsGamePass(userId, gamePassId);
     if (!own.ok) {
         return res.status(502).json({
@@ -2125,7 +2125,7 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         });
     }
 
-    // ── Ownership verified — load balance from Supabase, credit, save ──
+    // â”€â”€ Ownership verified â€” load balance from Supabase, credit, save â”€â”€
     const diskSave = await readAccountJson(userId);
     const save = diskSave ? { ...diskSave } : { robloxUserId: userId, balance: 0, stats: {} };
     save.robloxUserId = userId;
@@ -2164,13 +2164,13 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
         return res.status(503).json({ error: 'Could not save account.', detail: String(e && e.message) });
     }
 
-    // ── Lock this tier for 5 seconds so they can't spam-click ──
+    // â”€â”€ Lock this tier for 5 seconds so they can't spam-click â”€â”€
     lockDeposit(userId, gamePassId);
 
     console.log(`[Deposit] user=${userId} gp=${gamePassId} credited=${credit} newBal=${save.balance}`);
     {
         const who = getOnlineUsernameByUserId(userId) || `User ${userId}`;
-        postDiscordAudit(`💰 ${who} deposited ${credit.toLocaleString('en-US')} ZR$ (Game Pass).`);
+        postDiscordAudit(`💰 ${who} deposited ${credit.toLocaleString('en-US')} NexR$ (Game Pass).`);
     }
     res.json({ ok: true, save, credited: credit });
 });
@@ -2191,7 +2191,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
     zhAmount = parseInt(zhAmount, 10);
     
     if (!userId || !coin || !address || isNaN(zhAmount) || zhAmount < 1800) {
-        return res.status(400).json({ error: 'Invalid request. Minimum is 1800 ZR$.' });
+        return res.status(400).json({ error: 'Invalid request. Minimum is 1800 NexR$.' });
     }
     
     await withUserLock(userId, async () => {
@@ -2199,7 +2199,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
         const bal = await getUserBalance(userId);
         const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
         if (!bal || currentBalance < zhAmount) {
-            return res.status(400).json({ error: `Insufficient balance. You have ${Math.floor(currentBalance)} ZR$.` });
+            return res.status(400).json({ error: `Insufficient balance. You have ${Math.floor(currentBalance)} NexR$.` });
         }
 
         // Deduct directly via updateUserBalance (the single source of truth)
@@ -2211,7 +2211,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
         // Push balance update to any open tabs for this user
         emitBalanceRemoteSync(io, userId, { balance: newBalance, stats: {} });
 
-        // Fiat value estimation: 1 ZR$ = 0.007 EUR
+        // Fiat value estimation: 1 NexR$ = 0.007 EUR
         const fiatValue = parseFloat((zhAmount * 0.007).toFixed(2));
 
         // Look up username from in-memory connected players (best-effort)
@@ -2243,7 +2243,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
         postDiscordAudit(
             `📤 ${wdUsername || `User ${userId}`} requested withdraw ${zhAmount.toLocaleString(
                 'en-US'
-            )} ZR$ (~${fiatLabel}) to ${String(coin || '').toUpperCase()}.`
+            )} NexR$ (~${fiatLabel}) to ${String(coin || '').toUpperCase()}.`
         );
         
         res.json({ ok: true, request: wdReq });
@@ -2274,7 +2274,7 @@ app.post('/api/withdraw/crypto/cancel', express.json(), async (req, res) => {
     cryptoWdState[wdIndex].status = 'cancelled';
     saveCryptoWd();
     
-    // SECURITY: Use creditUserWin for atomic Supabase refund — not the stale read-modify-write pattern.
+    // SECURITY: Use creditUserWin for atomic Supabase refund â€” not the stale read-modify-write pattern.
     const refundResult = await creditUserWin(userId, reqWd.zhAmount);
     if (!refundResult.ok) {
         console.error('[CryptoWd Cancel] Refund failed for', userId, refundResult);
@@ -2317,7 +2317,7 @@ app.post('/api/scan-owned-passes', async (req, res) => {
 
 
 // =====================================================================
-// ROBLOX BOT — Automated Gamepass Withdrawal
+// ROBLOX BOT â€” Automated Gamepass Withdrawal
 // =====================================================================
 /** The bot's .ROBLOSECURITY cookie from .env */
 const ROBLOX_COOKIE = (process.env.ROBLOX_COOKIE || '').trim();
@@ -2328,12 +2328,12 @@ let botUsername = 'NOT LOGGED IN';
 
 async function initRobloxBot() {
     if (!ROBLOX_COOKIE) {
-        console.warn('[Withdrawal Bot] ROBLOX_COOKIE not set in .env — withdrawal endpoint will be disabled.');
+        console.warn('[Withdrawal Bot] ROBLOX_COOKIE not set in .env â€” withdrawal endpoint will be disabled.');
         return;
     }
     try {
         const user = await noblox.setCookie(ROBLOX_COOKIE);
-        // noblox.js v4+ returns { name, id } — older versions used UserName/UserID
+        // noblox.js v4+ returns { name, id } â€” older versions used UserName/UserID
         botUsername = user.name || user.UserName || JSON.stringify(user);
         const botId   = user.id   || user.UserID;
         botReady = true;
@@ -2353,7 +2353,7 @@ initRobloxBot();
  *   2. Fetch product info for the gamepass (verifies it exists & gets price).
  *   3. Verify the gamepass is owned by the requesting Roblox user.
  *   4. Purchase the gamepass with the bot account.
- *   5. Deduct ZR$ from the user's Supabase balance.
+ *   5. Deduct NexR$ from the user's Supabase balance.
  */
 app.post('/api/withdraw', express.json(), async (req, res) => {
     if (!botReady) {
@@ -2433,7 +2433,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(503).json({ error: 'Could not read your account balance. Try again.' });
     }
     if (currentBal.balance_zr < zrCoins) {
-        return res.status(400).json({ error: 'Insufficient ZR$ balance on server.' });
+        return res.status(400).json({ error: 'Insufficient NexR$ balance on server.' });
     }
 
     // --- Step 4: Purchase the gamepass with the bot using custom fetch (noblox v9 removed native buy wrapper) ---
@@ -2465,11 +2465,11 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
     } catch (e) {
         const msg = e && e.message ? e.message : String(e);
         console.error('[Withdraw] Purchase failed:', msg);
-        // Common noblox errors have useful messages — surface them to the user
+        // Common noblox errors have useful messages â€” surface them to the user
         return res.status(400).json({ error: 'Bot could not purchase the gamepass: ' + msg });
     }
 
-    // --- Step 5: Deduct the ZR$ balance in Supabase & Persist Profile ---
+    // --- Step 5: Deduct the NexR$ balance in Supabase & Persist Profile ---
     const newZr = Math.max(0, currentBal.balance_zr - zrCoins);
     const updateResult = await updateUserBalance(userId, newZr, currentBal.balance_zh);
     
@@ -2495,7 +2495,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
 
     {
         const who = getOnlineUsernameByUserId(userId) || `User ${userId}`;
-        postDiscordAudit(`📤 ${who} withdrew ${Number(zrCoins || 0).toLocaleString('en-US')} ZR$.`);
+        postDiscordAudit(`📤 ${who} withdrew ${Number(zrCoins || 0).toLocaleString('en-US')} NexR$.`);
     }
 
     return res.json({
@@ -2688,7 +2688,7 @@ function emitBalanceRemoteSync(io, rawUserId, save) {
         balanceZh: typeof save.balanceZh === 'number' ? save.balanceZh : 0,
         stats
     };
-    // SECURITY: Only deliver to the specific user's own sockets — never broadcast to all.
+    // SECURITY: Only deliver to the specific user's own sockets â€” never broadcast to all.
     for (const [sid, p] of onlinePlayers.entries()) {
         if (userIdsMatch(p.userId, rawUserId)) {
             const sock = io.sockets.sockets.get(sid);
@@ -2701,13 +2701,13 @@ function emitBalanceRemoteSync(io, rawUserId, save) {
 
 // ----- Tournaments (file-backed; baselines captured on first account sync during window) -----
 const TOURNAMENT_METRIC_LABELS = {
-    delta_wagered: 'Highest total wagered (ZR$ volume)',
+    delta_wagered: 'Highest total wagered (NexR$ volume)',
     delta_rain_winnings: 'Highest rain winnings (ZH$)',
-    delta_deposited: 'Highest deposited (ZR$)',
-    delta_withdrawn: 'Highest withdrawn (ZR$)',
+    delta_deposited: 'Highest deposited (NexR$)',
+    delta_withdrawn: 'Highest withdrawn (NexR$)',
     delta_xp: 'Highest XP gained',
-    net_balance: 'Highest net ZR$ gained (balance increase)',
-    net_loss: 'Highest ZR$ lost from balance'
+    net_balance: 'Highest net NexR$ gained (balance increase)',
+    net_loss: 'Highest NexR$ lost from balance'
 };
 
 const VALID_TOURNAMENT_METRICS = new Set(Object.keys(TOURNAMENT_METRIC_LABELS));
@@ -2845,7 +2845,7 @@ async function sendDiscordWebhook(message) {
 function adminActionLog(adminId, action, detail) {
     const msg = `[AdminAction] Admin ${adminId} performed ${action}: ${detail}`;
     console.log(msg);
-    const discordMsg = `🛡️ **Admin Action**\n**Admin:** ${adminId}\n**Action:** ${action}\n**Detail:** ${detail}`;
+    const discordMsg = `🚨 **Admin Action**\n**Admin:** ${adminId}\n**Action:** ${action}\n**Detail:** ${detail}`;
     sendDiscordWebhook(discordMsg).catch(err => console.error('[AdminAction] Webhook fail:', err.message));
 }
 
@@ -2898,7 +2898,7 @@ function checkBanStatus(userId, ip) {
                         createdAt: now
                     });
                     changed = true;
-                    sendDiscordWebhook(`🛡️ **IP Auto-Ban**\n**Player ID:** ${userId} was automatically banned for connecting from banned IP: ${ip}.`);
+                    sendDiscordWebhook(`🚨 **IP Auto-Ban**\n**Player ID:** ${userId} was automatically banned for connecting from banned IP: ${ip}.`);
                 }
             }
         }
@@ -3080,6 +3080,13 @@ async function finalizeTournamentById(tournamentId) {
 
 let globalAnnouncement = { active: false, text: '', expiresAt: 0 };
 
+// Fake Base Online Count (changes every 1 hr)
+let baseFakeCount = Math.floor(Math.random() * (60 - 30 + 1)) + 30; // 30-60
+setInterval(() => {
+    baseFakeCount = Math.floor(Math.random() * (60 - 30 + 1)) + 30;
+    io.emit('online:count', baseFakeCount + io.engine.clientsCount);
+}, 60 * 60 * 1000);
+
 io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
 
@@ -3089,7 +3096,7 @@ io.on('connection', (socket) => {
     socket.emit('coinflip:list', activeFlips);
     socket.emit('tournaments:update', getPublicTournamentsSnapshot());
     socket.emit('announcement:sync', { ...globalAnnouncement, msLeft: globalAnnouncement.expiresAt - Date.now() });
-    io.emit('online:count', io.engine.clientsCount);
+    io.emit('online:count', baseFakeCount + io.engine.clientsCount);
 
     socket.on('player:identify', (data) => {
         if (!data || data.userId == null) return;
@@ -3117,7 +3124,7 @@ io.on('connection', (socket) => {
             balanceZh: data.balanceZh || 0
         });
         // SECURITY: Store authenticated userId on server-side socket object.
-        // All subsequent handlers use socket.data.userId — never the client-supplied payload.
+        // All subsequent handlers use socket.data.userId â€” never the client-supplied payload.
         socket.data.userId = uid;
         if (ADMIN_IDS.includes(String(uid))) socket.isAdminMod = true;
     });
@@ -3171,6 +3178,7 @@ io.on('connection', (socket) => {
             id: Math.random().toString(36).substr(2, 9),
             userId,
             username,
+            avatarUrl: (data && typeof data.avatarUrl === 'string') ? data.avatarUrl : null,
             text: message.substring(0, 200),
             createdAt: Date.now()
         };
@@ -3325,7 +3333,7 @@ io.on('connection', (socket) => {
                             const share = shares[i];
                             const js = await loadOrCreateAccountSave(jid);
                             if (!js) {
-                                console.error('[Rain] Payout skipped — no account for user', jid);
+                                console.error('[Rain] Payout skipped â€” no account for user', jid);
                                 continue;
                             }
                             js.balance = (typeof js.balance === 'number' ? js.balance : 0) + share;
@@ -3498,7 +3506,7 @@ io.on('connection', (socket) => {
             cryptoWdState[wdIndex].status = 'rejected';
             saveCryptoWd();
             
-            // SECURITY: Use creditUserWin for atomic Supabase refund — not stale read-modify-write.
+            // SECURITY: Use creditUserWin for atomic Supabase refund â€” not stale read-modify-write.
             await creditUserWin(req.userId, req.zhAmount);
             
             socket.emit('admin:crypto_wd_update', cryptoWdState.filter(w => w.status === 'pending'));
@@ -3593,7 +3601,7 @@ io.on('connection', (socket) => {
         if (!save) {
             return socket.emit('admin:lookup_result', {
                 error:
-                    'User not found. On Render: set environment variable SUPABASE_SERVICE_ROLE_KEY (from Supabase Project Settings → API) on this web service so admin search can read profile rows. Never put that key in the frontend.'
+                    'User not found. On Render: set environment variable SUPABASE_SERVICE_ROLE_KEY (from Supabase Project Settings â†’ API) on this web service so admin search can read profile rows. Never put that key in the frontend.'
             });
         }
 
@@ -3733,11 +3741,11 @@ io.on('connection', (socket) => {
 
             socket.emit('admin:action_result', {
                 ok: true,
-                msg: `Balance updated: ZR$ ${save.balance.toFixed(2)}`,
+                msg: `Balance updated: NexR$ ${save.balance.toFixed(2)}`,
                 targetUserId: String(targetUserId),
                 skipAdminLookup: true
             });
-            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set balance of ${targetUserId} to ZR$${save.balance}`);
+            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set balance of ${targetUserId} to NexR$${save.balance}`);
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating balance.' });
         }
@@ -3849,7 +3857,7 @@ io.on('connection', (socket) => {
         broadcastTournamentsUpdate();
         socket.emit('admin:action_result', {
             ok: true,
-            msg: `Tournament "${tour.title}" created — ends ${new Date(endsAt).toLocaleString()}.`,
+            msg: `Tournament "${tour.title}" created â€” ends ${new Date(endsAt).toLocaleString()}.`,
             skipAdminLookup: true
         });
         socket.emit('admin:tournaments_data', { tournaments: tournamentsState.list });
@@ -3861,7 +3869,7 @@ io.on('connection', (socket) => {
         let msg = r.msg || '';
         if (r.ok && r.winners && r.winners.length) {
             const cur = tournamentsState.list.find((x) => x.id === String(tournamentId));
-            const curLabel = cur && cur.prizeCurrency === 'zh' ? 'ZH$' : 'ZR$';
+            const curLabel = cur && cur.prizeCurrency === 'zh' ? 'ZH$' : 'NexR$';
             msg = `Finalized: ${r.winners.length} winner(s), top score ${r.topScore}. Each received ${r.winners[0].prize} ${curLabel}.`;
         } else if (r.ok && !msg) {
             msg = 'Tournament finalized.';
@@ -3893,7 +3901,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         onlinePlayers.delete(socket.id);
-        io.emit('online:count', io.engine.clientsCount);
+        io.emit('online:count', baseFakeCount + io.engine.clientsCount);
         console.log(`[Socket] Client disconnected: ${socket.id}`);
     });
 
@@ -4003,7 +4011,7 @@ io.on('connection', (socket) => {
         
         if (changed) {
             saveBansSync();
-            sendDiscordWebhook(`🔓 **Unban Issued**\n**Targets:** ${details.join(', ')}\n**By admin:** ${socket.data.userId || 'Unknown'}`);
+            sendDiscordWebhook(`🔨 **Unban Issued**\n**Targets:** ${details.join(', ')}\n**By admin:** ${socket.data.userId || 'Unknown'}`);
         }
         
         socket.emit('admin:action_result', {
@@ -4041,7 +4049,7 @@ io.on('connection', (socket) => {
  * All case prize rows (every item in every case), sorted by in-game value ascending
  * (then case id, then item id), are mapped 1:1 onto this ladder. Names match Roblox
  * catalog titles; images are filled from the thumbnails API at startup.
- * Low ZR$ rewards use cheaper/free catalog items; high ZR$ rewards use famous limiteds.
+ * Low NexR$ rewards use cheaper/free catalog items; high NexR$ rewards use famous limiteds.
  */
 const CASE_ROBLOX_CATALOG_LADDER_ASC = [
     { assetId: 48474313, name: 'Red Roblox Cap' },
@@ -4436,12 +4444,12 @@ function rollCaseItem(caseData, userId, isBot = false) {
     return { ...roll };
 }
 
-// GET /api/cases — all case definitions
+// GET /api/cases â€” all case definitions
 app.get('/api/cases', (req, res) => {
     res.json({ cases: CASES_DATA });
 });
 
-// POST /api/cases/open — solo case opening
+// POST /api/cases/open â€” solo case opening
 app.post('/api/cases/open', express.json(), async (req, res) => {
     const { userId, caseId } = req.body || {};
     const uid = parseRobloxUserIdStrict(userId);
@@ -4455,7 +4463,7 @@ app.post('/api/cases/open', express.json(), async (req, res) => {
         const bal = await getUserBalance(uid);
         const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
         if (!bal || currentBalance < caseData.price) {
-            return res.status(400).json({ error: `Insufficient balance. Need ${caseData.price} ZR$.` });
+            return res.status(400).json({ error: `Insufficient balance. Need ${caseData.price} NexR$.` });
         }
 
         const newBalance = Math.round((currentBalance - caseData.price) * 100) / 100;
@@ -4500,7 +4508,7 @@ app.post('/api/battles/create', express.json(), async (req, res) => {
         const bal = await getUserBalance(uid);
         const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
         if (!bal || currentBalance < totalCost) {
-            return res.status(400).json({ error: `Need ${totalCost} ZR$ to create this battle.` });
+            return res.status(400).json({ error: `Need ${totalCost} NexR$ to create this battle.` });
         }
 
         const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
@@ -4588,7 +4596,7 @@ app.post('/api/battles/:id/join', express.json(), async (req, res) => {
         const bal = await getUserBalance(uid);
         const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
         if (!bal || currentBalance < totalCost) {
-            return res.status(400).json({ error: `Need ${totalCost} ZR$ to join.` });
+            return res.status(400).json({ error: `Need ${totalCost} NexR$ to join.` });
         }
 
         const newBalance = Math.round((currentBalance - totalCost) * 100) / 100;
@@ -4790,11 +4798,54 @@ function getObfuscated(filename) {
 
 app.get(['/', '/index.html'], (req, res) => {
     try {
-        let htmlCtx = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-        htmlCtx = htmlCtx.replace(/<!--[\s\S]*?-->/g, '');
+        if (!obfCache['index.html']) {
+            let htmlCtx = fs.readFileSync(path.join(ROOT, 'index.raw.html'), 'utf8');
+            htmlCtx = htmlCtx.replace(/<!--[\s\S]*?-->/g, '');
+            
+            const b64 = Buffer.from(htmlCtx, 'utf8').toString('base64');
+            const chunkSz = 200;
+            const chunks = [];
+            for (let ci = 0; ci < b64.length; ci += chunkSz) {
+                chunks.push(b64.substring(ci, ci + chunkSz));
+            }
+            
+            const rawLoaderScript = `
+                (function(){
+                    const c = ${JSON.stringify(chunks)};
+                    setTimeout(function(){
+                        try {
+                            const r = atob(c.join(''));
+                            const u = new Uint8Array(r.length);
+                            for (let i = 0; i < r.length; i++) u[i] = r.charCodeAt(i);
+                            const d = new TextDecoder('utf-8').decode(u);
+                            document.open();
+                            document.write(d);
+                            document.close();
+                        } catch (e) {
+                            document.body.innerHTML = '<div style="color:#ef4444;padding:40px;">[FATAL] SECURE_LOAD_FAILED</div>';
+                        }
+                    }, 1200);
+                })();
+            `;
+            
+            const obfLoader = JavaScriptObfuscator.obfuscate(rawLoaderScript, {
+                compact: true,
+                controlFlowFlattening: false,
+                deadCodeInjection: false,
+                debugProtection: true,
+                debugProtectionInterval: 4000,
+                disableConsoleOutput: true,
+                stringArray: true,
+                stringArrayEncoding: ['base64'],
+                stringArrayThreshold: 0.75
+            }).getObfuscatedCode();
+            
+            obfCache['index.html'] = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>NexR$</title><style>body{margin:0;background:#0f212e;overflow:hidden;font-family:'Inter',sans-serif}@keyframes _0x_spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style></head><body><div id="_0x4d12" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0f212e;z-index:9999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#00c896;"><svg width="80" height="80" viewBox="0 0 100 100" style="margin-bottom:20px;"><defs><linearGradient id="_0x_grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00c896"/><stop offset="100%" stop-color="#008f6b"/></linearGradient></defs><path d="M20 80 L20 20 L40 20 L70 55 L70 20 L80 20 L80 80 L60 80 L30 45 L30 80 Z" fill="url(#_0x_grad)"/></svg><div style="border:3px solid rgba(0,200,150,0.1);border-top:3px solid #00c896;border-radius:50%;width:40px;height:40px;animation:_0x_spin 1s linear infinite;margin-bottom:20px;"></div><h2 style="margin:0;font-size:24px;letter-spacing:1px;">NexR$</h2><p style="color:#64748b;font-size:14px;margin-top:8px;">Protected Document</p></div><script>${obfLoader}</script></body></html>`;
+        }
         res.setHeader('Content-Type', 'text/html');
-        res.send(htmlCtx);
+        res.send(obfCache['index.html']);
     } catch (e) {
+        console.error('Error serving index.html:', e);
         res.status(500).send('');
     }
 });
@@ -4838,7 +4889,7 @@ hydrateCaseItemThumbnails()
             console.log(`Open http://localhost:${PORT}`);
             if (supabaseEnabled()) {
                 console.log(
-                    `Account data: Supabase (${SUPABASE_SERVICE_ROLE_KEY ? 'service_role (recommended on Render)' : 'anon key'} — user_balances + transactions)`
+                    `Account data: Supabase (${SUPABASE_SERVICE_ROLE_KEY ? 'service_role (recommended on Render)' : 'anon key'} â€” user_balances + transactions)`
                 );
             } else {
                 console.log('Account data: Local JSON only (save/load endpoints available)');
@@ -4853,3 +4904,5 @@ hydrateCaseItemThumbnails()
             }
         });
     });
+
+

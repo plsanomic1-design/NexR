@@ -1,6 +1,6 @@
-/**
+﻿/**
  * Vercel: POST /api/gamepass-deposit-claim
- * body: { userId, save, gamePassId } — credits ZR$ when Roblox reports ownership of that pass (whitelist).
+ * body: { userId, save, gamePassId } â€” credits NexR$ when Roblox reports ownership of that pass (whitelist).
  */
 const https = require('https');
 const fs = require('fs').promises;
@@ -158,3 +158,4 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, save, credited: credit });
 };
+
