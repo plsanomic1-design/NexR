@@ -3720,15 +3720,29 @@ io.on('connection', (socket) => {
         if (!socket.isAdminMod) return;
 
         try {
-            let save = await readAccountJson(targetUserId);
+            const tid = parseRobloxNumericId(targetUserId);
+            if (tid == null || tid <= 0) {
+                return socket.emit('admin:action_result', { ok: false, msg: 'Invalid user id.' });
+            }
+
+            let save = await readAccountJson(tid);
             if (!save) {
-                // If they are local-only and online, we can still push a remote sync
                 let inMem = null;
                 for (const p of onlinePlayers.values()) {
-                    if (String(p.userId) === String(targetUserId)) inMem = p;
+                    const pid = parseRobloxNumericId(p.userId);
+                    if (pid === tid || String(p.userId) === String(targetUserId)) {
+                        inMem = p;
+                        break;
+                    }
                 }
                 if (inMem) {
-                    save = { ...inMem, balance: inMem.balance || 0, balanceZh: inMem.balanceZh || 0, isLocalOnly: true };
+                    save = {
+                        ...inMem,
+                        robloxUserId: tid,
+                        balance: typeof inMem.balance === 'number' ? inMem.balance : 0,
+                        balanceZh: typeof inMem.balanceZh === 'number' ? inMem.balanceZh : 0,
+                        isLocalOnly: true
+                    };
                 } else {
                     return socket.emit('admin:action_result', { ok: false, msg: 'User not found in DB or online.' });
                 }
@@ -3736,21 +3750,41 @@ io.on('connection', (socket) => {
 
             if (typeof newBalance === 'number' && newBalance >= 0) save.balance = newBalance;
             if (typeof newBalanceZh === 'number' && newBalanceZh >= 0) save.balanceZh = newBalanceZh;
-            
-            // Only try to physically save if they actually have DB records / configured DB
-            if (!save.isLocalOnly) {
-                await persistAccountSave(targetUserId, save);
+
+            if (supabaseEnabled()) {
+                if (!save.isLocalOnly) {
+                    const persistRes = await persistAccountSave(tid, save);
+                    if (!persistRes.ok) {
+                        return socket.emit('admin:action_result', {
+                            ok: false,
+                            msg: `Database save failed (${persistRes.step || 'unknown'}): ${persistRes.detail || 'check Render logs & Supabase RLS'}.`,
+                            targetUserId: String(tid),
+                            skipAdminLookup: true
+                        });
+                    }
+                } else {
+                    // Was skipping persist for "local only" users — balance never hit Supabase, so games saw no row / errors.
+                    const balRes = await updateUserBalance(tid, num(save.balance, 0), num(save.balanceZh, 0));
+                    if (!balRes.ok) {
+                        return socket.emit('admin:action_result', {
+                            ok: false,
+                            msg: `Could not write balance (${balRes.step || 'unknown'}): ${balRes.detail || 'check SUPABASE_SERVICE_ROLE_KEY and user_balances policies'}.`,
+                            targetUserId: String(tid),
+                            skipAdminLookup: true
+                        });
+                    }
+                }
             }
 
-            emitBalanceRemoteSync(io, targetUserId, save);
+            emitBalanceRemoteSync(io, tid, save);
 
             socket.emit('admin:action_result', {
                 ok: true,
-                msg: `Balance updated: RoBet ${save.balance.toFixed(2)}`,
-                targetUserId: String(targetUserId),
+                msg: `Balance updated: RoBet ${Number(save.balance).toFixed(2)}`,
+                targetUserId: String(tid),
                 skipAdminLookup: true
             });
-            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set balance of ${targetUserId} to RoBet${save.balance}`);
+            console.log(`[Admin] ${socket.data.userId || 'Unknown'} set balance of ${tid} to RoBet ${save.balance}`);
         } catch (e) {
             socket.emit('admin:action_result', { ok: false, msg: 'Error updating balance.' });
         }
