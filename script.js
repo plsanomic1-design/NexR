@@ -3489,7 +3489,7 @@ async function createDepositGamepass() {
 
     } finally {
         _isCreatingDeposit = false;
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> &nbsp;Generate Gamepass'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Deposit'; }
     }
 }
 
