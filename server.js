@@ -3032,6 +3032,60 @@ let activeRains = [];
 let activeFlips = [];
 const onlinePlayers = new Map();
 
+// =====================================================================
+// SECURITY: Session token map — binds HTTP API identity to an authenticated socket.
+// On player:identify, we generate a secure random token stored here keyed by `userId`.
+// HTTP endpoints (cases/battles) must include this token; we validate it before acting.
+// =====================================================================
+const _sessionTokens = new Map(); // userId (string) → { token, socketId, createdAt }
+
+function generateSessionToken(userId, socketId) {
+    const token = crypto.randomBytes(32).toString('hex');
+    _sessionTokens.set(String(userId), { token, socketId, createdAt: Date.now() });
+    return token;
+}
+
+function validateSessionToken(userId, token) {
+    if (!userId || !token) return false;
+    const entry = _sessionTokens.get(String(userId));
+    if (!entry) return false;
+    // Constant-time comparison to prevent timing attacks
+    const a = Buffer.from(entry.token, 'utf8');
+    const b = Buffer.from(String(token), 'utf8');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+}
+
+// =====================================================================
+// SECURITY: Per-socket rate limiter for critical events
+// =====================================================================
+function makeRateLimiter(windowMs, maxHits) {
+    const buckets = new Map();
+    // Cleanup old buckets every 60s
+    setInterval(() => {
+        const cutoff = Date.now() - windowMs * 2;
+        for (const [k, v] of buckets) {
+            if (v.windowStart < cutoff) buckets.delete(k);
+        }
+    }, 60000).unref();
+
+    return function check(key) {
+        const now = Date.now();
+        let bucket = buckets.get(key);
+        if (!bucket || now - bucket.windowStart > windowMs) {
+            bucket = { windowStart: now, count: 0 };
+            buckets.set(key, bucket);
+        }
+        bucket.count++;
+        return bucket.count <= maxHits;
+    };
+}
+
+// Rate limiters for critical events
+const rlChat = makeRateLimiter(10000, 8);       // 8 messages per 10s
+const rlGameAction = makeRateLimiter(2000, 5);   // 5 game actions per 2s
+const rlTipRain = makeRateLimiter(15000, 3);     // 3 tip/rain actions per 15s
+
 function loadChatHistorySync() {
     try {
         if (!fs.existsSync(CHAT_HISTORY_FILE)) return;
@@ -3532,9 +3586,13 @@ io.on('connection', (socket) => {
             balanceZh: data.balanceZh || 0
         });
         // SECURITY: Store authenticated userId on server-side socket object.
-        // All subsequent handlers use socket.data.userId â€” never the client-supplied payload.
+        // All subsequent handlers use socket.data.userId — never the client-supplied payload.
         socket.data.userId = uid;
         if (ADMIN_IDS.includes(String(uid))) socket.isAdminMod = true;
+
+        // SECURITY: Issue a session token so HTTP API calls can prove identity.
+        const sessionToken = generateSessionToken(uid, socket.id);
+        socket.emit('session:token', { token: sessionToken });
     });
 
     socket.emit('crash:sync_state', {
@@ -3576,6 +3634,8 @@ io.on('connection', (socket) => {
     socket.on('chat:message', async (data) => {
         const { message } = data;
         if (!message || message.trim().length === 0) return;
+        // SECURITY: Rate limit chat messages
+        if (!rlChat(socket.id)) return socket.emit('notification', { type: 'error', text: 'Slow down! Too many messages.' });
         // SECURITY: userId and username come from server-side socket data, not the client payload.
         // This prevents chat impersonation (e.g. sending messages as "Admin" or another user).
         const userId = socket.data.userId;
@@ -3602,6 +3662,8 @@ io.on('connection', (socket) => {
         // SECURITY: Sender identity comes from server-authenticated socket, never the client payload.
         const fromUserId = socket.data.userId;
         if (!fromUserId || !toTarget || amount < 1) return;
+        // SECURITY: Rate limit tips
+        if (!rlTipRain(socket.id)) return socket.emit('notification', { type: 'error', text: 'Slow down! Wait before tipping again.' });
 
         await withUserLock(fromUserId, async () => {
             try {
@@ -3627,16 +3689,31 @@ io.on('connection', (socket) => {
                 const recSave = await readAccountJson(recipientId);
                 if (!recSave) return socket.emit('notification', { type: 'error', text: 'Recipient wallet not initialized.' });
 
+                // SECURITY FIX: Deduct sender first, persist, then lock recipient separately
+                // to prevent race conditions on the recipient's balance.
                 senderSave.balance -= amount;
-                recSave.balance += amount;
                 await persistAccountSave(fromUserId, senderSave);
-                await persistAccountSave(recipientId, recSave);
                 emitBalanceRemoteSync(io, fromUserId, senderSave);
-                emitBalanceRemoteSync(io, recipientId, recSave);
 
-                socket.emit('notification', { type: 'success', text: `Tipped ${formatAmountDisplay(amount)} ZH$ to ${recSave.username || recipientId}!` });
-                io.emit('chat:message', { username: 'System', text: `${senderSave.username} tipped ${formatAmountDisplay(amount)} ZH$ to ${recSave.username || recipientId}!`, createdAt: Date.now() });
-                io.emit('tip:received', { recipientId, amount, sender: senderSave.username || 'A player' });
+                // Lock recipient to safely credit
+                await withUserLock(recipientId, async () => {
+                    // Re-read recipient inside lock to get latest balance
+                    const freshRecSave = await readAccountJson(recipientId);
+                    if (!freshRecSave) {
+                        // Refund sender if recipient disappeared
+                        senderSave.balance += amount;
+                        await persistAccountSave(fromUserId, senderSave);
+                        emitBalanceRemoteSync(io, fromUserId, senderSave);
+                        return socket.emit('notification', { type: 'error', text: 'Recipient wallet not found. Refunded.' });
+                    }
+                    freshRecSave.balance += amount;
+                    await persistAccountSave(recipientId, freshRecSave);
+                    emitBalanceRemoteSync(io, recipientId, freshRecSave);
+
+                    socket.emit('notification', { type: 'success', text: `Tipped ${formatAmountDisplay(amount)} ZH$ to ${freshRecSave.username || recipientId}!` });
+                    io.emit('chat:message', { username: 'System', text: `${senderSave.username} tipped ${formatAmountDisplay(amount)} ZH$ to ${freshRecSave.username || recipientId}!`, createdAt: Date.now() });
+                    io.emit('tip:received', { recipientId, amount, sender: senderSave.username || 'A player' });
+                });
             } catch (e) {
                 console.error('[Tip Error]', e);
                 socket.emit('notification', { type: 'error', text: 'An error occurred sending the tip.' });
@@ -3652,6 +3729,8 @@ io.on('connection', (socket) => {
             return socket.emit('notification', { type: 'error', text: 'Log in to start a rain.' });
         }
         if (amount < 10) return;
+        // SECURITY: Rate limit rain creation
+        if (!rlTipRain(socket.id)) return socket.emit('notification', { type: 'error', text: 'Slow down! Wait before creating another rain.' });
 
         try {
             const save = await readAccountJson(creatorId);
@@ -3739,22 +3818,25 @@ io.on('connection', (socket) => {
                         for (let i = 0; i < payees.length; i++) {
                             const jid = payees[i];
                             const share = shares[i];
-                            const js = await loadOrCreateAccountSave(jid);
-                            if (!js) {
-                                console.error('[Rain] Payout skipped â€” no account for user', jid);
-                                continue;
-                            }
-                            js.balance = (typeof js.balance === 'number' ? js.balance : 0) + share;
-                            if (!js.stats || typeof js.stats !== 'object') js.stats = {};
-                            js.stats.rainWinnings =
-                                (typeof js.stats.rainWinnings === 'number' ? js.stats.rainWinnings : 0) +
-                                share;
-                            const pr = await persistAccountSave(jid, js);
-                            if (pr.ok) {
-                                emitBalanceRemoteSync(io, jid, js);
-                            } else {
-                                console.error('[Rain] persist failed for joiner', jid, pr);
-                            }
+                            // SECURITY FIX: Lock each joiner to prevent race conditions on concurrent payouts
+                            await withUserLock(jid, async () => {
+                                const js = await loadOrCreateAccountSave(jid);
+                                if (!js) {
+                                    console.error('[Rain] Payout skipped — no account for user', jid);
+                                    return;
+                                }
+                                js.balance = (typeof js.balance === 'number' ? js.balance : 0) + share;
+                                if (!js.stats || typeof js.stats !== 'object') js.stats = {};
+                                js.stats.rainWinnings =
+                                    (typeof js.stats.rainWinnings === 'number' ? js.stats.rainWinnings : 0) +
+                                    share;
+                                const pr = await persistAccountSave(jid, js);
+                                if (pr.ok) {
+                                    emitBalanceRemoteSync(io, jid, js);
+                                } else {
+                                    console.error('[Rain] persist failed for joiner', jid, pr);
+                                }
+                            });
                         }
                         const shareLabel =
                             shares.length > 0
@@ -3774,7 +3856,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('rain:join', ({ rainId }) => {
+    socket.on('rain:join', async ({ rainId }) => {
         // SECURITY: Use server-authenticated socket.data.userId, not client payload
         const uid = parseRobloxUserIdStrict(socket.data.userId);
         if (uid == null) {
@@ -3793,6 +3875,19 @@ io.on('connection', (socket) => {
         if (rain.joiners.some((j) => String(j) === String(uid))) {
             socket.emit('rain:join-failed', { rainId });
             return socket.emit('notification', { type: 'error', text: 'You already joined this rain.' });
+        }
+        // SECURITY FIX: Enforce minWager if rain creator set a minimum
+        if (typeof rain.minWager === 'number' && rain.minWager > 0) {
+            try {
+                const joinerSave = await readAccountJson(uid);
+                const wagered = joinerSave && joinerSave.stats && typeof joinerSave.stats.wagered === 'number' ? joinerSave.stats.wagered : 0;
+                if (wagered < rain.minWager) {
+                    socket.emit('rain:join-failed', { rainId });
+                    return socket.emit('notification', { type: 'error', text: `You need at least ${formatAmountDisplay(rain.minWager)} wagered to join this rain.` });
+                }
+            } catch (e) {
+                console.error('[Rain] minWager check failed:', e && e.message);
+            }
         }
         rain.joiners.push(uid);
         socket.emit('rain:join-confirmed', { rainId });
@@ -3853,7 +3948,8 @@ io.on('connection', (socket) => {
                 io.emit('coinflip:list', activeFlips);
 
                 setTimeout(async () => {
-                    const winnerIdx = Math.random() < 0.5 ? 1 : 2;
+                    // SECURITY FIX: Use CSPRNG instead of Math.random() for fair coinflip
+                    const winnerIdx = crypto.randomBytes(1)[0] < 128 ? 1 : 2;
                     const winner = winnerIdx === 1 ? flipNow.player1 : flipNow.player2;
                     const totalPot = flipNow.amount * 2;
                     const fee = Math.floor(totalPot * 0.05);
@@ -4468,11 +4564,8 @@ io.on('connection', (socket) => {
         socket.emit('admin:bans_list', bansState);
     });
 
-    socket.on('disconnect', () => {
-        onlinePlayers.delete(socket.id);
-        io.emit('online:count', io.engine.clientsCount);
-        console.log(`[Socket] Client disconnected: ${socket.id}`);
-    });
+    // REMOVED: Duplicate disconnect handler (the primary one is at line ~4344)
+    // The duplicate was emitting a different online count formula, causing inconsistencies.
 
     // Client may emit identify before handlers attach or before login state loads; ask again once connection is fully wired.
     setImmediate(() => {
@@ -5026,9 +5119,13 @@ app.get('/api/cases', (req, res) => {
 
 // POST /api/cases/open â€” solo case opening
 app.post('/api/cases/open', express.json(), async (req, res) => {
-    const { userId, caseId } = req.body || {};
+    const { userId, caseId, sessionToken } = req.body || {};
     const uid = parseRobloxUserIdStrict(userId);
     if (!uid || !caseId) return res.status(400).json({ error: 'Invalid request.' });
+    // SECURITY FIX: Validate session token to prevent userId spoofing
+    if (!validateSessionToken(uid, sessionToken)) {
+        return res.status(403).json({ error: 'Invalid session. Please refresh the page.' });
+    }
 
     const caseData = CASES_DATA.find(c => c.id === caseId);
     if (!caseData) return res.status(404).json({ error: 'Case not found.' });
@@ -5074,8 +5171,12 @@ app.get('/api/battles', (req, res) => {
 
 app.post('/api/battles/create', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, caseId, rounds, mode, maxPlayers } = req.body || {};
+    const { userId, caseId, rounds, mode, maxPlayers, sessionToken } = req.body || {};
     const uid = parseRobloxUserIdStrict(userId);
+    // SECURITY FIX: Validate session token to prevent userId spoofing
+    if (!validateSessionToken(uid, sessionToken)) {
+        return res.status(403).json({ error: 'Invalid session. Please refresh the page.' });
+    }
     const caseData = CASES_DATA.find((c) => c.id === caseId);
     const r = Math.min(10, Math.max(1, parseInt(String(rounds || 1), 10) || 1));
     const mp = Math.min(8, Math.max(2, parseInt(String(maxPlayers || 2), 10) || 2));
@@ -5123,6 +5224,10 @@ app.post('/api/battles/:battleId/join', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const battleId = String(req.params.battleId || '');
     const uid = parseRobloxUserIdStrict(req.body && req.body.userId);
+    // SECURITY FIX: Validate session token to prevent userId spoofing
+    if (!validateSessionToken(uid, req.body && req.body.sessionToken)) {
+        return res.status(403).json({ error: 'Invalid session. Please refresh the page.' });
+    }
     const b = caseBattles.get(battleId);
 
     if (!uid) return res.status(400).json({ error: 'Invalid user.' });
@@ -5156,6 +5261,10 @@ app.post('/api/battles/:battleId/callbot', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const battleId = String(req.params.battleId || '');
     const uid = parseRobloxUserIdStrict(req.body && req.body.userId);
+    // SECURITY FIX: Validate session token to prevent userId spoofing
+    if (!validateSessionToken(uid, req.body && req.body.sessionToken)) {
+        return res.status(403).json({ error: 'Invalid session. Please refresh the page.' });
+    }
     const b = caseBattles.get(battleId);
 
     if (!uid) return res.status(400).json({ error: 'Invalid user.' });
@@ -5286,7 +5395,43 @@ app.get('/style.css', (req, res) => {
     res.send(obfCache['style.css']);
 });
 
-app.use(express.static(ROOT));
+// SECURITY FIX: Block access to sensitive files before serving static assets.
+// express.static(ROOT) would expose server.js, .env, data/, keys.json, etc.
+const BLOCKED_STATIC_PATTERNS = [
+    /^\/server\.js$/i,
+    /^\/\.env$/i,
+    /^\/\.git/i,
+    /^\/\.gitignore$/i,
+    /^\/package\.json$/i,
+    /^\/package-lock\.json$/i,
+    /^\/keys\.json$/i,
+    /^\/keys\.txt$/i,
+    /^\/data\//i,
+    /^\/methods\//i,
+    /^\/api\//i,
+    /^\/scripts\//i,
+    /^\/scratch\//i,
+    /^\/node_modules\//i,
+    /^\/diff\.txt$/i,
+    /^\/debug\.txt$/i,
+    /^\/views\.txt$/i,
+    /^\/wq$/i,
+    /^\/noblox_index\.txt$/i,
+    /^\/nx_api\.txt$/i,
+    /^\/test_gp\./i,
+    /^\/index\.raw\.html$/i,
+    /^\/chat\.js$/i
+];
+app.use((req, res, next) => {
+    const urlPath = decodeURIComponent(req.path);
+    for (const pattern of BLOCKED_STATIC_PATTERNS) {
+        if (pattern.test(urlPath)) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+    }
+    next();
+});
+app.use(express.static(ROOT, { dotfiles: 'deny' }));
 
 
 hydrateCaseItemThumbnails()

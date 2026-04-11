@@ -4234,7 +4234,15 @@ const socket =
             : io(_socketIoOpts)
         : null;
 
+window._sessionToken = null;
+
 if(socket) {
+    socket.on('session:token', (data) => {
+        if (data && data.token) {
+            window._sessionToken = data.token;
+        }
+    });
+
     socket.on('chat-msg', (data) => {
         if(data.text.startsWith('!rain')) {
             const modal = document.getElementById('rain-modal');
@@ -6812,7 +6820,7 @@ async function cbConfirmCreate() {
     const maxPlayers = CB_FORMAT_PLAYERS[_cbBattleFormat] || 2;
     const { ok, data } = await cbApiFetch('/api/battles/create', {
         method: 'POST',
-        body: JSON.stringify({ userId: robloxUserId, caseId: _cbCreateCaseId, rounds: _cbCreateRounds, mode: _cbCreateMode, maxPlayers })
+        body: JSON.stringify({ userId: robloxUserId, caseId: _cbCreateCaseId, rounds: _cbCreateRounds, mode: _cbCreateMode, maxPlayers, sessionToken: window._sessionToken })
     });
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-swords"></i> Create Battle';
@@ -6866,7 +6874,7 @@ async function cbOpenCaseModal(caseId) {
     // Request roll from server first
     const { ok, data } = await cbApiFetch('/api/cases/open', {
         method: 'POST',
-        body: JSON.stringify({ userId: robloxUserId, caseId })
+        body: JSON.stringify({ userId: robloxUserId, caseId, sessionToken: window._sessionToken })
     });
 
     if (!ok) {
@@ -7174,7 +7182,7 @@ async function cbJoinBattle(battleId) {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Joining...'; }
     const { ok, data } = await cbApiFetch(`/api/battles/${battleId}/join`, {
         method: 'POST',
-        body: JSON.stringify({ userId: robloxUserId })
+        body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
     });
     if (!ok) return alert(data.error || 'Could not join.');
     cbSoundEngine.click();
@@ -7186,7 +7194,7 @@ async function cbCallBot(battleId) {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-robot"></i> Calling...'; }
     const { ok, data } = await cbApiFetch(`/api/battles/${battleId}/callbot`, {
         method: 'POST',
-        body: JSON.stringify({ userId: robloxUserId })
+        body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
     });
     if (!ok) return alert(data.error || 'Could not call bot.');
     cbSoundEngine.click();
