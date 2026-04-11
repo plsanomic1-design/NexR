@@ -463,7 +463,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     GSM.update('mines', { revealed: mRevealed, revealedTiles: mRevealedTiles, multiplier: mMultiplier });
                     
                     if(mRevealed + bombs === 25) {
-                        endMines(true); // auto cashout if all found
+                        // Full clear: server only pays on /cashout — same as manual cashout button
+                        minesPlayBtn.disabled = true;
+                        minesPlayBtn.textContent = 'Cashing out...';
+                        try {
+                            const resCo = await fetch('/api/game/mines/cashout', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: robloxUserId, revealed: mRevealed })
+                            });
+                            const dataCo = await resCo.json();
+                            if (dataCo.logic) mGrid = dataCo.logic;
+                        } catch (e) {
+                            console.error('[Mines auto cashout]', e);
+                        }
+                        endMines(true);
                     }
                 }
             } catch(e) {
@@ -709,6 +723,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     rElements[curRow-1].classList.add('passed');
                     
                     if(curRow >= rows) {
+                        // Top row cleared: server only pays on /cashout — same as manual cashout
+                        tPlayBtn.disabled = true;
+                        tPlayBtn.textContent = 'Cashing out...';
+                        try {
+                            await fetch('/api/game/towers/cashout', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: robloxUserId, curRow })
+                            });
+                        } catch (e) {
+                            console.error('[Towers auto cashout]', e);
+                        }
                         endTowers(true);
                     } else {
                         rElements[curRow].classList.add('active-row');
