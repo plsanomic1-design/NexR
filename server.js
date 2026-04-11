@@ -3787,7 +3787,8 @@ io.on('connection', (socket) => {
                         }
                     }
                     io.emit('chat:message', {
-                        username: 'System',
+                        userId: r.creatorUserId,
+                        username: r.creator,
                         text: 'Rain ended with no joiners. Refunded.',
                         createdAt: Date.now()
                     });
@@ -3810,7 +3811,8 @@ io.on('connection', (socket) => {
                             }
                         }
                         io.emit('chat:message', {
-                            username: 'System',
+                            userId: r.creatorUserId,
+                            username: r.creator,
                             text: 'Rain had no valid joiners; refunded to host.',
                             createdAt: Date.now()
                         });
@@ -3844,7 +3846,8 @@ io.on('connection', (socket) => {
                                 ? `${formatAmountDisplay(shares[0])} ZH$ each`
                                 : `${formatAmountDisplay(r.amount / payees.length)} ZH$ each`;
                         io.emit('chat:message', {
-                            username: 'System',
+                            userId: r.creatorUserId,
+                            username: r.creator,
                             text: `🌧️ Rain ended! ${payees.length} player(s) split ${formatAmountDisplay(r.amount)} ZH$ (${shareLabel}).`,
                             createdAt: Date.now()
                         });
