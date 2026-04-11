@@ -80,6 +80,9 @@
             <a href="#" class="nav-item" data-view="plinko" title="Plinko">
                 <i class="fa-solid fa-sitemap"></i><span>Plinko</span>
             </a>
+            <a href="#" class="nav-item" data-view="slots" title="Slots">
+                <i class="fa-solid fa-plane"></i><span>Slots</span>
+            </a>
             <a href="#" class="nav-item" data-view="coinflip" title="Coinflip">
                 <i class="fa-solid fa-coins"></i><span>Coinflip</span>
             </a>
@@ -1482,6 +1485,57 @@
                     <div class="game-area plinko-area">
                         <canvas id="plinko-canvas" width="600" height="400"></canvas>
                         <div id="plinko-buckets" class="plinko-buckets"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-slots" class="view">
+                <div class="slots-page-header">
+                    <h1 class="slots-page-title"><i class="fa-solid fa-plane" style="color:var(--accent);"></i> Slots</h1>
+                    <p class="slots-page-sub">Provably styled originals &amp; flight games. RNG rounds — no manual cash-out where noted.</p>
+                </div>
+                <div class="game-layout avia-layout">
+                    <div class="bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active" type="button">Avia Masters</button>
+                        </div>
+                        <p class="avia-disclaimer">BGaming-style flight game: each round is decided by server RNG. There is <strong>no</strong> cash-out button — the plane lands or crashes.</p>
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
+                                <input type="number" id="avia-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button type="button" onclick="halfBetInput('avia-bet-input')">1/2</button>
+                                    <button type="button" onclick="doubleBetInput('avia-bet-input')">2x</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Flight speed</label>
+                            <div class="avia-speed-row" role="group" aria-label="Flight speed">
+                                <button type="button" class="avia-speed-btn" data-avia-speed="0" title="Slowest (turtle)"><i class="fa-solid fa-hourglass-start"></i></button>
+                                <button type="button" class="avia-speed-btn" data-avia-speed="1" title="Normal"><i class="fa-solid fa-wind"></i></button>
+                                <button type="button" class="avia-speed-btn active" data-avia-speed="2" title="Fast"><i class="fa-solid fa-gauge-high"></i></button>
+                                <button type="button" class="avia-speed-btn" data-avia-speed="3" title="Fastest"><i class="fa-solid fa-bolt"></i></button>
+                            </div>
+                            <p class="avia-speed-hint">Turtle → lightning: animation only; odds unchanged.</p>
+                        </div>
+                        <button class="btn-primary" id="avia-play-btn" type="button" style="width:100%; margin-top:auto; padding:15px;">Play round</button>
+                    </div>
+                    <div class="game-area avia-area">
+                        <div class="avia-sky">
+                            <div class="avia-ship" aria-hidden="true"></div>
+                            <div class="avia-carrier" aria-hidden="true"></div>
+                            <div class="avia-plane-wrap" id="avia-plane-wrap">
+                                <span class="avia-plane" id="avia-plane-icon"><i class="fa-solid fa-paper-plane"></i></span>
+                            </div>
+                            <div class="avia-mult-panel">
+                                <div class="avia-mult-label">Round multiplier</div>
+                                <div class="avia-mult-value" id="avia-mult-display">1.00x</div>
+                                <div class="avia-status" id="avia-status-text">Set your bet and press Play. Prizes add (+1x–+10x), boosts multiply (2x–5x), rockets halve your running total.</div>
+                            </div>
+                        </div>
+                        <div class="avia-log" id="avia-event-log" aria-live="polite"></div>
                     </div>
                 </div>
             </div>

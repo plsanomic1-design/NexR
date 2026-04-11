@@ -1081,7 +1081,8 @@ const LIVE_FEED_GAME_KEYS = new Set([
     'mines',
     'towers',
     'plinko',
-    'rooms'
+    'rooms',
+    'aviamasters'
 ]);
 
 function sanitizeLiveFeedUsername(u) {
@@ -1439,7 +1440,101 @@ app.post('/api/game/plinko', express.json(), async (req, res) => {
     });
 });
 
+/**
+ * Avia Masters — server-side RNG round (no manual cash-out). Outcome + event log for client animation.
+ * CUS: forceLoss / forceWin bias terminal rolls like dice/plinko.
+ */
+function simulateAviaMastersRound(forceLoss, forceWin) {
+    let mult = 1;
+    const events = [];
+    const maxSteps = 48;
+    for (let step = 0; step < maxSteps; step++) {
+        let crashP = forceLoss ? 0.26 : 0.085;
+        let landP = forceWin ? 0.22 : 0.065;
+        if (mult >= 75) landP += 0.12;
+        if (step < 2) crashP *= 0.45;
+        const r = Math.random();
+        if (r < crashP) {
+            events.push({ type: 'crash' });
+            return { won: false, mult: 0, events, tier: 'loss' };
+        }
+        if (r < crashP + landP) {
+            const fm = Math.min(Math.max(0.5, mult), 80);
+            events.push({ type: 'land', mult: fm });
+            const tier =
+                fm >= 50 ? 'superMega' : fm >= 20 ? 'mega' : fm >= 8 ? 'big' : 'win';
+            return { won: true, mult: fm, events, tier };
+        }
+        const r2 = Math.random();
+        if (r2 < 0.34) {
+            const adds = [1, 1, 2, 2, 2, 5, 5, 10];
+            const add = adds[Math.floor(Math.random() * adds.length)];
+            mult += add;
+            events.push({ type: 'prize', add });
+        } else if (r2 < 0.52) {
+            const boosts = [2, 2, 3, 4, 5];
+            const b = boosts[Math.floor(Math.random() * boosts.length)];
+            mult *= b;
+            events.push({ type: 'boost', mult: b });
+        } else if (r2 < 0.68) {
+            const before = mult;
+            mult = Math.max(0.35, mult * 0.5);
+            events.push({ type: 'rocket', before, after: mult });
+        } else {
+            events.push({ type: 'cruise' });
+        }
+        mult = Math.min(Math.max(0.35, mult), 130);
+    }
+    if (forceLoss) {
+        events.push({ type: 'crash' });
+        return { won: false, mult: 0, events, tier: 'loss' };
+    }
+    const fm = Math.min(Math.max(0.5, mult), 80);
+    events.push({ type: 'land', mult: fm });
+    const tier = fm >= 50 ? 'superMega' : fm >= 20 ? 'mega' : fm >= 8 ? 'big' : 'win';
+    return { won: true, mult: fm, events, tier };
+}
 
+app.post('/api/game/aviamasters/play', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, bet, speed } = req.body || {};
+    const speedIdx = Math.max(0, Math.min(3, parseInt(speed, 10) || 1));
+
+    await withUserLock(userId, async () => {
+        const betVal = num(bet, 0);
+        if (betVal > 0 && supabaseEnabled()) {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), {
+                balance: deduct.newBalance,
+                balanceZh: deduct.balanceZh,
+                stats: {}
+            });
+        }
+
+        const forceLoss = getCusState(userId).check();
+        const forceWin = getCusState(userId).checkWin();
+        const round = simulateAviaMastersRound(forceLoss, forceWin);
+
+        let winAmount = 0;
+        if (betVal > 0 && supabaseEnabled()) {
+            winAmount = round.won ? Math.round(betVal * round.mult * 100) / 100 : 0;
+            await creditUserWin(userId, winAmount);
+        }
+
+        if (round.won) getCusState(userId).recordWin(round.mult >= 3);
+        else getCusState(userId).recordLoss();
+
+        res.json({
+            ok: true,
+            won: round.won,
+            finalMultiplier: round.mult,
+            tier: round.tier,
+            events: round.events,
+            speed: speedIdx
+        });
+    });
+});
 
 // REMOVED: /api/game/record-result was a public endpoint that allowed console manipulation of game outcomes.
 

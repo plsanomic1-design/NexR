@@ -924,6 +924,154 @@ document.addEventListener('DOMContentLoaded', () => {
         updateFromSlider();
     }
 
+    // Avia Masters (Slots) — server RNG + CUS; client replays event log (no manual cash-out)
+    const aviaPlayBtn = document.getElementById('avia-play-btn');
+    if (aviaPlayBtn) {
+        const aviaBetInp = document.getElementById('avia-bet-input');
+        const aviaMultEl = document.getElementById('avia-mult-display');
+        const aviaStatusEl = document.getElementById('avia-status-text');
+        const aviaLogEl = document.getElementById('avia-event-log');
+        const aviaPlaneWrap = document.getElementById('avia-plane-wrap');
+        let aviaSpeedIdx = 2;
+        const aviaDelays = [520, 340, 200, 110];
+
+        document.querySelectorAll('.avia-speed-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.avia-speed-btn').forEach((b) => b.classList.remove('active'));
+                btn.classList.add('active');
+                aviaSpeedIdx = parseInt(btn.dataset.aviaSpeed, 10) || 2;
+            });
+        });
+
+        function aviaResetUI() {
+            if (aviaMultEl) {
+                aviaMultEl.textContent = '1.00x';
+                aviaMultEl.className = 'avia-mult-value';
+            }
+            if (aviaLogEl) aviaLogEl.innerHTML = '';
+            if (aviaStatusEl) aviaStatusEl.textContent = 'Round in progress…';
+            if (aviaPlaneWrap) {
+                aviaPlaneWrap.style.left = '12%';
+                aviaPlaneWrap.style.bottom = '48%';
+                aviaPlaneWrap.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function aviaLogLine(cls, text) {
+            if (!aviaLogEl) return;
+            const d = document.createElement('div');
+            d.className = 'avia-log-line ' + cls;
+            d.textContent = text;
+            aviaLogEl.appendChild(d);
+            aviaLogEl.scrollTop = aviaLogEl.scrollHeight;
+        }
+
+        function aviaTierClass(tier) {
+            if (tier === 'superMega') return 'avia-tier-super';
+            if (tier === 'mega') return 'avia-tier-mega';
+            if (tier === 'big') return 'avia-tier-big';
+            return '';
+        }
+
+        aviaPlayBtn.addEventListener('click', async () => {
+            const bet = parseFloat(aviaBetInp && aviaBetInp.value) || 0;
+            aviaPlayBtn.disabled = true;
+            aviaResetUI();
+            try {
+                const res = await fetch('/api/game/aviamasters/play', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: robloxUserId,
+                        bet,
+                        speed: aviaSpeedIdx
+                    })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    if (aviaStatusEl) aviaStatusEl.textContent = data.error || 'Could not play. Try again.';
+                    aviaPlayBtn.disabled = false;
+                    return;
+                }
+                const ms = aviaDelays[typeof data.speed === 'number' ? data.speed : aviaSpeedIdx] || 340;
+                let runMult = 1;
+                const events = Array.isArray(data.events) ? data.events : [];
+                const progN = Math.max(events.length - 1, 1);
+                let stepIdx = 0;
+
+                function progressStep(i) {
+                    if (!aviaPlaneWrap) return;
+                    const t = progN > 0 ? i / progN : 0;
+                    aviaPlaneWrap.style.left = 12 + t * 58 + '%';
+                    aviaPlaneWrap.style.bottom = 48 - t * 32 + '%';
+                    aviaPlaneWrap.style.transform = `rotate(${-26 + t * 14}deg)`;
+                }
+
+                for (const ev of events) {
+                    await new Promise((r) => setTimeout(r, ms));
+                    progressStep(stepIdx);
+                    stepIdx++;
+
+                    if (ev.type === 'prize') {
+                        runMult += ev.add || 0;
+                        aviaLogLine('prize', `Prize +${ev.add}x  →  ${runMult.toFixed(2)}x`);
+                    } else if (ev.type === 'boost') {
+                        runMult *= ev.mult || 1;
+                        aviaLogLine('boost', `Boost ×${ev.mult}  →  ${runMult.toFixed(2)}x`);
+                    } else if (ev.type === 'rocket') {
+                        runMult = typeof ev.after === 'number' ? ev.after : runMult * 0.5;
+                        aviaLogLine('rocket', `Rocket! Halved  →  ${runMult.toFixed(2)}x`);
+                    } else if (ev.type === 'cruise') {
+                        aviaLogLine('cruise', 'In flight…');
+                    } else if (ev.type === 'crash') {
+                        if (aviaMultEl) {
+                            aviaMultEl.textContent = '—';
+                            aviaMultEl.className = 'avia-mult-value avia-lose';
+                        }
+                        aviaLogLine('crash', 'Crashed into the sea — round lost.');
+                        if (aviaStatusEl) aviaStatusEl.textContent = 'Crashed! No manual cash-out — better luck next round.';
+                        postLiveFeedRound('aviamasters', bet, 0, -bet);
+                        soundLose();
+                    } else if (ev.type === 'land') {
+                        const fm = typeof ev.mult === 'number' ? ev.mult : runMult;
+                        runMult = fm;
+                        if (aviaMultEl) {
+                            aviaMultEl.textContent = fm.toFixed(2) + 'x';
+                            aviaMultEl.className = 'avia-mult-value ' + aviaTierClass(data.tier);
+                        }
+                        const tierLabel =
+                            data.tier === 'superMega'
+                                ? 'Super Mega Win'
+                                : data.tier === 'mega'
+                                  ? 'Mega Win'
+                                  : data.tier === 'big'
+                                    ? 'Big Win'
+                                    : 'Win';
+                        aviaLogLine('land', `Landed on the carrier — ${fm.toFixed(2)}x (${tierLabel})`);
+                        if (aviaStatusEl) {
+                            aviaStatusEl.textContent = `${tierLabel}! Payout uses final multiplier (cap 80x).`;
+                        }
+                        const gross = Math.round(bet * fm * 100) / 100;
+                        postLiveFeedRound('aviamasters', bet, fm, gross);
+                        soundWin();
+                    }
+                    if (aviaMultEl && ev.type !== 'crash' && ev.type !== 'land') {
+                        aviaMultEl.textContent = runMult.toFixed(2) + 'x';
+                    }
+                }
+
+                if (aviaPlaneWrap && data.won) {
+                    aviaPlaneWrap.style.left = '78%';
+                    aviaPlaneWrap.style.bottom = '22%';
+                }
+            } catch (e) {
+                console.error(e);
+                if (aviaStatusEl) aviaStatusEl.textContent = 'Network error. Try again.';
+            }
+            aviaPlayBtn.disabled = false;
+        });
+    }
+
     // Plinko Logic
     const pPlayBtn = document.getElementById('plinko-play-btn');
     if(pPlayBtn) {
@@ -1999,7 +2147,8 @@ const GAME_FEED_META = {
     mines: { name: 'Mines', emoji: '💎' },
     towers: { name: 'Towers', emoji: '🏰' },
     plinko: { name: 'Plinko', emoji: '📊' },
-    rooms: { name: 'Rooms', emoji: '🚪' }
+    rooms: { name: 'Rooms', emoji: '🚪' },
+    aviamasters: { name: 'Avia Masters', emoji: '✈️' }
 };
 
 function escapeFeedHtml(s) {
@@ -2122,6 +2271,7 @@ document.addEventListener('DOMContentLoaded', () => {
     patchMinesBalance();
     patchTowersBalance();
     patchDiceBalance();
+    patchAviaMastersBalance();
 });
 
 function patchBlackjackBalance() {
@@ -2308,6 +2458,27 @@ function patchTowersBalance() {
         });
         tileObs.observe(tGrid, { attributes: true, subtree: true, attributeFilter: ['class'] });
     }
+}
+
+function patchAviaMastersBalance() {
+    const playBtn = document.getElementById('avia-play-btn');
+    if (!playBtn) return;
+    playBtn.addEventListener(
+        'click',
+        function (e) {
+            const bet = parseFloat(document.getElementById('avia-bet-input')?.value) || 0;
+            if (bet <= 0 || bet > roBalance) {
+                e.stopImmediatePropagation();
+                const warn = document.createElement('div');
+                warn.textContent = bet <= 0 ? 'Enter a valid bet amount!' : 'Not enough RoBet!';
+                warn.style.cssText =
+                    'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2a1515;border:1px solid var(--red);color:var(--red);padding:12px 24px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;';
+                document.body.appendChild(warn);
+                setTimeout(() => warn.remove(), 2000);
+            }
+        },
+        true
+    );
 }
 
 function patchDiceBalance() {
