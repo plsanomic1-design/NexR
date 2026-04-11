@@ -111,9 +111,6 @@
                         <i class="fa-solid fa-comments"></i>
                         <span>Chat</span>
                     </div>
-                    <div class="chat-lang-pill">
-                        <span>ðŸŒ</span><span>English</span><i class="fa-solid fa-chevron-down" style="font-size:8px;"></i>
-                    </div>
                 </div>
                 <div class="chat-header-right">
                     <span class="online-count"><i class="fa-solid fa-circle" style="color:var(--green); font-size:7px;"></i>&nbsp;<span id="chat-online-count">--</span></span>
@@ -561,25 +558,28 @@
                 </div>
 
                 <div class="dep-methods">
-                    <!-- Robux -->
                     <div class="dep-method dep-robux-new" onclick="goDepPage(2)">
-                        <img src="methods/robux.png" alt="Robux" class="dep-method-img">
-                        <div class="dep-method-label" style="font-weight:800; letter-spacing:0.5px;">R$ Gamepass</div>
+                        <div class="dep-method-label">R$ Gamepass</div>
+                        <div class="dep-icon-wrap" aria-hidden="true"><i class="fa-solid fa-cubes"></i></div>
+                        <p class="dep-method-desc">Deposit Robux via a game pass purchase on Roblox.</p>
                         <div class="dep-method-tag" style="background:var(--accent); color:#000;">Instant</div>
                     </div>
-                    <!-- Cards -->
                     <div class="dep-method dep-card" onclick="showComingSoon()">
-                        <img src="methods/credit_debit_cards.png" alt="Credit Cards" class="dep-method-img">
+                        <div class="dep-method-label">Card &amp; bank</div>
+                        <div class="dep-icon-wrap" aria-hidden="true"><i class="fa-solid fa-credit-card"></i></div>
+                        <p class="dep-method-desc">Debit / credit and local payment methods.</p>
                         <div class="dep-method-tag dep-method-tag--soon">Soon</div>
                     </div>
-                    <!-- Crypto -->
                     <div class="dep-method dep-crypto" onclick="goDepPage('crypto1')">
-                        <img src="methods/crypto.png" alt="Crypto" class="dep-method-img">
+                        <div class="dep-method-label">Cryptocurrency</div>
+                        <div class="dep-icon-wrap" aria-hidden="true"><i class="fa-brands fa-bitcoin"></i></div>
+                        <p class="dep-method-desc">BTC, ETH, USDT, SOL and many altcoins.</p>
                         <div class="dep-method-tag">Auto</div>
                     </div>
-                    <!-- Promo Code -->
                     <div class="dep-method dep-promo" onclick="showComingSoon()">
-                        <img src="methods/promo_code.png" alt="Promo Code" class="dep-method-img">
+                        <div class="dep-method-label">Promo code</div>
+                        <div class="dep-icon-wrap" aria-hidden="true"><i class="fa-solid fa-ticket"></i></div>
+                        <p class="dep-method-desc">Redeem sponsor, bonus, or campaign codes.</p>
                         <div class="dep-method-tag dep-method-tag--soon">Soon</div>
                     </div>
                 </div>
@@ -782,21 +782,29 @@
                     <button type="button" class="modal-close" onclick="closeWithdrawModal(null)" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <div class="dep-methods">
-                    <!-- Robux -->
                     <div class="dep-method dep-robux-new" onclick="goWdPage(2)">
-                        <img src="methods/robux.png" alt="Robux" class="dep-method-img">
-                        <div class="dep-method-label" style="font-weight:800; letter-spacing:0.5px;">R$ Quick</div>
-                        <div class="dep-method-tag" style="background:var(--accent); color:#000;">Fast Payout</div>
+                        <div class="dep-method-label">R$ Quick</div>
+                        <div class="dep-icon-wrap" aria-hidden="true"><i class="fa-solid fa-cubes"></i></div>
+                        <p class="dep-method-desc">Withdraw as Robux through your listed game pass.</p>
+                        <div class="dep-method-tag" style="background:var(--accent); color:#000;">Fast</div>
                     </div>
-                    <!-- Cards -->
                     <div class="dep-method dep-card" onclick="showWdComingSoon()">
-                        <img src="methods/credit_debit_cards.png" alt="Credit Cards" class="dep-method-img">
+                        <div class="dep-method-label">Card &amp; bank</div>
+                        <div class="dep-icon-wrap" aria-hidden="true"><i class="fa-solid fa-building-columns"></i></div>
+                        <p class="dep-method-desc">Bank transfer or card payout to your account.</p>
                         <div class="dep-method-tag dep-method-tag--soon">Soon</div>
                     </div>
-                    <!-- Crypto -->
                     <div class="dep-method dep-crypto" onclick="goWdPage('crypto')">
-                        <img src="methods/crypto.png" alt="Crypto" class="dep-method-img">
-                        <div class="dep-method-tag">Crypto</div>
+                        <div class="dep-method-label">Cryptocurrency</div>
+                        <div class="dep-icon-wrap" aria-hidden="true"><i class="fa-brands fa-bitcoin"></i></div>
+                        <p class="dep-method-desc">Send RoBet to your crypto wallet (many coins).</p>
+                        <div class="dep-method-tag">Network</div>
+                    </div>
+                    <div class="dep-method dep-promo" onclick="showWdComingSoon()">
+                        <div class="dep-method-label">Promo / gift</div>
+                        <div class="dep-icon-wrap" aria-hidden="true"><i class="fa-solid fa-gift"></i></div>
+                        <p class="dep-method-desc">Gift cards and partner redemption (when available).</p>
+                        <div class="dep-method-tag dep-method-tag--soon">Soon</div>
                     </div>
                 </div>
             </div>

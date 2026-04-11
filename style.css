@@ -2324,21 +2324,6 @@ body:not(.chat-hidden) .chat-sidebar {
     color: var(--text-primary);
 }
 .chat-header-title i { color: var(--accent); font-size: 13px; }
-.chat-lang-pill {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    background: var(--bg-input);
-    border: 1px solid var(--border-subtle);
-    border-radius: 100px;
-    padding: 4px 9px;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: var(--transition);
-}
-.chat-lang-pill:hover { border-color: var(--border-color); color: var(--text-primary); }
 .chat-header-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .online-count { font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 5px; }
 .chat-close-btn {
@@ -2450,15 +2435,43 @@ body:not(.chat-hidden) .chat-sidebar {
     position: relative;
     transition: var(--transition);
     overflow: hidden;
-    min-height: 152px;
+    min-height: 198px;
     display: flex;
     flex-direction: column;
 }
 .dep-method:hover { border-color: var(--accent-border); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(124,58,237,0.2); }
-.dep-method-label { font-size: 12px; font-weight: 800; margin-bottom: 12px; z-index: 2; position: relative; letter-spacing: 0.01em; }
+.dep-method-label { font-size: 12px; font-weight: 800; margin-bottom: 4px; z-index: 2; position: relative; letter-spacing: 0.01em; }
 .dep-robux .dep-method-label, .dep-robux-new .dep-method-label { color: var(--green); }
 .dep-card .dep-method-label, .dep-crypto .dep-method-label, .dep-promo .dep-method-label { color: var(--accent); }
-.dep-icon-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
+.dep-method .dep-icon-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 68px;
+    margin: 4px 0 6px;
+}
+.dep-method .dep-icon-wrap i {
+    font-size: 40px;
+    line-height: 1;
+    filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.4));
+    transition: transform 0.2s ease;
+}
+.dep-method:hover .dep-icon-wrap i { transform: scale(1.06); }
+.dep-robux-new .dep-icon-wrap i { color: var(--green); }
+.dep-card .dep-icon-wrap i { color: #c4b5fd; }
+.dep-crypto .dep-icon-wrap i { color: #fbbf24; }
+.dep-promo .dep-icon-wrap i { color: #f87171; }
+.dep-method-desc {
+    flex: 1 1 auto;
+    margin: 0 0 8px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    text-align: center;
+    z-index: 2;
+    position: relative;
+}
 .dep-currency-badge { position: absolute; bottom: 8px; right: 8px; min-width: 26px; height: 24px; padding: 0 4px; background: var(--bg-glass); border: 1px solid var(--border-subtle); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-secondary); }
 .dep-robux, .dep-robux-new { background: radial-gradient(circle at bottom, rgba(16,185,129,0.15) 0%, transparent 70%); }
 .dep-card { background: radial-gradient(circle at bottom, rgba(124,58,237,0.12) 0%, transparent 70%); }
@@ -2962,23 +2975,6 @@ input:checked + .slider { background: var(--accent); border-color: var(--accent)
 /* Home hero title stays white */
 .home-hero__title { color: var(--text-primary); }
 
-/* === PAYMENT MODAL SVG ICONS === */
-.dep-icon-wrap {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 10px;
-}
-.dep-method-svg {
-    width: 64px;
-    height: 64px;
-    flex-shrink: 0;
-    transition: transform 0.25s ease;
-}
-.dep-method:hover .dep-method-svg { transform: scale(1.08); }
-
 .dep-method-tag {
     display: inline-block;
     font-size: 10px;
@@ -2990,7 +2986,8 @@ input:checked + .slider { background: var(--accent); border-color: var(--accent)
     border: 1px solid var(--border-subtle);
     border-radius: 100px;
     padding: 3px 10px;
-    margin-top: 4px;
+    margin-top: auto;
+    align-self: center;
     transition: color 0.2s, border-color 0.2s;
 }
 .dep-method:hover .dep-method-tag { color: var(--text-primary); border-color: var(--border-color); }
