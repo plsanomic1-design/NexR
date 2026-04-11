@@ -3493,7 +3493,11 @@ async function createDepositGamepass() {
     }
 }
 
+let _isVerifyingDeposit = false;
+
 async function verifyDepositGamepass() {
+    if (_isVerifyingDeposit) return;
+
     const errEl = document.getElementById('dep-verify-error');
     const btn = document.getElementById('dep-verify-btn');
 
@@ -3507,6 +3511,7 @@ async function verifyDepositGamepass() {
         return showErr('You must be signed in with your Roblox account first.');
     }
 
+    _isVerifyingDeposit = true;
     const oldLabel = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...'; }
 
@@ -3540,6 +3545,7 @@ async function verifyDepositGamepass() {
         goDepPage(4);
 
     } finally {
+        _isVerifyingDeposit = false;
         if (btn) { btn.disabled = false; btn.innerHTML = oldLabel || '<i class="fa-solid fa-shield-check"></i> Verify Purchase'; }
     }
 }
@@ -4912,7 +4918,6 @@ function initWelcomeModal() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    initDepGamePassGrid();
     
     // Give login logic a moment to settle, then run a background scan
     setTimeout(() => {

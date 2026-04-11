@@ -2482,11 +2482,35 @@ app.post('/api/deposit/robux/create', express.json(), async (req, res) => {
         formData.append('price', String(depositAmount));
         formData.append('isForSale', 'true');
 
-        const gpCreateRes = await fetch(`https://apis.roblox.com/game-passes/v1/universes/${houseUniverseId}/game-passes`, {
+        let actualUniverseId = houseUniverseId;
+        let gpCreateRes = await fetch(`https://apis.roblox.com/game-passes/v1/universes/${actualUniverseId}/game-passes`, {
             method: 'POST',
             headers: { 'x-api-key': houseApiKey },
             body: formData
         });
+
+        // Autocorrect if user accidentally put a Place ID in HOUSE_UNIVERSE_ID (.env)
+        if (gpCreateRes.status === 404 || gpCreateRes.status === 400) {
+            const uniRes = await fetch(`https://apis.roblox.com/universes/v1/places/${actualUniverseId}/universe`);
+            if (uniRes.ok) {
+                const uniData = await uniRes.json();
+                if (uniData && uniData.universeId) {
+                    actualUniverseId = uniData.universeId;
+                    
+                    // Remake the form data because it got consumed
+                    const retryData = new FormData();
+                    retryData.append('name', 'delete me');
+                    retryData.append('price', String(depositAmount));
+                    retryData.append('isForSale', 'true');
+
+                    gpCreateRes = await fetch(`https://apis.roblox.com/game-passes/v1/universes/${actualUniverseId}/game-passes`, {
+                        method: 'POST',
+                        headers: { 'x-api-key': houseApiKey },
+                        body: retryData
+                    });
+                }
+            }
+        }
 
         let gpJson;
         try {
