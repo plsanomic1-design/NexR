@@ -5572,16 +5572,16 @@ function addChatMessage(msg) {
     textDiv.className = 'chat-msg-text';
     textDiv.textContent = String(msg.text || '');
 
-    // For System rain messages, append a safe JOIN button via DOM
+    // For rain messages, append a safe Join button via DOM
     const rawText = String(msg.text || '');
     const rainMatch = rawText.match(/(.+) started a Rain for ([\d\.]+) ZH\$!/);
-    if (msg.username === 'System' && rainMatch) {
+    if (rainMatch) {
         const joinBtn = document.createElement('button');
         joinBtn.className = 'chat-join-btn';
         joinBtn.dataset.rainId = 'active';
-        joinBtn.textContent = 'JOIN';
+        joinBtn.textContent = 'Join';
         joinBtn.addEventListener('click', () => handleInlineJoinRain(joinBtn));
-        textDiv.appendChild(document.createTextNode(' '));
+        textDiv.appendChild(document.createElement('br'));
         textDiv.appendChild(joinBtn);
     }
 

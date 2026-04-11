@@ -3118,3 +3118,28 @@ input:checked + .slider { background: var(--accent); border-color: var(--accent)
 }
 
 
+
+/* Chat Rain Join Button */
+.chat-join-btn {
+    background: linear-gradient(135deg, #60a5fa, #2563eb);
+    color: white;
+    border: none;
+    border-radius: 999px; /* fully rounded edges */
+    padding: 6px 18px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+    margin-top: 8px;
+    display: inline-block;
+}
+.chat-join-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.55);
+}
+.chat-join-btn:active {
+    transform: translateY(1px);
+}

@@ -3765,7 +3765,8 @@ io.on('connection', (socket) => {
             activeRains.push(rain);
             io.emit('rain:active', activeRains);
             io.emit('chat:message', {
-                username: 'System',
+                userId: creatorId,
+                username: save.username,
                 text: `${save.username} started a Rain for ${formatAmountDisplay(amount)} ZH$!`,
                 createdAt: Date.now()
             });
