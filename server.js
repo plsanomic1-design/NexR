@@ -2596,17 +2596,7 @@ app.post('/api/deposit/robux/verify', express.json(), async (req, res) => {
     const creditAmount = pending.amount; // Server-authoritative, not from client
 
     await withUserLock(userId, async () => {
-        // --- SECURITY: Check gamepass has not already been claimed by anyone ---
-        const diskSave = await readAccountJson(userId);
-        const save = diskSave ? { ...diskSave } : { robloxUserId: userId, balance: 0, stats: {} };
-        if (!save.stats) save.stats = {};
-        if (!Array.isArray(save.stats.claimedDepositPassIds)) save.stats.claimedDepositPassIds = [];
-
-        if (save.stats.claimedDepositPassIds.includes(gpId)) {
-            return res.status(400).json({ error: 'This gamepass has already been claimed. Each gamepass can only be used once.' });
-        }
-
-        // --- Verify ownership with Roblox ---
+        // --- Verify ownership with Roblox FIRST to fail fast ---
         const own = await fetchUserOwnsGamePass(Number(userId), gpId);
         if (!own.ok) {
             return res.status(502).json({ error: 'Could not verify ownership with Roblox. Try again in a moment.' });
@@ -2615,11 +2605,20 @@ app.post('/api/deposit/robux/verify', express.json(), async (req, res) => {
             return res.status(400).json({ error: 'You do not own this gamepass yet. Buy it on Roblox first, then click Verify.' });
         }
 
-        // --- Credit the balance atomically ---
-        const creditResult = await creditUserWin(userId, creditAmount);
-        if (!creditResult || !creditResult.ok) {
-            return res.status(500).json({ error: 'Could not credit your balance. Please contact support.' });
+        // --- SECURITY: Check gamepass has not already been claimed by anyone ---
+        // Load the freshest state inside the lock *after* verification passes to minimize lock contention time
+        const diskSave = await readAccountJson(userId);
+        const save = diskSave ? { ...diskSave } : { robloxUserId: userId, balance: 0, stats: {} };
+        mergeFlipIntoBalance(save); // ensure flip balance is synchronized if needed
+        if (!save.stats) save.stats = {};
+        if (!Array.isArray(save.stats.claimedDepositPassIds)) save.stats.claimedDepositPassIds = [];
+
+        if (save.stats.claimedDepositPassIds.includes(gpId)) {
+            return res.status(400).json({ error: 'This gamepass has already been claimed. Each gamepass can only be used once.' });
         }
+
+        // --- Credit the balance atomically ---
+        save.balance = (typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0) + creditAmount;
 
         // --- Mark as permanently claimed so it can never be reused ---
         _pendingDeposits.delete(gpId);
@@ -2637,7 +2636,15 @@ app.post('/api/deposit/robux/verify', express.json(), async (req, res) => {
         });
         if (save.transactions.length > 100) save.transactions = save.transactions.slice(0, 100);
 
-        await persistAccountSave(userId, save);
+        try {
+            const result = await persistAccountSave(userId, save);
+            if (!result.ok) {
+                return res.status(503).json({ error: 'Could not save account during verification.' });
+            }
+        } catch (e) {
+            console.error('[Deposit/persist] error:', e);
+            return res.status(503).json({ error: 'Could not write deposit to server disk.' });
+        }
 
         const who = save.username || getOnlineUsernameByUserId(userId) || `User ${userId}`;
         postDiscordAudit(`💰 **Deposit:** ${who} deposited ${creditAmount.toLocaleString('en-US')} R$ → credited ${creditAmount.toLocaleString('en-US')} RoBet.`);

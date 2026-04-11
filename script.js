@@ -3515,6 +3515,8 @@ async function verifyDepositGamepass() {
     const oldLabel = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...'; }
 
+    let resOk = false;
+
     try {
         const res = await fetch('/api/deposit/robux/verify', {
             method: 'POST',
@@ -3526,6 +3528,8 @@ async function verifyDepositGamepass() {
             showErr(j.error || 'Verification failed. Make sure you purchased the gamepass, then try again.');
             return;
         }
+
+        resOk = true;
 
         // SUCCESS
         const credited = typeof j.credited === 'number' ? j.credited : 0;
@@ -3545,8 +3549,25 @@ async function verifyDepositGamepass() {
         goDepPage(4);
 
     } finally {
-        _isVerifyingDeposit = false;
-        if (btn) { btn.disabled = false; btn.innerHTML = oldLabel || '<i class="fa-solid fa-shield-check"></i> Verify Purchase'; }
+        if (!resOk) {
+            // Initiate a 5 second visual anti-spam cooldown on failure
+            let timeLeft = 5;
+            if (btn) btn.innerHTML = `Wait ${timeLeft}s...`;
+            const iv = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    clearInterval(iv);
+                    _isVerifyingDeposit = false;
+                    if (btn) { btn.disabled = false; btn.innerHTML = oldLabel || '<i class="fa-solid fa-shield-check"></i> Verify Purchase'; }
+                } else {
+                    if (btn) btn.innerHTML = `Wait ${timeLeft}s...`;
+                }
+            }, 1000);
+        } else {
+            // Success -> instantly unlock because they go to the success page anyway
+            _isVerifyingDeposit = false;
+            if (btn) { btn.disabled = false; btn.innerHTML = oldLabel || '<i class="fa-solid fa-shield-check"></i> Verify Purchase'; }
+        }
     }
 }
 
