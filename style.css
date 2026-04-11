@@ -1799,6 +1799,126 @@ input:checked + .slider:before { transform: translateX(14px); }
     background: rgba(59,130,246,0.08);
 }
 .cb-open-modal-inner { max-width: 700px; }
+
+/* ===== Case open modal: chromeless / transparent — only title, controls, item art, win value ===== */
+#cb-open-modal.cb-modal-backdrop {
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+#cb-open-modal .cb-modal.cb-open-modal-inner {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 20px 16px 24px;
+}
+#cb-open-modal .cb-modal-header {
+    margin-bottom: 12px;
+    padding-bottom: 8px !important;
+    background: transparent;
+    border: none;
+}
+#cb-open-modal .cb-modal-header h2,
+#cb-open-modal #cb-open-modal-title {
+    color: #fff;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95), 0 1px 4px rgba(0, 0, 0, 1);
+}
+#cb-open-modal #cb-open-modal-title i {
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.85));
+}
+#cb-open-modal .cb-sound-toggle,
+#cb-open-modal .cb-modal-close {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: #fff;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+#cb-open-modal .cb-sound-toggle:hover,
+#cb-open-modal .cb-modal-close:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.45);
+}
+#cb-open-modal .cb-spinner-wrap {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+#cb-open-modal .cb-spinner-arrow {
+    border-top-color: rgba(255, 255, 255, 0.9);
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.35));
+}
+#cb-open-modal .cb-spinner-track .cb-horiz-item {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 6px 4px;
+}
+#cb-open-modal .cb-spinner-track .cb-horiz-item-name,
+#cb-open-modal .cb-spinner-track .cb-horiz-item-val {
+    display: none;
+}
+#cb-open-modal .cb-spinner-track .cb-horiz-item-img {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 0;
+    filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.65));
+}
+#cb-open-modal .cb-spinner-track .cb-horiz-item.cb-spin-item--win {
+    border: none !important;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55), 0 0 20px rgba(255, 255, 255, 0.2) !important;
+}
+#cb-open-modal .cb-spinner-track .cb-horiz-item.cb-spin-item--bigwin {
+    border: none !important;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 0 28px rgba(255, 255, 255, 0.28) !important;
+    animation: none;
+}
+#cb-open-modal .cb-open-result {
+    background: transparent;
+    padding: 16px 8px 8px;
+}
+#cb-open-modal #cb-result-item-name,
+#cb-open-modal .cb-result-name {
+    display: none;
+}
+#cb-open-modal .cb-result-item-img {
+    margin-bottom: 10px;
+}
+#cb-open-modal .cb-result-item-img img,
+#cb-open-modal .cb-result-prize-img {
+    filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 20px rgba(255, 255, 255, 0.12));
+}
+#cb-open-modal .cb-result-value {
+    -webkit-text-fill-color: var(--green);
+    color: var(--green);
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9), 0 0 24px rgba(0, 230, 118, 0.35);
+}
+#cb-open-modal .cb-open-result .cb-btn,
+#cb-open-modal .cb-open-result .cb-btn-create {
+    margin-top: 18px;
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+    color: #fff !important;
+    box-shadow: none !important;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+#cb-open-modal .cb-open-result .cb-btn:hover,
+#cb-open-modal .cb-open-result .cb-btn-create:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.55) !important;
+    transform: none;
+}
+#cb-open-modal.cb-modal-backdrop .cb-open-modal-inner.big-hit {
+    animation: none;
+    box-shadow: none !important;
+}
+
 .cb-spinner-wrap {
     position: relative;
     height: 148px;
