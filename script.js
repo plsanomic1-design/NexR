@@ -3452,8 +3452,8 @@ async function createDepositGamepass() {
     function showErr(msg) { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } }
     if (errEl) errEl.style.display = 'none';
 
-    if (!amount || amount < 1 || amount > 100000) {
-        return showErr('Please enter a valid amount between 1 and 100,000 R$.');
+    if (!amount || amount < 7 || amount > 100000) {
+        return showErr('Please enter a valid amount between 7 and 100,000 R$.');
     }
     if (typeof robloxUserId !== 'number' || robloxUserId <= 0) {
         return showErr('You must be signed in with your Roblox account first.');

@@ -2446,8 +2446,8 @@ app.post('/api/deposit/robux/create', express.json(), async (req, res) => {
     const { userId, amount, sessionToken } = req.body || {};
     const depositAmount = Number(amount);
 
-    if (!userId || isNaN(depositAmount) || depositAmount < 1 || depositAmount > 100000) {
-        return res.status(400).json({ error: 'Invalid deposit amount. Must be between 1 and 100,000 R$.' });
+    if (!userId || isNaN(depositAmount) || depositAmount < 7 || depositAmount > 100000) {
+        return res.status(400).json({ error: 'Invalid deposit amount. Must be between 7 and 100,000 R$.' });
     }
     if (!Number.isInteger(depositAmount)) {
         return res.status(400).json({ error: 'Deposit amount must be a whole number.' });
