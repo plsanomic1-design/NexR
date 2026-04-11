@@ -3423,215 +3423,156 @@ function patchDiceBalance() {
 }
 
 // ===== DEPOSIT MODAL (game pass tiers: Robux paid = same RoBet credit; IDs must match server GAME_PASS_CREDIT_BY_ID) =====
-const GAME_PASS_DEPOSIT_TIERS = [
-    { id: 1784194501, robux: 7 },
-    { id: 1783449405, robux: 8 },
-    { id: 1784128758, robux: 9 },
-    { id: 1784222735, robux: 10 },
-    { id: 1784188882, robux: 15 },
-    { id: 1784300749, robux: 20 },
-    { id: 1784700043, robux: 25 },
-    { id: 1784130820, robux: 30 },
-    { id: 1784396767, robux: 35 },
-    { id: 1784082914, robux: 40 },
-    { id: 1783926960, robux: 45 },
-    { id: 1784340755, robux: 50 },
-    { id: 1784248824, robux: 60 },
-    { id: 1783479386, robux: 70 },
-    { id: 1790780840, robux: 75 },
-    { id: 1784464672, robux: 80 },
-    { id: 1784464674, robux: 90 },
-    { id: 1783918985, robux: 100 }
-];
+// ===== DYNAMIC ROBUX DEPOSIT =====
 
-let selectedDepTierId = null;
+// Tracks the current pending deposit gamepass ID server returned
+let _pendingDepositGpId = null;
+let _isCreatingDeposit = false;
 
-function initDepGamePassGrid() {
-    const grid = document.getElementById('dep-tiers-grid');
-    if (!grid) return;
-    
-    const sorted = [...GAME_PASS_DEPOSIT_TIERS].sort((a, b) => a.robux - b.robux);
-    
-    // Filter out already deposited tiers
-    const usedIds = Array.isArray(userStats.depositedPassIds) ? userStats.depositedPassIds : [];
-    const available = sorted.filter(t => !usedIds.includes(t.id));
-    
-    if (available.length === 0) {
-        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: var(--text-secondary);">
-            <i class="fa-solid fa-check-circle" style="font-size: 32px; color: var(--green); margin-bottom: 10px; display: block;"></i>
-            No tiers available. You've deposited everything!
-        </div>`;
-        return;
-    }
-
-    grid.innerHTML = available.map(t => `
-        <div class="dep-tier-btn ${selectedDepTierId === t.id ? 'active' : ''}" data-id="${t.id}" onclick="selectDepTier(this, ${t.id})">
-            <div class="dep-tier-robux">
-                <i class="fa-solid fa-gem"></i>
-                ${t.robux}
-            </div>
-            <div class="dep-tier-zr">${t.robux} RoBet</div>
-        </div>
-    `).join('');
-    
-    syncDepGamePassLink();
+function resetDepositFlow() {
+    _pendingDepositGpId = null;
+    const createStep = document.getElementById('dep-create-step');
+    const purchaseStep = document.getElementById('dep-purchase-step');
+    if (createStep) createStep.style.display = 'block';
+    if (purchaseStep) purchaseStep.style.display = 'none';
+    const amtInput = document.getElementById('dep-robux-amount');
+    if (amtInput) amtInput.value = '';
+    const errEl = document.getElementById('dep-create-error');
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
 }
 
-function selectDepTier(el, id) {
-    selectedDepTierId = id;
-    document.querySelectorAll('.dep-tier-btn').forEach(btn => btn.classList.remove('active'));
-    el.classList.add('active');
-    syncDepGamePassLink();
-}
+async function createDepositGamepass() {
+    if (_isCreatingDeposit) return;
 
-function syncDepGamePassLink() {
-    const link = document.getElementById('dep-gamepass-store-link');
-    const desc = document.getElementById('dep-gamepass-tier-desc');
-    if (!link) return;
-    
-    const tier = GAME_PASS_DEPOSIT_TIERS.find(t => t.id === selectedDepTierId);
-    if (!tier) {
-        link.style.display = 'none';
-        if (desc) desc.textContent = 'Select a tier above to see details.';
-        return;
+    const amtInput = document.getElementById('dep-robux-amount');
+    const amount = Math.floor(parseFloat(amtInput ? amtInput.value : 0) || 0);
+    const errEl = document.getElementById('dep-create-error');
+    const btn = document.getElementById('dep-create-btn');
+
+    function showErr(msg) { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } }
+    if (errEl) errEl.style.display = 'none';
+
+    if (!amount || amount < 1 || amount > 100000) {
+        return showErr('Please enter a valid amount between 1 and 100,000 R$.');
     }
-    
-    link.style.display = 'block';
-    link.href = `https://www.roblox.com/game-pass/${tier.id}/${tier.robux}`;
-    if (desc) {
-        desc.textContent = `You pay ${tier.robux} Robux on Roblox; we credit ${tier.robux} RoBet after verification.`;
+    if (typeof robloxUserId !== 'number' || robloxUserId <= 0) {
+        return showErr('You must be signed in with your Roblox account first.');
+    }
+    if (!window._sessionToken) {
+        return showErr('Session expired. Please refresh the page.');
+    }
+
+    _isCreatingDeposit = true;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...'; }
+
+    try {
+        const res = await fetch('/api/deposit/robux/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: robloxUserId, amount, sessionToken: window._sessionToken })
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            showErr(j.error || 'Failed to generate gamepass. Please try again.');
+            return;
+        }
+
+        _pendingDepositGpId = j.gamepassId;
+        const link = document.getElementById('dep-gamepass-store-link');
+        if (link) link.href = j.gamepassUrl || '#';
+
+        // Show purchase step, hide create step
+        const createStep = document.getElementById('dep-create-step');
+        const purchaseStep = document.getElementById('dep-purchase-step');
+        if (createStep) createStep.style.display = 'none';
+        if (purchaseStep) purchaseStep.style.display = 'block';
+
+    } finally {
+        _isCreatingDeposit = false;
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> &nbsp;Generate Gamepass'; }
     }
 }
 
-function getSelectedDepGamePassId() {
-    return selectedDepTierId || 0;
+async function verifyDepositGamepass() {
+    const errEl = document.getElementById('dep-verify-error');
+    const btn = document.getElementById('dep-verify-btn');
+
+    function showErr(msg) { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } }
+    if (errEl) errEl.style.display = 'none';
+
+    if (!_pendingDepositGpId) {
+        return showErr('No pending deposit found. Please generate a gamepass first.');
+    }
+    if (typeof robloxUserId !== 'number' || robloxUserId <= 0) {
+        return showErr('You must be signed in with your Roblox account first.');
+    }
+
+    const oldLabel = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...'; }
+
+    try {
+        const res = await fetch('/api/deposit/robux/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: robloxUserId, gamepassId: _pendingDepositGpId, sessionToken: window._sessionToken })
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            showErr(j.error || 'Verification failed. Make sure you purchased the gamepass, then try again.');
+            return;
+        }
+
+        // SUCCESS
+        const credited = typeof j.credited === 'number' ? j.credited : 0;
+        _roBalance += credited;
+        userStats.deposited = (userStats.deposited || 0) + credited;
+        addTransaction(`Deposit (${credited} R$ → ${credited} RoBet)`, credited, 'deposit');
+        updateBalanceDisplay();
+        updateProfViews();
+        saveToStorage();
+        if (window.sfx) window.sfx.bigWin();
+        soundWin();
+
+        const msg = document.getElementById('dep-success-msg');
+        if (msg) msg.textContent = `+${credited.toLocaleString('en-US')} RoBet added to your balance!`;
+
+        _pendingDepositGpId = null;
+        goDepPage(4);
+
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = oldLabel || '<i class="fa-solid fa-shield-check"></i> Verify Purchase'; }
+    }
 }
 
-// ===== DEPOSIT MODAL =====
+
+
+// ===== DEPOSIT MODAL CONTROLS =====
 function openDepositModal() {
     if (window.sfx) window.sfx.swoosh();
     const backdrop = document.getElementById('deposit-backdrop');
-    backdrop.classList.add('show');
+    if (backdrop) backdrop.classList.add('show');
     goDepPage(1);
 }
 
 function closeDepositModal(event) {
-    if(event && event.target !== event.currentTarget) return;
+    if (event && event.target !== event.currentTarget) return;
     if (window.sfx) window.sfx.swooshClose();
     const backdrop = document.getElementById('deposit-backdrop');
-    backdrop.classList.remove('show');
-    const depErr = document.getElementById('dep-gamepass-error');
-    if(depErr) {
-        depErr.textContent = '';
-        depErr.style.display = 'none';
-    }
+    if (backdrop) backdrop.classList.remove('show');
+    resetDepositFlow();
 }
 
 function goDepPage(num) {
     document.querySelectorAll('.dep-page').forEach(p => p.style.display = 'none');
     const page = document.getElementById('dep-page-' + num);
-    if(page) page.style.display = 'block';
-    if(num === 3) updateDepGamePassUi();
-    if(num === 'crypto1') updateCryptoMinAmount();
-}
-
-function updateDepGamePassUi() {
-    const btn = document.getElementById('dep-gamepass-verify-btn');
-    if(btn && !btn.disabled) btn.textContent = 'Verify purchase';
-    initDepGamePassGrid();
+    if (page) page.style.display = 'block';
+    if (num === 3) resetDepositFlow();
+    if (num === 'crypto1') updateCryptoMinAmount();
 }
 
 function showComingSoon() {
     showGameToast('This payment method is coming soon! 🚀', 'var(--accent)');
     if (window.sfx) window.sfx.notification();
-}
-
-async function confirmGamePassDeposit() {
-    const errEl = document.getElementById('dep-gamepass-error');
-    if(errEl) {
-        errEl.style.display = 'none';
-        errEl.textContent = '';
-    }
-    if(typeof robloxUserId !== 'number' || robloxUserId <= 0) {
-        if(errEl) {
-            errEl.textContent = 'Sign in with your Roblox account first.';
-            errEl.style.display = 'block';
-        }
-        return;
-    }
-    if(typeof window !== 'undefined' && window.location.protocol === 'file:') {
-        if(errEl) {
-            errEl.textContent =
-                "Deposits require this app's server. Run npm start and open http://localhost:8080.";
-            errEl.style.display = 'block';
-        }
-        return;
-    }
-    const gamePassId = getSelectedDepGamePassId();
-    if(!gamePassId) {
-        if(errEl) {
-            errEl.textContent = 'Choose a deposit amount first.';
-            errEl.style.display = 'block';
-        }
-        return;
-    }
-    const btn = document.getElementById('dep-gamepass-verify-btn');
-    const oldLabel = btn ? btn.textContent : '';
-    if(btn) {
-        btn.disabled = true;
-        btn.textContent = 'Verifying...';
-    }
-    try {
-        const res = await fetch(new URL('/api/gamepass-deposit-claim', window.location.origin).href, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: robloxUserId,
-                gamePassId
-            })
-        });
-        const j = await res.json().catch(() => ({}));
-        if(!res.ok) {
-            let msg =
-                typeof j.error === 'string' && j.error.length > 0
-                    ? j.error
-                    : res.status === 429
-                      ? 'Please wait a couple of seconds and try again.'
-                      : 'Verification failed.';
-            if (typeof j.detail === 'string' && j.detail.length > 0) {
-                msg += ' — ' + j.detail;
-            } else if (typeof j.step === 'string' && j.step.length > 0) {
-                msg += ' (' + j.step + ')';
-            }
-            throw new Error(msg);
-        }
-        if(j.save && typeof j.save === 'object') applySavePayload(j.save);
-        updateDepGamePassUi();
-        saveToStorage();
-        updateBalanceDisplay();
-        updateProfViews();
-        soundWin();
-        if (window.sfx) window.sfx.bigWin();
-        const msg = document.getElementById('dep-success-msg');
-        const credited = typeof j.credited === 'number' ? j.credited : 7;
-        if(msg) msg.textContent = `+${credited.toFixed(2)} RoBet added to your balance.`;
-        goDepPage(4);
-        
-        // Scan immediately after successful deposit to trigger lock screen if needed
-        if (typeof performActiveGamepassScan === 'function') {
-            performActiveGamepassScan(true);
-        }
-    } catch(e) {
-        if(errEl) {
-            errEl.textContent = e && typeof e.message === 'string' ? e.message : 'Verification failed.';
-            errEl.style.display = 'block';
-        }
-    } finally {
-        if(btn) {
-            btn.disabled = false;
-            btn.textContent = oldLabel || 'Verify purchase';
-        }
-    }
 }
 
 // ===== WITHDRAW MODAL =====

@@ -2403,7 +2403,228 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
     res.status(200).send('OK');
 });
 
+// =====================================================================
+// DYNAMIC ROBUX DEPOSIT (API-KEY BASED)
+// =====================================================================
+/**
+ * In-memory store of pending deposits created by the server.
+ * Key: gamePassId (number)
+ * Value: { userId (number), amount (number), createdAt (number) }
+ *
+ * SECURITY: The credit amount is stored here server-side only.
+ * The client NEVER sends the amount during verify — we look it up here.
+ * Entries expire after 30 minutes to prevent stale claims.
+ */
+const _pendingDeposits = new Map();
+const DEPOSIT_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+
+// Cleanup expired pending deposits every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [gpId, entry] of _pendingDeposits) {
+        if (now - entry.createdAt > DEPOSIT_EXPIRY_MS) {
+            _pendingDeposits.delete(gpId);
+        }
+    }
+}, 5 * 60 * 1000).unref();
+
+/**
+ * POST /api/deposit/robux/create
+ * Body: { userId, amount, sessionToken }
+ * Creates a unique gamepass on the house experience at the requested price.
+ * Returns: { gamepassId, gamepassUrl }
+ */
+app.options('/api/deposit/robux/create', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.sendStatus(204);
+});
+
+app.post('/api/deposit/robux/create', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, amount, sessionToken } = req.body || {};
+    const depositAmount = Number(amount);
+
+    if (!userId || isNaN(depositAmount) || depositAmount < 1 || depositAmount > 100000) {
+        return res.status(400).json({ error: 'Invalid deposit amount. Must be between 1 and 100,000 R$.' });
+    }
+    if (!Number.isInteger(depositAmount)) {
+        return res.status(400).json({ error: 'Deposit amount must be a whole number.' });
+    }
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page and make sure you are logged in.' });
+    }
+    if (!supabaseEnabled()) {
+        return res.status(503).json({ error: 'Server database is not configured. Contact admin.' });
+    }
+
+    const houseApiKey = process.env.HOUSE_API_KEY;
+    const houseUniverseId = process.env.HOUSE_UNIVERSE_ID;
+    if (!houseApiKey || !houseUniverseId) {
+        console.error('[Deposit/Create] HOUSE_API_KEY or HOUSE_UNIVERSE_ID not set in environment.');
+        return res.status(503).json({ error: 'Deposit system is not configured. Contact admin.' });
+    }
+
+    // Check per-user deposit rate limit (max 1 pending deposit creation per 10s)
+    const diskSave = await readAccountJson(userId);
+    const save = diskSave ? { ...diskSave } : { stats: {} };
+    if (!save.stats) save.stats = {};
+    const lastCreate = save.stats.lastDepositCreateAt || 0;
+    if (Date.now() - lastCreate < 10000) {
+        return res.status(429).json({ error: 'Please wait a few seconds before creating another deposit.' });
+    }
+
+    try {
+        // Create the gamepass on the house experience via Roblox Open Cloud API
+        const formData = new FormData();
+        formData.append('name', 'delete me');
+        formData.append('price', String(depositAmount));
+        formData.append('isForSale', 'true');
+
+        const gpCreateRes = await fetch(`https://apis.roblox.com/game-passes/v1/universes/${houseUniverseId}/game-passes`, {
+            method: 'POST',
+            headers: { 'x-api-key': houseApiKey },
+            body: formData
+        });
+
+        let gpJson;
+        try {
+            gpJson = await gpCreateRes.json();
+        } catch (_) {
+            throw new Error(`Roblox API returned invalid response (${gpCreateRes.status}).`);
+        }
+
+        if (!gpCreateRes.ok) {
+            throw new Error(`Roblox API Error: ${gpJson.message || gpJson.code || gpCreateRes.statusText || 'Check HOUSE_API_KEY permissions.'}`);
+        }
+
+        const gpId = gpJson.gamePassId;
+        if (!gpId) throw new Error('Roblox did not return a valid Game Pass ID.');
+
+        // Store pending deposit server-side (amount is authoritative here, never from client)
+        _pendingDeposits.set(Number(gpId), {
+            userId: Number(userId),
+            amount: depositAmount,
+            createdAt: Date.now()
+        });
+
+        // Rate-limit stamp
+        save.stats.lastDepositCreateAt = Date.now();
+        await persistAccountSave(userId, save);
+
+        console.log(`[Deposit/Create] user=${userId} gpId=${gpId} amount=${depositAmount} R$`);
+
+        return res.json({
+            ok: true,
+            gamepassId: gpId,
+            gamepassUrl: `https://www.roblox.com/game-pass/${gpId}/delete-me`
+        });
+
+    } catch (e) {
+        const msg = e && e.message ? e.message : String(e);
+        console.error('[Deposit/Create] Failed:', msg);
+        return res.status(400).json({ error: msg });
+    }
+});
+
+/**
+ * POST /api/deposit/robux/verify
+ * Body: { userId, gamepassId, sessionToken }
+ * Verifies the user owns the gamepass, then credits their balance.
+ * Amount is looked up from server-side _pendingDeposits — never trusted from client.
+ */
+app.options('/api/deposit/robux/verify', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.sendStatus(204);
+});
+
+app.post('/api/deposit/robux/verify', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, gamepassId, sessionToken } = req.body || {};
+    const gpId = Number(gamepassId);
+
+    if (!userId || !gpId || gpId < 1) {
+        return res.status(400).json({ error: 'Missing userId or gamepassId.' });
+    }
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh and log in again.' });
+    }
+    if (!supabaseEnabled()) {
+        return res.status(503).json({ error: 'Server database is not configured.' });
+    }
+
+    // --- SECURITY: Look up amount from server-side store, NOT from client ---
+    const pending = _pendingDeposits.get(gpId);
+    if (!pending) {
+        return res.status(400).json({ error: 'No pending deposit found for this gamepass. It may have expired (30 min limit) or already been claimed.' });
+    }
+    if (Number(pending.userId) !== Number(userId)) {
+        return res.status(403).json({ error: 'This deposit was created for a different account.' });
+    }
+    if (Date.now() - pending.createdAt > DEPOSIT_EXPIRY_MS) {
+        _pendingDeposits.delete(gpId);
+        return res.status(400).json({ error: 'This deposit link has expired. Please create a new one.' });
+    }
+
+    const creditAmount = pending.amount; // Server-authoritative, not from client
+
+    await withUserLock(userId, async () => {
+        // --- SECURITY: Check gamepass has not already been claimed by anyone ---
+        const diskSave = await readAccountJson(userId);
+        const save = diskSave ? { ...diskSave } : { robloxUserId: userId, balance: 0, stats: {} };
+        if (!save.stats) save.stats = {};
+        if (!Array.isArray(save.stats.claimedDepositPassIds)) save.stats.claimedDepositPassIds = [];
+
+        if (save.stats.claimedDepositPassIds.includes(gpId)) {
+            return res.status(400).json({ error: 'This gamepass has already been claimed. Each gamepass can only be used once.' });
+        }
+
+        // --- Verify ownership with Roblox ---
+        const own = await fetchUserOwnsGamePass(Number(userId), gpId);
+        if (!own.ok) {
+            return res.status(502).json({ error: 'Could not verify ownership with Roblox. Try again in a moment.' });
+        }
+        if (!own.owned) {
+            return res.status(400).json({ error: 'You do not own this gamepass yet. Buy it on Roblox first, then click Verify.' });
+        }
+
+        // --- Credit the balance atomically ---
+        const creditResult = await creditUserWin(userId, creditAmount);
+        if (!creditResult || !creditResult.ok) {
+            return res.status(500).json({ error: 'Could not credit your balance. Please contact support.' });
+        }
+
+        // --- Mark as permanently claimed so it can never be reused ---
+        _pendingDeposits.delete(gpId);
+        save.stats.claimedDepositPassIds.push(gpId);
+        save.stats.deposited = (save.stats.deposited || 0) + creditAmount;
+        save.stats.lastDepositAt = Date.now();
+
+        if (!Array.isArray(save.transactions)) save.transactions = [];
+        save.transactions.unshift({
+            id: Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0'),
+            desc: `Deposit (${creditAmount} R$ → ${creditAmount} RoBet)`,
+            date: formatTxDateServer(),
+            amount: creditAmount,
+            type: 'deposit'
+        });
+        if (save.transactions.length > 100) save.transactions = save.transactions.slice(0, 100);
+
+        await persistAccountSave(userId, save);
+
+        const who = save.username || getOnlineUsernameByUserId(userId) || `User ${userId}`;
+        postDiscordAudit(`💰 **Deposit:** ${who} deposited ${creditAmount.toLocaleString('en-US')} R$ → credited ${creditAmount.toLocaleString('en-US')} RoBet.`);
+        console.log(`[Deposit/Verify] user=${userId} gpId=${gpId} credited=${creditAmount}`);
+
+        return res.json({ ok: true, credited: creditAmount });
+    });
+});
+
 /** Game pass deposit: Robux paid = RoBet credited. Keys must match client GAME_PASS_DEPOSIT_TIERS. */
+
 const GAME_PASS_CREDIT_BY_ID = {
     1784194501: 7,
     1783449405: 8,

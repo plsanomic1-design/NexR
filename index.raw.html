@@ -609,27 +609,51 @@
                 </div>
             </div>
 
-            <!-- Page 3: Game pass purchase (tiers) -->
+            <!-- Page 3: Dynamic Gamepass Deposit -->
             <div class="dep-page" id="dep-page-3" style="display:none;">
                 <div class="modal-header">
                     <div class="dep-breadcrumb"><span onclick="goDepPage(1)">Deposit</span> <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i> <span onclick="goDepPage(2)">Robux</span></div>
                     <button class="modal-close" onclick="closeDepositModal(null)"><i class="fa-solid fa-xmark"></i></button>
                 </div>
-                <h2>Game pass deposit</h2>
-                <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.55;">Pick how much you want to add. Buy <strong>that</strong> game pass on Roblox, then press <strong>Verify purchase</strong>. We match Roblox ownership to your account and credit the same amount in RoBet (wait a few seconds between verifications).</p>
-                <label class="dep-gamepass-label">Choose an amount</label>
-                <div id="dep-tiers-grid" class="dep-tiers-grid">
-                    <!-- Populated by script.js -->
+                <h2>Deposit Robux</h2>
+
+                <!-- Step 1: Enter amount + create -->
+                <div id="dep-create-step" style="margin-top:18px;">
+                    <p style="font-size:13px; color:var(--text-secondary); margin-bottom:14px; line-height:1.6;">Enter any Robux amount. We'll instantly generate a unique gamepass for you to purchase — once bought and verified, your RoBet balance is credited 1:1.</p>
+                    <label style="font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px;">Amount (R$)</label>
+                    <div class="input-wrapper" style="background:var(--bg-body); border-radius:8px; border:1px solid rgba(99,102,241,0.3); height:50px; display:flex; align-items:center; margin-top:8px;">
+                        <i class="fa-solid fa-coins" style="color:var(--accent); margin-left:15px; flex-shrink:0;"></i>
+                        <input type="number" id="dep-robux-amount" min="1" max="100000" step="1" placeholder="e.g. 100" autocomplete="off"
+                            style="flex:1; padding:0 15px; background:transparent; border:none; color:white; font-size:15px; font-family:inherit; outline:none;">
+                        <span style="margin-right:15px; font-size:13px; color:var(--text-secondary);">R$</span>
+                    </div>
+                    <p id="dep-create-error" class="welcome-error" role="alert" style="display:none; margin-top:10px;"></p>
+                    <button type="button" id="dep-create-btn" onclick="createDepositGamepass()" class="btn-primary btn-deposit-full" style="margin-top:16px; width:100%; padding:14px;">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> &nbsp;Generate Gamepass
+                    </button>
                 </div>
-                <p id="dep-gamepass-tier-desc" class="dep-gamepass-tier-desc">Select a tier above to see details.</p>
-                <a href="#" target="_blank" rel="noopener noreferrer" class="dep-gamepass-link" id="dep-gamepass-store-link">Open selected game pass on Roblox <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:11px;"></i></a>
-                <p id="dep-gamepass-error" class="welcome-error" role="alert" style="display:none; margin-top:12px;"></p>
-                
-                <div class="dep-actions" style="margin-top:22px;">
-                    <button class="dep-back-btn" onclick="goDepPage(2)">Back</button>
-                    <button type="button" class="btn-primary dep-confirm-btn" id="dep-gamepass-verify-btn" onclick="confirmGamePassDeposit()">Verify purchase</button>
+
+                <!-- Step 2: Purchase link (shown after gamepass is created) -->
+                <div id="dep-purchase-step" style="display:none; margin-top:18px;">
+                    <div style="background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.25); border-radius:10px; padding:16px; margin-bottom:14px;">
+                        <p style="font-size:13px; font-weight:600; color:white; margin-bottom:6px;"><i class="fa-solid fa-circle-check" style="color:var(--green);"></i> &nbsp;Gamepass created!</p>
+                        <p style="font-size:13px; color:var(--text-secondary); line-height:1.6;">Click the button below to open the gamepass on Roblox, purchase it, then come back here and click <strong>Verify</strong>.</p>
+                    </div>
+                    <a id="dep-gamepass-store-link" href="#" target="_blank" rel="noopener noreferrer"
+                        class="btn-primary btn-deposit-full"
+                        style="display:block; text-align:center; padding:14px; margin-bottom:12px; text-decoration:none; background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> &nbsp;Buy Gamepass on Roblox
+                    </a>
+                    <p id="dep-verify-error" class="welcome-error" role="alert" style="display:none; margin-top:8px;"></p>
+                    <div class="dep-actions" style="margin-top:14px;">
+                        <button class="dep-back-btn" onclick="resetDepositFlow()">Start over</button>
+                        <button type="button" id="dep-verify-btn" onclick="verifyDepositGamepass()" class="btn-primary dep-confirm-btn">
+                            <i class="fa-solid fa-shield-check"></i> Verify Purchase
+                        </button>
+                    </div>
                 </div>
             </div>
+
 
             <!-- Page 4: Success -->
             <div class="dep-page" id="dep-page-4" style="display:none;">
