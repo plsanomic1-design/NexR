@@ -1261,56 +1261,152 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.restore();
         }
 
+        function aviaDrawPlaneStar(c, x, y, r) {
+            c.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const a = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+                const px = x + Math.cos(a) * r;
+                const py = y + Math.sin(a) * r;
+                if (i === 0) c.moveTo(px, py);
+                else c.lineTo(px, py);
+            }
+            c.closePath();
+            c.fill();
+        }
+
+        /** Side-view biplane (nose → +x), styled like Aviamasters reference: red body, yellow stripes, prop blur. */
         function aviaDrawPlane(ctx, W, camX, camY) {
             const sx = aviaPlane.wx - camX;
             const sy = aviaPlane.wy - camY;
-            if (sx < -80 || sx > W + 80) return;
+            if (sx < -120 || sx > W + 120) return;
             const now = performance.now();
-            const spin = (now * 0.018) % (Math.PI * 2);
+            const spin = (now * 0.024) % (Math.PI * 2);
             ctx.save();
             ctx.translate(sx, sy);
             ctx.rotate(aviaPlane.angle);
-            ctx.fillStyle = 'rgba(120, 200, 255, 0.35)';
-            for (let i = 0; i < 5; i++) {
-                const a = spin + i * 0.9;
+            const S = 1.08;
+            ctx.scale(S, S);
+
+            ctx.fillStyle = '#991b1b';
+            ctx.beginPath();
+            ctx.ellipse(8, 11, 40, 6.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#7f1d1d';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.moveTo(-28, 7);
+            ctx.lineTo(48, 7);
+            ctx.moveTo(-28, 14);
+            ctx.lineTo(48, 14);
+            ctx.stroke();
+
+            ctx.fillStyle = '#b91c1c';
+            ctx.beginPath();
+            ctx.ellipse(4, -13, 36, 5.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(-28, -15);
+            ctx.lineTo(40, -15);
+            ctx.moveTo(-28, -11);
+            ctx.lineTo(40, -11);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#7f1d1d';
+            ctx.lineWidth = 2.2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(-6, -13);
+            ctx.lineTo(-3, 11);
+            ctx.moveTo(20, -13);
+            ctx.lineTo(22, 11);
+            ctx.stroke();
+
+            const fusG = ctx.createLinearGradient(-16, 0, 34, 0);
+            fusG.addColorStop(0, '#881337');
+            fusG.addColorStop(0.35, '#e11d48');
+            fusG.addColorStop(0.85, '#dc2626');
+            fusG.addColorStop(1, '#9f1239');
+            ctx.fillStyle = fusG;
+            ctx.beginPath();
+            ctx.ellipse(6, 0, 29, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            const cowG = ctx.createLinearGradient(20, 0, 44, 0);
+            cowG.addColorStop(0, '#c2410c');
+            cowG.addColorStop(0.45, '#f59e0b');
+            cowG.addColorStop(1, '#fde047');
+            ctx.fillStyle = cowG;
+            ctx.beginPath();
+            ctx.ellipse(31, 0, 10, 9, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#facc15';
+            aviaDrawPlaneStar(ctx, -5, -3, 3.2);
+            aviaDrawPlaneStar(ctx, 7, -3, 3.2);
+
+            ctx.fillStyle = '#b45309';
+            ctx.beginPath();
+            ctx.arc(11, 2, 4.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fcd34d';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(25, 40, 65, 0.9)';
+            ctx.beginPath();
+            ctx.ellipse(-5, -1, 9, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#166534';
+            ctx.beginPath();
+            ctx.ellipse(-5, 0, 6, 7, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#86efac';
+            ctx.beginPath();
+            ctx.arc(-5, -3, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.fillStyle = '#0a0a0a';
+            ctx.beginPath();
+            ctx.arc(-1, 16, 3.2, 0, Math.PI * 2);
+            ctx.arc(15, 16, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#404040';
+            ctx.beginPath();
+            ctx.arc(-1, 16, 1.2, 0, Math.PI * 2);
+            ctx.arc(15, 16, 1.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = '#fef9c3';
+            for (let b = 0; b < 3; b++) {
+                ctx.save();
+                ctx.translate(42, 0);
+                ctx.rotate(spin * 10 + b * ((2 * Math.PI) / 3));
                 ctx.beginPath();
-                ctx.arc(-22 + Math.cos(a) * 3, Math.sin(a) * 3, 3 - i * 0.4, 0, Math.PI * 2);
+                ctx.ellipse(0, 0, 2.2, 15, 0, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.restore();
             }
-            ctx.fillStyle = '#c1121f';
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#ca8a04';
             ctx.beginPath();
-            ctx.ellipse(2, -5, 10, 5, 0, 0, Math.PI * 2);
-            ctx.ellipse(2, 5, 10, 5, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#d62828';
-            ctx.beginPath();
-            ctx.ellipse(4, 0, 20, 7, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#f1faee';
-            ctx.beginPath();
-            aviaRoundRect(ctx, -6, -4, 14, 8, 2);
-            ctx.fill();
-            ctx.fillStyle = '#9d0208';
-            ctx.beginPath();
-            ctx.moveTo(10, 0);
-            ctx.lineTo(32, -14);
-            ctx.lineTo(32, 14);
-            ctx.closePath();
-            ctx.fill();
-            ctx.fillStyle = 'rgba(255, 215, 120, 0.9)';
-            ctx.save();
-            ctx.translate(-16, 0);
-            ctx.rotate(spin * 6);
-            ctx.fillRect(-1, -8, 2, 16);
-            ctx.fillRect(-8, -1, 16, 2);
-            ctx.restore();
-            ctx.fillStyle = '#ffb703';
-            ctx.beginPath();
-            ctx.arc(-16, 0, 5, 0, Math.PI * 2);
+            ctx.arc(42, 0, 4.5, 0, Math.PI * 2);
             ctx.fill();
             ctx.strokeStyle = 'rgba(0,0,0,0.35)';
             ctx.lineWidth = 1;
             ctx.stroke();
+
             ctx.restore();
         }
 
@@ -1411,8 +1507,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 aviaTrailLastMs = now;
                 if (aviaContrail.length > 22) aviaContrail.shift();
                 aviaContrail.push({
-                    wx: aviaPlane.wx - Math.cos(aviaPlane.angle) * 26,
-                    wy: aviaPlane.wy - Math.sin(aviaPlane.angle) * 26,
+                    wx: aviaPlane.wx - Math.cos(aviaPlane.angle) * 48,
+                    wy: aviaPlane.wy - Math.sin(aviaPlane.angle) * 48,
                     born: now
                 });
             }
@@ -1497,21 +1593,44 @@ document.addEventListener('DOMContentLoaded', () => {
             return pts;
         }
 
-        function aviaAnimateSegment(from, to, durationMs) {
+        function aviaEaseInOutCubic(u) {
+            return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+        }
+
+        /** Smooth arc flight (quadratic bezier) — duration scales with distance so nothing “teleports”. */
+        function aviaAnimateSegment(from, to, baseMs) {
             return new Promise((resolve) => {
-                const t0 = performance.now();
                 const fx = from.wx;
                 const fy = from.wy;
                 const tx = to.wx;
                 const ty = to.wy;
+                const dx = tx - fx;
+                const dy = ty - fy;
+                const dist = Math.hypot(dx, dy) || 1;
+                const nx = -dy / dist;
+                const ny = dx / dist;
+                const arcMag = Math.min(72, dist * 0.28);
+                const cx = (fx + tx) / 2 + nx * arcMag;
+                const cy = (fy + ty) / 2 + ny * arcMag - dist * 0.05;
+                let durationMs = baseMs * (0.72 + dist / 155);
+                durationMs = Math.min(3400, Math.max(baseMs * 0.55, durationMs));
+                const t0 = performance.now();
                 function tick(now) {
                     const u = Math.min(1, (now - t0) / durationMs);
-                    const e = 1 - Math.pow(1 - u, 2.2);
-                    aviaPlane.wx = fx + (tx - fx) * e;
-                    aviaPlane.wy = fy + (ty - fy) * e;
-                    aviaPlane.angle = Math.atan2(ty - fy, tx - fx);
+                    const t = aviaEaseInOutCubic(u);
+                    const omt = 1 - t;
+                    aviaPlane.wx = omt * omt * fx + 2 * omt * t * cx + t * t * tx;
+                    aviaPlane.wy = omt * omt * fy + 2 * omt * t * cy + t * t * ty;
+                    const txd = 2 * omt * (cx - fx) + 2 * t * (tx - cx);
+                    const tyd = 2 * omt * (cy - fy) + 2 * t * (ty - cy);
+                    aviaPlane.angle = Math.atan2(tyd, txd);
                     if (u < 1) requestAnimationFrame(tick);
-                    else resolve();
+                    else {
+                        aviaPlane.wx = tx;
+                        aviaPlane.wy = ty;
+                        aviaPlane.angle = Math.atan2(2 * (ty - cy), 2 * (tx - cx));
+                        resolve();
+                    }
                 }
                 requestAnimationFrame(tick);
             });
