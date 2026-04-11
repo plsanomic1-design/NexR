@@ -924,16 +924,451 @@ document.addEventListener('DOMContentLoaded', () => {
         updateFromSlider();
     }
 
-    // Avia Masters (Slots) — server RNG + CUS; client replays event log (no manual cash-out)
+    // Avia Masters (Slots) — canvas: water texture, landing decks, plane, +/− pickups (server RNG + CUS)
     const aviaPlayBtn = document.getElementById('avia-play-btn');
-    if (aviaPlayBtn) {
+    const aviaCanvas = document.getElementById('avia-canvas');
+    const aviaStage = document.getElementById('avia-stage');
+    if (aviaPlayBtn && aviaCanvas && aviaStage) {
         const aviaBetInp = document.getElementById('avia-bet-input');
         const aviaMultEl = document.getElementById('avia-mult-display');
         const aviaStatusEl = document.getElementById('avia-status-text');
         const aviaLogEl = document.getElementById('avia-event-log');
-        const aviaPlaneWrap = document.getElementById('avia-plane-wrap');
         let aviaSpeedIdx = 2;
         const aviaDelays = [520, 340, 200, 110];
+        const aviaCtx = aviaCanvas.getContext('2d');
+
+        let aviaCssW = 400;
+        let aviaCssH = 320;
+        let aviaWaterY = 200;
+        let aviaWaterScroll = 0;
+        let aviaPlane = { x: 40, y: 80, angle: -0.35 };
+        let aviaPads = [];
+        let aviaPopups = [];
+        let aviaParticles = [];
+        let aviaWinGlow = 0;
+        let aviaRaf = 0;
+        let aviaWaterPattern = null;
+        /** One airborne pickup the plane is flying toward (shown before collection). */
+        let aviaIncoming = null;
+
+        function aviaRoundRect(ctx, x, y, w, h, r) {
+            const rr = Math.min(r, w / 2, h / 2);
+            ctx.beginPath();
+            ctx.moveTo(x + rr, y);
+            ctx.arcTo(x + w, y, x + w, y + h, rr);
+            ctx.arcTo(x + w, y + h, x, y + h, rr);
+            ctx.arcTo(x, y + h, x, y, rr);
+            ctx.arcTo(x, y, x + w, y, rr);
+            ctx.closePath();
+        }
+
+        function aviaBuildPads() {
+            const W = aviaCssW;
+            const H = aviaCssH;
+            const waterY0 = aviaWaterY;
+            const deckH = Math.min(50, H * 0.14);
+            const deckW = Math.max(56, W * 0.2);
+            const y = waterY0 - deckH * 0.42;
+            aviaPads = [
+                { x: W * 0.06, y, w: deckW, h: deckH, label: 'DECK A', win: false },
+                { x: W * 0.5 - deckW / 2, y, w: deckW, h: deckH, label: 'WIN ZONE', win: true },
+                { x: W * 0.94 - deckW, y, w: deckW, h: deckH, label: 'DECK B', win: false }
+            ];
+        }
+
+        function aviaEnsureWaterPattern() {
+            if (aviaWaterPattern) return;
+            const pc = document.createElement('canvas');
+            pc.width = 160;
+            pc.height = 160;
+            const p = pc.getContext('2d');
+            const g = p.createLinearGradient(0, 0, 0, 160);
+            g.addColorStop(0, 'rgba(20,100,130,0.35)');
+            g.addColorStop(1, 'rgba(5,40,60,0.5)');
+            p.fillStyle = g;
+            p.fillRect(0, 0, 160, 160);
+            p.globalAlpha = 0.4;
+            for (let i = 0; i < 18; i++) {
+                p.strokeStyle = i % 2 ? 'rgba(120,210,255,0.25)' : 'rgba(30,140,190,0.2)';
+                p.lineWidth = 1;
+                p.beginPath();
+                const y0 = i * 9;
+                for (let x = 0; x <= 160; x += 4) {
+                    const yy = y0 + Math.sin(x * 0.12 + i) * 4;
+                    if (x === 0) p.moveTo(x, yy);
+                    else p.lineTo(x, yy);
+                }
+                p.stroke();
+            }
+            p.globalAlpha = 0.12;
+            p.fillStyle = '#fff';
+            for (let n = 0; n < 120; n++) {
+                p.fillRect((n * 47) % 160, (n * 71) % 160, 2, 1);
+            }
+            aviaWaterPattern = aviaCtx.createPattern(pc, 'repeat');
+        }
+
+        function aviaResize() {
+            const rect = aviaStage.getBoundingClientRect();
+            aviaCssW = Math.max(280, rect.width);
+            aviaCssH = Math.max(300, rect.height);
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            aviaCanvas.width = Math.floor(aviaCssW * dpr);
+            aviaCanvas.height = Math.floor(aviaCssH * dpr);
+            aviaCanvas.style.width = aviaCssW + 'px';
+            aviaCanvas.style.height = aviaCssH + 'px';
+            aviaCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            aviaWaterY = aviaCssH * 0.58;
+            aviaBuildPads();
+            aviaWaterPattern = null;
+            aviaEnsureWaterPattern();
+            aviaDrawStatic();
+        }
+
+        function aviaDrawSky(ctx, W, H) {
+            const g = ctx.createLinearGradient(0, 0, 0, aviaWaterY);
+            g.addColorStop(0, '#1a4a6e');
+            g.addColorStop(0.45, '#2a5f82');
+            g.addColorStop(1, '#3d7aa3');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, aviaWaterY + 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            for (let c = 0; c < 5; c++) {
+                const cx = ((c * 137 + 20) % W) + 40;
+                const cy = 30 + (c % 3) * 35;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy, 50 + c * 8, 18, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function aviaDrawWater(ctx, W, H) {
+            const y0 = aviaWaterY;
+            const g = ctx.createLinearGradient(0, y0, 0, H);
+            g.addColorStop(0, '#0d5a78');
+            g.addColorStop(0.35, '#084a63');
+            g.addColorStop(1, '#021f2c');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, y0, W, H - y0);
+            ctx.save();
+            ctx.translate(0, (aviaWaterScroll % 40) * 0.5);
+            if (aviaWaterPattern) {
+                ctx.fillStyle = aviaWaterPattern;
+                ctx.fillRect(0, y0, W, H - y0 + 40);
+            }
+            ctx.restore();
+            ctx.strokeStyle = 'rgba(180, 235, 255, 0.18)';
+            ctx.lineWidth = 1;
+            for (let w = 0; w < 10; w++) {
+                ctx.beginPath();
+                const baseY = y0 + 12 + w * ((H - y0) / 10);
+                for (let x = 0; x <= W; x += 6) {
+                    const yy = baseY + Math.sin((x + aviaWaterScroll * (1 + w * 0.08)) * 0.035) * (3 + w * 0.4);
+                    if (x === 0) ctx.moveTo(x, yy);
+                    else ctx.lineTo(x, yy);
+                }
+                ctx.stroke();
+            }
+            ctx.fillStyle = 'rgba(255,255,255,0.06)';
+            for (let k = 0; k < 60; k++) {
+                const sx = ((k * 83 + aviaWaterScroll * 2) % W);
+                const sy = y0 + ((k * 47) % (H - y0 - 4));
+                ctx.fillRect(sx, sy, 2, 1);
+            }
+        }
+
+        function aviaDrawPads(ctx) {
+            aviaPads.forEach((p) => {
+                const isWin = p.win;
+                const glow = isWin ? 0.2 + aviaWinGlow * 0.55 : 0;
+                ctx.save();
+                ctx.shadowColor = isWin ? `rgba(0, 230, 170, ${glow})` : 'rgba(0,0,0,0.5)';
+                ctx.shadowBlur = isWin ? 22 : 10;
+                ctx.fillStyle = isWin ? '#152a22' : '#222e3d';
+                aviaRoundRect(ctx, p.x, p.y, p.w, p.h, 8);
+                ctx.fill();
+                ctx.strokeStyle = isWin ? `rgba(0, 220, 160, ${0.45 + aviaWinGlow * 0.45})` : 'rgba(255,255,255,0.12)';
+                ctx.lineWidth = isWin ? 3 : 2;
+                ctx.stroke();
+                ctx.globalAlpha = 0.2;
+                ctx.fillStyle = '#fff';
+                for (let s = 10; s < p.w - 6; s += 16) {
+                    ctx.fillRect(p.x + s, p.y + 6, 8, p.h - 12);
+                }
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = isWin ? '#6ee7b7' : '#94a3b8';
+                ctx.font = 'bold 11px system-ui, Segoe UI, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(p.label, p.x + p.w / 2, p.y + p.h * 0.38);
+                if (isWin) {
+                    ctx.font = '600 9px system-ui, sans-serif';
+                    ctx.fillStyle = 'rgba(110,231,183,0.85)';
+                    ctx.fillText('LAND HERE TO WIN', p.x + p.w / 2, p.y + p.h * 0.72);
+                }
+                ctx.restore();
+            });
+        }
+
+        function aviaDrawIncoming(ctx) {
+            if (!aviaIncoming) return;
+            const m = aviaIncoming;
+            const x = m.x;
+            const y = m.y;
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.45)';
+            ctx.shadowBlur = 10;
+            if (m.kind === 'prize') {
+                ctx.fillStyle = 'rgba(16, 185, 129, 0.35)';
+                ctx.strokeStyle = '#34d399';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 22, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#ecfdf5';
+                ctx.font = 'bold 14px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('+' + m.add + 'x', x, y);
+            } else if (m.kind === 'boost') {
+                ctx.fillStyle = 'rgba(139, 92, 246, 0.35)';
+                ctx.strokeStyle = '#a78bfa';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 22, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#f5f3ff';
+                ctx.font = 'bold 14px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('×' + m.mult, x, y);
+            } else if (m.kind === 'rocket') {
+                ctx.fillStyle = 'rgba(234, 88, 12, 0.4)';
+                ctx.strokeStyle = '#fb923c';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 22, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#fff7ed';
+                ctx.font = 'bold 13px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('−½', x, y);
+            } else if (m.kind === 'cruise') {
+                ctx.strokeStyle = 'rgba(148, 163, 184, 0.7)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 6]);
+                ctx.beginPath();
+                ctx.arc(x, y, 18, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.fillStyle = '#cbd5e1';
+                ctx.font = 'bold 12px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('· · ·', x, y);
+            } else if (m.kind === 'land') {
+                ctx.fillStyle = 'rgba(52, 211, 153, 0.25)';
+                ctx.strokeStyle = '#34d399';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(x, y, 26, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#a7f3d0';
+                ctx.font = 'bold 11px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('DECK', x, y - 6);
+                ctx.fillText('WIN', x, y + 8);
+            } else if (m.kind === 'crash') {
+                ctx.fillStyle = 'rgba(248, 113, 113, 0.2)';
+                ctx.strokeStyle = 'rgba(248, 113, 113, 0.7)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 24, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#fecaca';
+                ctx.font = 'bold 11px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('SEA', x, y - 5);
+                ctx.fillText('RISK', x, y + 9);
+            }
+            ctx.restore();
+        }
+
+        function aviaDrawPlane(ctx, x, y, angle) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            ctx.fillStyle = '#d62828';
+            ctx.beginPath();
+            ctx.ellipse(4, 0, 20, 7, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#f1faee';
+            ctx.beginPath();
+            aviaRoundRect(ctx, -6, -4, 14, 8, 2);
+            ctx.fill();
+            ctx.fillStyle = '#9d0208';
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(32, -14);
+            ctx.lineTo(32, 14);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#ffb703';
+            ctx.beginPath();
+            ctx.arc(-16, 0, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function aviaDrawPopups(ctx) {
+            const now = performance.now();
+            aviaPopups = aviaPopups.filter((p) => now - p.born < p.life);
+            aviaPopups.forEach((p) => {
+                const t = (now - p.born) / p.life;
+                const lift = t * 28;
+                const alpha = 1 - t;
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, alpha);
+                ctx.font = 'bold 15px system-ui, sans-serif';
+                const pad = 8;
+                const w = ctx.measureText(p.text).width + pad * 2;
+                const h = 28;
+                ctx.fillStyle = 'rgba(10,20,30,0.85)';
+                aviaRoundRect(ctx, p.x - w / 2, p.y - lift - h, w, h, 8);
+                ctx.fill();
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.fillStyle = p.color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(p.text, p.x, p.y - lift - h / 2);
+                ctx.restore();
+            });
+        }
+
+        function aviaDrawParticles(ctx) {
+            const now = performance.now();
+            aviaParticles = aviaParticles.filter((q) => now - q.born < q.life);
+            aviaParticles.forEach((q) => {
+                const t = (now - q.born) / q.life;
+                ctx.save();
+                ctx.globalAlpha = 1 - t;
+                ctx.fillStyle = q.color;
+                ctx.beginPath();
+                ctx.arc(q.x + q.vx * t * 20, q.y + q.vy * t * 20 - t * 15, q.r * (1 + t * 2), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        function aviaSpawnSplash(x, y) {
+            for (let i = 0; i < 36; i++) {
+                aviaParticles.push({
+                    x,
+                    y,
+                    vx: Math.cos((i / 36) * Math.PI * 2) * (0.5 + Math.random()),
+                    vy: -1.2 - Math.random(),
+                    r: 2 + Math.random() * 4,
+                    born: performance.now(),
+                    life: 600 + Math.random() * 400,
+                    color: i % 3 ? 'rgba(180,230,255,0.9)' : 'rgba(255,255,255,0.85)'
+                });
+            }
+        }
+
+        function aviaPushPopup(x, y, text, color) {
+            aviaPopups.push({ x, y, text, color, born: performance.now(), life: 900 });
+        }
+
+        function aviaDrawFrame() {
+            const W = aviaCssW;
+            const H = aviaCssH;
+            aviaCtx.clearRect(0, 0, W, H);
+            aviaWaterScroll += 0.45;
+            if (aviaWinGlow > 0.02) aviaWinGlow *= 0.965;
+            else aviaWinGlow = 0;
+            aviaDrawSky(aviaCtx, W, H);
+            aviaDrawWater(aviaCtx, W, H);
+            aviaDrawPads(aviaCtx);
+            aviaDrawIncoming(aviaCtx);
+            aviaDrawPlane(aviaCtx, aviaPlane.x, aviaPlane.y, aviaPlane.angle);
+            aviaDrawPopups(aviaCtx);
+            aviaDrawParticles(aviaCtx);
+        }
+
+        function aviaDrawStatic() {
+            aviaDrawFrame();
+        }
+
+        function aviaLoop() {
+            aviaDrawFrame();
+            aviaRaf = requestAnimationFrame(aviaLoop);
+        }
+
+        function aviaStartLoop() {
+            if (!aviaRaf) aviaRaf = requestAnimationFrame(aviaLoop);
+        }
+
+        function aviaStopLoop() {
+            if (aviaRaf) {
+                cancelAnimationFrame(aviaRaf);
+                aviaRaf = 0;
+            }
+        }
+
+        function aviaBuildWaypoints(events) {
+            const W = aviaCssW;
+            const H = aviaCssH;
+            const y0 = aviaWaterY;
+            const pts = [{ x: W * 0.06, y: H * 0.24 }];
+            const n = events.length;
+            if (n === 0) return pts;
+            for (let i = 0; i < n - 1; i++) {
+                const t = (i + 1) / n;
+                pts.push({
+                    x: W * (0.1 + t * 0.68) + Math.sin(i * 2.1) * W * 0.07,
+                    y: H * (0.14 + ((i * 3) % 5) * 0.07)
+                });
+            }
+            const last = events[n - 1];
+            if (last && last.type === 'land') {
+                const win = aviaPads.find((p) => p.win);
+                if (win) pts.push({ x: win.x + win.w / 2, y: win.y + win.h * 0.32 });
+            } else {
+                const seed = (n * 37 + 13) % 100;
+                pts.push({ x: W * (0.22 + seed * 0.0056), y: y0 + 32 });
+            }
+            return pts;
+        }
+
+        function aviaAnimateSegment(from, to, durationMs) {
+            return new Promise((resolve) => {
+                const t0 = performance.now();
+                function tick(now) {
+                    const u = Math.min(1, (now - t0) / durationMs);
+                    const e = 1 - Math.pow(1 - u, 2.2);
+                    aviaPlane.x = from.x + (to.x - from.x) * e;
+                    aviaPlane.y = from.y + (to.y - from.y) * e;
+                    aviaPlane.angle = Math.atan2(to.y - from.y, to.x - from.x);
+                    if (u < 1) requestAnimationFrame(tick);
+                    else resolve();
+                }
+                requestAnimationFrame(tick);
+            });
+        }
 
         document.querySelectorAll('.avia-speed-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
@@ -943,6 +1378,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
+        if (typeof ResizeObserver !== 'undefined') {
+            const aviaRo = new ResizeObserver(() => aviaResize());
+            aviaRo.observe(aviaStage);
+        }
+        window.addEventListener('resize', aviaResize);
+        aviaResize();
+        aviaStartLoop();
+
         function aviaResetUI() {
             if (aviaMultEl) {
                 aviaMultEl.textContent = '1.00x';
@@ -950,11 +1393,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (aviaLogEl) aviaLogEl.innerHTML = '';
             if (aviaStatusEl) aviaStatusEl.textContent = 'Round in progress…';
-            if (aviaPlaneWrap) {
-                aviaPlaneWrap.style.left = '12%';
-                aviaPlaneWrap.style.bottom = '48%';
-                aviaPlaneWrap.style.transform = 'rotate(0deg)';
-            }
+            aviaPopups = [];
+            aviaParticles = [];
+            aviaWinGlow = 0;
+            aviaIncoming = null;
+            aviaPlane = { x: aviaCssW * 0.06, y: aviaCssH * 0.24, angle: -0.3 };
         }
 
         function aviaLogLine(cls, text) {
@@ -976,6 +1419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         aviaPlayBtn.addEventListener('click', async () => {
             const bet = parseFloat(aviaBetInp && aviaBetInp.value) || 0;
             aviaPlayBtn.disabled = true;
+            aviaResize();
             aviaResetUI();
             try {
                 const res = await fetch('/api/game/aviamasters/play', {
@@ -996,45 +1440,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ms = aviaDelays[typeof data.speed === 'number' ? data.speed : aviaSpeedIdx] || 340;
                 let runMult = 1;
                 const events = Array.isArray(data.events) ? data.events : [];
-                const progN = Math.max(events.length - 1, 1);
-                let stepIdx = 0;
+                const waypoints = aviaBuildWaypoints(events);
 
-                function progressStep(i) {
-                    if (!aviaPlaneWrap) return;
-                    const t = progN > 0 ? i / progN : 0;
-                    aviaPlaneWrap.style.left = 12 + t * 58 + '%';
-                    aviaPlaneWrap.style.bottom = 48 - t * 32 + '%';
-                    aviaPlaneWrap.style.transform = `rotate(${-26 + t * 14}deg)`;
-                }
+                for (let k = 0; k < events.length; k++) {
+                    const from = waypoints[k] || aviaPlane;
+                    const to = waypoints[k + 1] || from;
+                    const ev = events[k];
+                    if (ev.type === 'prize') aviaIncoming = { x: to.x, y: to.y, kind: 'prize', add: ev.add };
+                    else if (ev.type === 'boost') aviaIncoming = { x: to.x, y: to.y, kind: 'boost', mult: ev.mult };
+                    else if (ev.type === 'rocket') aviaIncoming = { x: to.x, y: to.y, kind: 'rocket' };
+                    else if (ev.type === 'cruise') aviaIncoming = { x: to.x, y: to.y, kind: 'cruise' };
+                    else if (ev.type === 'land') aviaIncoming = { x: to.x, y: to.y, kind: 'land' };
+                    else if (ev.type === 'crash') aviaIncoming = { x: to.x, y: to.y, kind: 'crash' };
+                    else aviaIncoming = null;
 
-                for (const ev of events) {
-                    await new Promise((r) => setTimeout(r, ms));
-                    progressStep(stepIdx);
-                    stepIdx++;
+                    await aviaAnimateSegment(from, to, ms);
+                    aviaIncoming = null;
+                    const px = aviaPlane.x;
+                    const py = aviaPlane.y;
 
                     if (ev.type === 'prize') {
                         runMult += ev.add || 0;
+                        aviaPushPopup(px, py - 20, `+${ev.add}x`, '#34d399');
                         aviaLogLine('prize', `Prize +${ev.add}x  →  ${runMult.toFixed(2)}x`);
                     } else if (ev.type === 'boost') {
                         runMult *= ev.mult || 1;
+                        aviaPushPopup(px, py - 24, `×${ev.mult}`, '#a78bfa');
                         aviaLogLine('boost', `Boost ×${ev.mult}  →  ${runMult.toFixed(2)}x`);
                     } else if (ev.type === 'rocket') {
                         runMult = typeof ev.after === 'number' ? ev.after : runMult * 0.5;
+                        aviaPushPopup(px, py - 18, '−50%', '#fb923c');
                         aviaLogLine('rocket', `Rocket! Halved  →  ${runMult.toFixed(2)}x`);
                     } else if (ev.type === 'cruise') {
+                        aviaPushPopup(px, py - 16, '···', 'rgba(148,163,184,0.95)');
                         aviaLogLine('cruise', 'In flight…');
                     } else if (ev.type === 'crash') {
+                        aviaSpawnSplash(px, aviaWaterY + 8);
+                        aviaPushPopup(px, aviaWaterY - 10, 'SPLASH!', '#f87171');
                         if (aviaMultEl) {
                             aviaMultEl.textContent = '—';
                             aviaMultEl.className = 'avia-mult-value avia-lose';
                         }
-                        aviaLogLine('crash', 'Crashed into the sea — round lost.');
-                        if (aviaStatusEl) aviaStatusEl.textContent = 'Crashed! No manual cash-out — better luck next round.';
+                        aviaLogLine('crash', 'Missed the decks — crashed into the sea.');
+                        if (aviaStatusEl) {
+                            aviaStatusEl.textContent =
+                                'You did not reach a landing deck. Only the green WIN ZONE counts as a win.';
+                        }
                         postLiveFeedRound('aviamasters', bet, 0, -bet);
                         soundLose();
                     } else if (ev.type === 'land') {
                         const fm = typeof ev.mult === 'number' ? ev.mult : runMult;
                         runMult = fm;
+                        aviaWinGlow = 1;
+                        aviaPushPopup(px, py - 30, 'LANDED ✓', '#4ade80');
                         if (aviaMultEl) {
                             aviaMultEl.textContent = fm.toFixed(2) + 'x';
                             aviaMultEl.className = 'avia-mult-value ' + aviaTierClass(data.tier);
@@ -1047,9 +1505,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                   : data.tier === 'big'
                                     ? 'Big Win'
                                     : 'Win';
-                        aviaLogLine('land', `Landed on the carrier — ${fm.toFixed(2)}x (${tierLabel})`);
+                        aviaLogLine('land', `Landed on WIN ZONE — ${fm.toFixed(2)}x (${tierLabel})`);
                         if (aviaStatusEl) {
-                            aviaStatusEl.textContent = `${tierLabel}! Payout uses final multiplier (cap 80x).`;
+                            aviaStatusEl.textContent = `${tierLabel}! You touched down on the green deck (cap 80x).`;
                         }
                         const gross = Math.round(bet * fm * 100) / 100;
                         postLiveFeedRound('aviamasters', bet, fm, gross);
@@ -1058,11 +1516,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (aviaMultEl && ev.type !== 'crash' && ev.type !== 'land') {
                         aviaMultEl.textContent = runMult.toFixed(2) + 'x';
                     }
-                }
-
-                if (aviaPlaneWrap && data.won) {
-                    aviaPlaneWrap.style.left = '78%';
-                    aviaPlaneWrap.style.bottom = '22%';
+                    await new Promise((r) => setTimeout(r, 80));
                 }
             } catch (e) {
                 console.error(e);
