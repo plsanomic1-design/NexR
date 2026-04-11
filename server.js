@@ -3756,6 +3756,7 @@ io.on('connection', (socket) => {
                 id: Math.random().toString(36).substr(2, 9),
                 creatorUserId: creatorId,
                 creator: save.username,
+                creatorAvatarUrl: save.robloxAvatarUrl,
                 amount,
                 minWager: minWager || 0,
                 endsAt: Date.now() + duration * 1000,
@@ -3767,6 +3768,7 @@ io.on('connection', (socket) => {
             io.emit('chat:message', {
                 userId: creatorId,
                 username: save.username,
+                avatarUrl: save.robloxAvatarUrl,
                 text: `${save.username} started a Rain for ${formatAmountDisplay(amount)} ZH$!`,
                 createdAt: Date.now()
             });
@@ -3789,6 +3791,7 @@ io.on('connection', (socket) => {
                     io.emit('chat:message', {
                         userId: r.creatorUserId,
                         username: r.creator,
+                        avatarUrl: r.creatorAvatarUrl,
                         text: 'Rain ended with no joiners. Refunded.',
                         createdAt: Date.now()
                     });
@@ -3813,6 +3816,7 @@ io.on('connection', (socket) => {
                         io.emit('chat:message', {
                             userId: r.creatorUserId,
                             username: r.creator,
+                            avatarUrl: r.creatorAvatarUrl,
                             text: 'Rain had no valid joiners; refunded to host.',
                             createdAt: Date.now()
                         });
@@ -3848,6 +3852,7 @@ io.on('connection', (socket) => {
                         io.emit('chat:message', {
                             userId: r.creatorUserId,
                             username: r.creator,
+                            avatarUrl: r.creatorAvatarUrl,
                             text: `🌧️ Rain ended! ${payees.length} player(s) split ${formatAmountDisplay(r.amount)} ZH$ (${shareLabel}).`,
                             createdAt: Date.now()
                         });

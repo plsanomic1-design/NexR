@@ -5524,9 +5524,9 @@ function addChatMessage(msg) {
 
     const avatarObj = document.createElement('img');
     avatarObj.className = 'chat-msg-avatar';
-    const fallbackDicebear = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(msg.username || 'System')}&backgroundColor=2c2f4a`;
+    const fallbackAvatar = 'https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/150/150/AvatarHeadshot/Png';
     if (msg.username === 'System') {
-        avatarObj.src = fallbackDicebear;
+        avatarObj.src = fallbackAvatar;
     } else if (msg.avatarUrl) {
         avatarObj.src = msg.avatarUrl;
     } else if (msg.userId) {
@@ -5536,13 +5536,13 @@ function addChatMessage(msg) {
             avatarObj.src = robloxHeadshotUrl(msg.userId, 150);
         }
     } else {
-        avatarObj.src = fallbackDicebear;
+        avatarObj.src = fallbackAvatar;
     }
     avatarObj.alt = 'avatar';
     avatarObj.style.objectFit = 'cover';
     avatarObj.onerror = function() {
         this.onerror = null;
-        this.src = fallbackDicebear;
+        this.src = fallbackAvatar;
     };
     
     const bodyDiv = document.createElement('div');
