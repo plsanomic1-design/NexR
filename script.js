@@ -956,6 +956,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let aviaTrailLastMs = 0;
         /** One airborne pickup the plane is flying toward (world coords). */
         let aviaIncoming = null;
+        /** Cosmetic pickups in the sky (not tied to server outcome — you fly past them). */
+        let aviaDecoys = [];
 
         function aviaCamY() {
             return AVIA_WORLD_WATER - aviaWaterY;
@@ -1166,6 +1168,66 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 ctx.restore();
             });
+        }
+
+        function aviaDrawDecoys(ctx, W, camX, camY) {
+            if (!aviaDecoys.length) return;
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.setLineDash([3, 5]);
+            aviaDecoys.forEach((d) => {
+                const x = d.wx - camX;
+                const y = d.wy - camY;
+                if (x < -50 || x > W + 50) return;
+                ctx.strokeStyle = 'rgba(255,255,255,0.32)';
+                ctx.fillStyle = 'rgba(15, 25, 40, 0.5)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(x, y, 16, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(203, 213, 225, 0.8)';
+                ctx.font = '600 11px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(d.label, x, y);
+            });
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+
+        function aviaBuildDecoysForSegment(from, to, segIndex, count) {
+            const dx = to.wx - from.wx;
+            const dy = to.wy - from.wy;
+            const dist = Math.hypot(dx, dy) || 1;
+            const ux = dx / dist;
+            const uy = dy / dist;
+            const px = -uy;
+            const py = ux;
+            const out = [];
+            const labels = ['+1', '+2', '+5', '×2', '×3', '−½'];
+            const seed = segIndex * 31 + from.wx * 0.07;
+            for (let i = 0; i < count; i++) {
+                const u = 0.18 + ((i + 0.4) / Math.max(count, 1)) * 0.52;
+                const bx = from.wx + dx * u;
+                const by = from.wy + dy * u;
+                const side = i % 2 === 0 ? 1 : -1;
+                const off = 36 + ((i * 23 + seed) % 28);
+                out.push({
+                    wx: bx + px * side * off,
+                    wy: by + py * side * off,
+                    label: labels[(Math.floor(seed) + i * 3 + i * i) % labels.length]
+                });
+            }
+            return out;
+        }
+
+        function aviaWrapPi(a) {
+            let x = a;
+            while (x > Math.PI) x -= Math.PI * 2;
+            while (x < -Math.PI) x += Math.PI * 2;
+            return x;
         }
 
         function aviaDrawIncoming(ctx, W, camX, camY) {
@@ -1518,6 +1580,7 @@ document.addEventListener('DOMContentLoaded', () => {
             aviaDrawAmbientIslands(aviaCtx, W, camX, camY);
             aviaDrawLaunchDeck(aviaCtx, W, camX, camY);
             aviaDrawPads(aviaCtx, W, camX, camY);
+            aviaDrawDecoys(aviaCtx, W, camX, camY);
             aviaDrawIncoming(aviaCtx, W, camX, camY);
             aviaDrawContrail(aviaCtx, camX, camY);
             aviaDrawPlane(aviaCtx, W, camX, camY);
@@ -1598,8 +1661,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         /**
-         * Loose, floaty flight — drifts toward the next area with wander (not a visible “scripted” arc).
-         * On “pickup” moment: prize/boost nudges up, rocket nudges down; final land/crash is calmer and tighter.
+         * Flight like Aviamasters-style RNG run: plane cruises forward, can pass *decoys* without collecting,
+         * and uses a “miss lane” so it does not aim straight at the real +/− until late in the beat.
+         * Heading is smoothed to avoid spinning. Outcome is still server-authoritative.
          */
         function aviaAnimateSegment(from, to, baseMs, ev, segIndex) {
             return new Promise((resolve) => {
@@ -1610,44 +1674,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dx = tx - fx;
                 const dy = ty - fy;
                 const dist = Math.hypot(dx, dy) || 140;
-                const pathAng = Math.atan2(dy, dx);
-                const perpAng = pathAng + Math.PI / 2;
-                const seed = segIndex * 2.413 + fx * 0.017 + fy * 0.011;
+                const pathAng0 = Math.atan2(dy, dx);
+                const uhatx = dx / dist;
+                const uhaty = dy / dist;
+                const px = -uhaty;
+                const py = uhatx;
+                const seed = segIndex * 2.11 + fx * 0.013;
                 const isFinal = ev && (ev.type === 'land' || ev.type === 'crash');
-                let durationMs = baseMs * (0.88 + dist / 165);
-                durationMs = Math.min(3600, Math.max(baseMs * 0.58, durationMs));
-                if (isFinal) durationMs *= 0.92;
+                const missSide = Math.sin(seed + segIndex * 1.9) >= 0 ? 1 : -1;
+                const missAmt = isFinal ? 14 : 52 + (segIndex % 4) * 10;
 
-                const hitU = 0.74 + (Math.sin(seed) * 0.5 + 0.5) * 0.12;
+                let durationMs = baseMs * (0.82 + dist / 168);
+                durationMs = Math.min(3600, Math.max(baseMs * 0.58, durationMs));
+                if (isFinal) durationMs *= 0.9;
+
+                const hitU = 0.8 + (Math.sin(seed * 2) * 0.5 + 0.5) * 0.07;
                 let hitApplied = false;
                 let bumpWy = 0;
                 const t0 = performance.now();
 
-                function sampleDrift(uLin) {
-                    const p = aviaEaseInOutCubic(uLin);
-                    const slack = isFinal ? 0.92 : 0.78;
-                    const bx = fx + dx * Math.min(1, p * slack + (1 - slack) * p * p * 0.35);
-                    const by = fy + dy * Math.min(1, p * slack + (1 - slack) * p * p * 0.35);
-
-                    const wMagA = isFinal ? 10 : 36 + Math.sin(seed * 3) * 10;
-                    const wMagB = isFinal ? 5 : 22;
-                    const w1 = wMagA * Math.sin(p * Math.PI * 4.4 + seed);
-                    const w2 = wMagB * Math.sin(p * Math.PI * 7.1 + seed * 1.9);
-                    const w3 = isFinal ? 0 : 16 * Math.sin(uLin * Math.PI * 2.8 + seed * 2.2);
-                    let ox = Math.cos(perpAng) * (w1 + w2 * 0.55);
-                    let oy = Math.sin(perpAng) * (w1 + w2 * 0.55);
-
-                    const fadeWig = isFinal ? 1 - p * 0.85 : 1 - p * 0.25;
-                    ox *= fadeWig;
-                    oy *= fadeWig;
-
-                    const bobA = isFinal ? 5 : 15;
-                    const bobB = isFinal ? 0 : 11;
-                    const bob =
-                        bobA * Math.sin(uLin * Math.PI * 2.1 + seed * 3) +
-                        bobB * Math.sin(uLin * Math.PI * 4.6 + seed);
-
-                    return { wx: bx + ox, wy: by + oy + bob };
+                function segmentPos(rawU, bumpY) {
+                    const p = aviaEaseInOutCubic(rawU);
+                    const missT = 1 - Math.min(1, rawU / (isFinal ? 0.78 : 0.58));
+                    const curMiss = missAmt * missT * (isFinal ? 0.35 : 1);
+                    const bx = fx + dx * p;
+                    const by = fy + dy * p;
+                    const wig = (isFinal ? 5 : 12) * Math.sin(rawU * Math.PI * 3.2 + seed);
+                    const wig2 = (isFinal ? 3 : 9) * Math.sin(rawU * Math.PI * 1.9 + seed * 1.3);
+                    return {
+                        wx: bx + px * missSide * curMiss + uhatx * wig2 * 0.25,
+                        wy: by + py * missSide * curMiss + uhaty * wig2 * 0.25 + wig + bumpY
+                    };
                 }
 
                 function tick(now) {
@@ -1655,35 +1712,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (!hitApplied && rawU >= hitU && ev && !isFinal) {
                         hitApplied = true;
-                        if (ev.type === 'prize') bumpWy = -26 - Math.min(10, (ev.add || 1) * 1.2);
-                        else if (ev.type === 'boost') bumpWy = -20;
-                        else if (ev.type === 'rocket') bumpWy = 24;
-                        else if (ev.type === 'cruise') bumpWy = (Math.sin(seed * 5) * 5);
+                        if (ev.type === 'prize') bumpWy = -22 - Math.min(8, (ev.add || 1) * 1);
+                        else if (ev.type === 'boost') bumpWy = -17;
+                        else if (ev.type === 'rocket') bumpWy = 20;
+                        else if (ev.type === 'cruise') bumpWy = Math.sin(seed * 5) * 4;
                     }
 
-                    let pos = sampleDrift(rawU);
-                    pos.wy += bumpWy;
                     bumpWy *= 0.9;
-
+                    const pos = segmentPos(rawU, bumpWy);
                     aviaPlane.wx = pos.wx;
                     aviaPlane.wy = pos.wy;
 
-                    const du = 0.018;
-                    const pA = sampleDrift(Math.max(0, rawU - du));
-                    const pB = sampleDrift(Math.min(1, rawU + du));
-                    let ax = pB.wx - pA.wx;
-                    let ay = pB.wy - pA.wy + bumpWy * 0.08;
-                    if (ax * ax + ay * ay < 4) {
-                        ax = Math.cos(pathAng) * 3;
-                        ay = Math.sin(pathAng) * 3;
+                    const du = 0.028;
+                    const pA = segmentPos(Math.max(0, rawU - du), bumpWy);
+                    const pB = segmentPos(Math.min(1, rawU + du), bumpWy);
+                    let tax = pB.wx - pA.wx;
+                    let tay = pB.wy - pA.wy;
+                    if (tax * tax + tay * tay < 9) {
+                        tax = Math.cos(pathAng0) * 5;
+                        tay = Math.sin(pathAng0) * 5;
                     }
-                    aviaPlane.angle = Math.atan2(ay, ax);
+                    let targetAng = Math.atan2(tay, tax);
+                    if (typeof aviaPlane.smoothAngle !== 'number') aviaPlane.smoothAngle = targetAng;
+                    const dAng = aviaWrapPi(targetAng - aviaPlane.smoothAngle);
+                    const maxStep = isFinal ? 0.14 : 0.095;
+                    aviaPlane.smoothAngle += Math.max(-maxStep, Math.min(maxStep, dAng));
+                    aviaPlane.angle = aviaPlane.smoothAngle;
 
                     if (rawU < 1) requestAnimationFrame(tick);
                     else {
                         aviaPlane.wx = tx;
                         aviaPlane.wy = ty;
-                        aviaPlane.angle = Math.atan2(ty - fy, tx - fx);
+                        const endA = Math.atan2(ty - fy, tx - fx);
+                        aviaPlane.smoothAngle = endA;
+                        aviaPlane.angle = endA;
                         resolve();
                     }
                 }
@@ -1720,7 +1782,8 @@ document.addEventListener('DOMContentLoaded', () => {
             aviaWinGlow = 0;
             aviaIncoming = null;
             aviaPads = [];
-            aviaPlane = { wx: 100, wy: 145, angle: -0.15 };
+            aviaDecoys = [];
+            aviaPlane = { wx: 100, wy: 145, angle: -0.15, smoothAngle: -0.15 };
             aviaUpdateCamera();
         }
 
@@ -1768,12 +1831,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (waypoints.length) {
                     aviaPlane.wx = waypoints[0].wx;
                     aviaPlane.wy = waypoints[0].wy;
+                    const a0 = Math.atan2(
+                        waypoints[1] ? waypoints[1].wy - waypoints[0].wy : 0,
+                        waypoints[1] ? waypoints[1].wx - waypoints[0].wx : 1
+                    );
+                    aviaPlane.angle = a0;
+                    aviaPlane.smoothAngle = a0;
                 }
 
                 for (let k = 0; k < events.length; k++) {
                     const from = waypoints[k] || { wx: aviaPlane.wx, wy: aviaPlane.wy };
                     const to = waypoints[k + 1] || from;
                     const ev = events[k];
+                    const isFinSeg = ev.type === 'land' || ev.type === 'crash';
+                    aviaDecoys = isFinSeg ? [] : aviaBuildDecoysForSegment(from, to, k, 2 + (k % 2));
+
                     if (ev.type === 'prize') aviaIncoming = { wx: to.wx, wy: to.wy, kind: 'prize', add: ev.add };
                     else if (ev.type === 'boost') aviaIncoming = { wx: to.wx, wy: to.wy, kind: 'boost', mult: ev.mult };
                     else if (ev.type === 'rocket') aviaIncoming = { wx: to.wx, wy: to.wy, kind: 'rocket' };
@@ -1784,6 +1856,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     await aviaAnimateSegment(from, to, ms, ev, k);
                     aviaIncoming = null;
+                    aviaDecoys = [];
                     const px = aviaPlane.wx;
                     const py = aviaPlane.wy;
 
