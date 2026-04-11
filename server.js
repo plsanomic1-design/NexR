@@ -4392,6 +4392,83 @@ io.on('connection', (socket) => {
 // CASE BATTLES SYSTEM
 // ======================================================================
 
+/** Inline SVG data URLs — no photo backgrounds; icons sit cleanly on UI surfaces. */
+function caseSvgDataUrl(svg) {
+    const min = svg.replace(/\s{2,}/g, ' ').replace(/>\s+</g, '><').trim();
+    return 'data:image/svg+xml,' + encodeURIComponent(min);
+}
+
+function caseNormalizeHex(c) {
+    const s = String(c || '#64748b').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(s)) return s;
+    if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+        return '#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
+    }
+    return '#64748b';
+}
+
+/** Dark theme hexes need a lighter stroke or the art disappears on navy cards. */
+function caseStrokeForUi(hex) {
+    const h = caseNormalizeHex(hex).slice(1);
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    if (lum < 0.22) return '#94a3b8';
+    return caseNormalizeHex(hex);
+}
+
+function caseHashStr(s) {
+    let h = 0;
+    const str = String(s);
+    for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+    return Math.abs(h);
+}
+
+const CASE_RARITY_ICON = {
+    common: '#94a3b8',
+    uncommon: '#4ade80',
+    rare: '#38bdf8',
+    epic: '#c084fc',
+    legendary: '#fbbf24'
+};
+
+function buildCaseCoverDataUrl(hex, caseId) {
+    const c = caseStrokeForUi(hex);
+    const v = caseHashStr(caseId) % 4;
+    let inner = '';
+    if (v === 0) {
+        inner = `<path d="M50 8 L88 36 L72 88 L28 88 L12 36 Z" stroke="${c}" stroke-width="2.6" fill="none" stroke-linejoin="round"/><path d="M50 8 L50 52 M12 36 L88 36 M28 88 L72 12 M72 88 L28 12" stroke="${c}" stroke-width="1.1" opacity="0.45"/>`;
+    } else if (v === 1) {
+        inner = `<rect x="18" y="22" width="64" height="56" rx="7" stroke="${c}" stroke-width="2.6" fill="none"/><path d="M18 42h64M50 22v18" stroke="${c}" stroke-width="2"/><rect x="36" y="48" width="28" height="18" rx="3" fill="${c}" fill-opacity="0.12" stroke="${c}" stroke-width="1.2"/>`;
+    } else if (v === 2) {
+        inner = `<circle cx="50" cy="50" r="28" stroke="${c}" stroke-width="2.6" fill="none"/><circle cx="50" cy="50" r="15" stroke="${c}" stroke-width="1.4" fill="none" opacity="0.7"/><ellipse cx="50" cy="50" rx="36" ry="11" stroke="${c}" stroke-width="1.1" fill="none" opacity="0.38" transform="rotate(-22 50 50)"/>`;
+    } else {
+        inner = `<path d="M50 6 L63 38 L94 42 L68 58 L74 92 L50 72 L26 92 L32 58 L6 42 L37 38 Z" stroke="${c}" stroke-width="2.2" fill="none" stroke-linejoin="round"/><path d="M50 6 V72 M37 38 L63 58 M6 42 L94 42" stroke="${c}" stroke-width="1" opacity="0.35"/>`;
+    }
+    return caseSvgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">${inner}</svg>`
+    );
+}
+
+function buildCaseItemIconDataUrl(rarity, itemId) {
+    const c = CASE_RARITY_ICON[String(rarity || 'common').toLowerCase()] || CASE_RARITY_ICON.common;
+    const v = caseHashStr(String(itemId) + String(rarity)) % 5;
+    let inner = '';
+    if (v === 0) {
+        inner = `<path d="M50 14 L72 42 L50 86 L28 42 Z" stroke="${c}" stroke-width="2.5" fill="none" stroke-linejoin="round"/><path d="M50 14 V86 M28 42 h44" stroke="${c}" stroke-width="1" opacity="0.42"/>`;
+    } else if (v === 1) {
+        inner = `<path d="M50 12 L58 38 L86 42 L64 58 L70 88 L50 74 L30 88 L36 58 L14 42 L42 38 Z" stroke="${c}" stroke-width="2" fill="none" stroke-linejoin="round"/>`;
+    } else if (v === 2) {
+        inner = `<path d="M50 10 L58 34 L84 38 L64 52 L70 80 L50 68 L30 80 L36 52 L16 38 L42 34 Z" stroke="${c}" stroke-width="1.9" fill="none" stroke-linejoin="round"/>`;
+    } else if (v === 3) {
+        inner = `<circle cx="50" cy="50" r="26" stroke="${c}" stroke-width="2.4" fill="none"/><circle cx="50" cy="50" r="14" fill="${c}" fill-opacity="0.14"/><path d="M50 24v52M24 50h52" stroke="${c}" stroke-width="1" opacity="0.35"/>`;
+    } else {
+        inner = `<path d="M50 8 L56 36 L86 40 L62 56 L68 90 L50 76 L32 90 L38 56 L14 40 L44 36 Z" stroke="${c}" stroke-width="2" fill="none" stroke-linejoin="round"/>`;
+    }
+    return caseSvgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">${inner}</svg>`);
+}
+
 /**
  * All case prize rows (every item in every case), sorted by in-game value ascending
  * (then case id, then item id), are mapped 1:1 onto this ladder. Names match Roblox
@@ -4463,7 +4540,7 @@ const CASES_DATA_BASE = [
         id: 'starter',
         name: 'Starter Case',
         price: 100,
-        image: '/case_starter.png',
+        image: '',
         color: '#00d2ff',
         items: [
             { id: 'blue_gem', value: 30, chance: 55, rarity: 'common' },
@@ -4476,7 +4553,7 @@ const CASES_DATA_BASE = [
         id: 'standard',
         name: 'ZephR$ Standard',
         price: 500,
-        image: '/case_standard.png',
+        image: '',
         color: '#a855f7',
         items: [
             { id: 'bronze_shield', value: 100, chance: 40, rarity: 'common' },
@@ -4490,7 +4567,7 @@ const CASES_DATA_BASE = [
         id: 'elite',
         name: 'Elite Case',
         price: 2000,
-        image: '/case_elite.png',
+        image: '',
         color: '#ef4444',
         items: [
             { id: 'rare_aura', value: 500, chance: 35, rarity: 'uncommon' },
@@ -4504,7 +4581,7 @@ const CASES_DATA_BASE = [
         id: 'lucky',
         name: 'Lucky Flip',
         price: 250,
-        image: '/case_lucky.png',
+        image: '',
         color: '#22c55e',
         items: [
             { id: 'nothing', value: 0, chance: 45, rarity: 'common' },
@@ -4516,7 +4593,7 @@ const CASES_DATA_BASE = [
         id: 'amethyst',
         name: 'Amethyst Case',
         price: 45,
-        image: '/case_amethyst.png',
+        image: '',
         color: '#a855f7',
         items: [
             { id: 'amethyst_shard', value: 15, chance: 50, rarity: 'common' },
@@ -4529,7 +4606,7 @@ const CASES_DATA_BASE = [
         id: 'ruby',
         name: 'Ruby Case',
         price: 150,
-        image: '/case_ruby.png',
+        image: '',
         color: '#ef4444',
         items: [
             { id: 'ruby_shard', value: 40, chance: 55, rarity: 'common' },
@@ -4542,7 +4619,7 @@ const CASES_DATA_BASE = [
         id: 'emerald',
         name: 'Emerald Case',
         price: 400,
-        image: '/case_emerald.png',
+        image: '',
         color: '#22c55e',
         items: [
             { id: 'emerald_shard', value: 110, chance: 55, rarity: 'common' },
@@ -4555,7 +4632,7 @@ const CASES_DATA_BASE = [
         id: 'sapphire',
         name: 'Sapphire Case',
         price: 850,
-        image: '/case_sapphire.png',
+        image: '',
         color: '#3b82f6',
         items: [
             { id: 'sapphire_shard', value: 250, chance: 50, rarity: 'common' },
@@ -4568,7 +4645,7 @@ const CASES_DATA_BASE = [
         id: 'diamond',
         name: 'Diamond Case',
         price: 1500,
-        image: '/case_diamond.png',
+        image: '',
         color: '#e0f2fe',
         items: [
             { id: 'diamond_shard', value: 450, chance: 55, rarity: 'common' },
@@ -4581,7 +4658,7 @@ const CASES_DATA_BASE = [
         id: 'void',
         name: 'Void Case',
         price: 3000,
-        image: '/case_void.png',
+        image: '',
         color: '#111827',
         items: [
             { id: 'void_dust', value: 800, chance: 55, rarity: 'common' },
@@ -4594,7 +4671,7 @@ const CASES_DATA_BASE = [
         id: 'galactic',
         name: 'Galactic Case',
         price: 6500,
-        image: '/case_galactic.png',
+        image: '',
         color: '#4c1d95',
         items: [
             { id: 'star_dust', value: 1800, chance: 55, rarity: 'common' },
@@ -4607,7 +4684,7 @@ const CASES_DATA_BASE = [
         id: 'inferno',
         name: 'Inferno Case',
         price: 12000,
-        image: '/case_inferno.png',
+        image: '',
         color: '#991b1b',
         items: [
             { id: 'ember', value: 3500, chance: 55, rarity: 'common' },
@@ -4620,7 +4697,7 @@ const CASES_DATA_BASE = [
         id: 'divine',
         name: 'Divine Case',
         price: 25000,
-        image: '/case_divine.png',
+        image: '',
         color: '#fef08a',
         items: [
             { id: 'holy_light', value: 7500, chance: 55, rarity: 'common' },
@@ -4633,7 +4710,7 @@ const CASES_DATA_BASE = [
         id: 'supreme',
         name: 'ZephR$ Supreme',
         price: 50000,
-        image: '/case_supreme.png',
+        image: '',
         color: '#facc15',
         items: [
             { id: 'pure_gold', value: 15000, chance: 55, rarity: 'common' },
@@ -4668,47 +4745,20 @@ function buildCasesDataSync() {
         row.it.name = L.name;
         row.it.icon = '';
     });
+    for (const c of base) {
+        c.image = buildCaseCoverDataUrl(c.color, c.id);
+        for (const it of c.items) {
+            it.icon = buildCaseItemIconDataUrl(it.rarity, it.id);
+        }
+    }
     return base;
 }
 
 let CASES_DATA = buildCasesDataSync();
 
-async function fetchRobloxAssetThumbUrlMap(assetIds) {
-    const map = new Map();
-    const uniq = [...new Set(assetIds.filter((n) => Number.isFinite(n) && n > 0))];
-    const CHUNK = 100;
-    for (let i = 0; i < uniq.length; i += CHUNK) {
-        const chunk = uniq.slice(i, i + CHUNK);
-        const url = `https://thumbnails.roblox.com/v1/assets?assetIds=${chunk.join(
-            ','
-        )}&returnPolicy=PlaceHolder&size=420x420&format=Png&isCircular=false`;
-        try {
-            const res = await fetch(url);
-            const j = await res.json();
-            for (const row of j.data || []) {
-                if (row.imageUrl && row.targetId != null) map.set(row.targetId, row.imageUrl);
-            }
-        } catch (e) {
-            console.error('[Cases] Thumbnail batch failed:', e && e.message);
-        }
-    }
-    return map;
-}
-
 async function hydrateCaseItemThumbnails() {
-    const ids = [];
-    for (const c of CASES_DATA) {
-        for (const it of c.items) {
-            if (it.assetId) ids.push(it.assetId);
-        }
-    }
-    const thumbMap = await fetchRobloxAssetThumbUrlMap(ids);
-    for (const c of CASES_DATA) {
-        for (const it of c.items) {
-            const u = thumbMap.get(it.assetId);
-            if (u) it.icon = u;
-        }
-    }
+    // Prize icons are inline SVG data URLs from buildCasesDataSync (transparent, no Roblox JPEG squares).
+    return;
 }
 
 
@@ -5142,10 +5192,10 @@ app.use(express.static(ROOT));
 
 hydrateCaseItemThumbnails()
     .then(() => {
-        console.log('[Cases] Roblox catalog thumbnails loaded for case items.');
+        console.log('[Cases] Using inline SVG art for case covers and prize icons.');
     })
     .catch((e) => {
-        console.error('[Cases] Thumbnail hydrate failed (items may lack icons until restart):', e && e.message);
+        console.error('[Cases] Case art init failed:', e && e.message);
     })
     .finally(() => {
         server.listen(PORT, () => {

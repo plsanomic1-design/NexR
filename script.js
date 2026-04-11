@@ -5900,7 +5900,7 @@ async function cbOpenCaseModal(caseId) {
     await new Promise(r => setTimeout(r, 350));
     result.style.display = 'block';
     document.getElementById('cb-result-item-img-wrap').innerHTML =
-        `<img src="${winningItem.icon}" alt="${winningItem.name}" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 0 20px ${RARITY_COLORS[winningItem.rarity]||'#fff'})">`;
+        `<img class="cb-result-prize-img" src="${winningItem.icon}" alt="${winningItem.name}" style="filter:drop-shadow(0 0 22px ${RARITY_COLORS[winningItem.rarity]||'#fff'})">`;
     document.getElementById('cb-result-item-name').textContent = winningItem.name;
     const valEl = document.getElementById('cb-result-item-value');
     valEl.textContent = winningItem.value ? winningItem.value.toLocaleString() + ' RoBet' : 'No value';
