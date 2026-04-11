@@ -945,7 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const AVIA_WORLD_WATER = 310;
         /** Camera X: world x at left edge = plane.wx - offset (infinite scroll). */
         let aviaCamX = 0;
-        let aviaPlane = { wx: 120, wy: 145, angle: -0.2 };
+        let aviaPlane = { wx: 120, wy: 145, angle: -0.2, vx: 0, vy: 0 };
         let aviaPads = [];
         let aviaPopups = [];
         let aviaParticles = [];
@@ -1656,98 +1656,131 @@ document.addEventListener('DOMContentLoaded', () => {
             return pts;
         }
 
-        function aviaEaseInOutCubic(u) {
-            return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
-        }
-
         /**
-         * Flight like Aviamasters-style RNG run: plane cruises forward, can pass *decoys* without collecting,
-         * and uses a “miss lane” so it does not aim straight at the real +/− until late in the beat.
-         * Heading is smoothed to avoid spinning. Outcome is still server-authoritative.
+         * Free-flight feel: velocity + steering (not a time-t plot along a spline).
+         * Soft seek toward the next beat with arrival slowdown, gusty lateral drift, speed carried between segments.
+         * Collection when you wander close enough (min airtime first); max time fail-safe. Server outcome unchanged.
          */
         function aviaAnimateSegment(from, to, baseMs, ev, segIndex) {
             return new Promise((resolve) => {
-                const fx = from.wx;
-                const fy = from.wy;
                 const tx = to.wx;
                 const ty = to.wy;
-                const dx = tx - fx;
-                const dy = ty - fy;
-                const dist = Math.hypot(dx, dy) || 140;
-                const pathAng0 = Math.atan2(dy, dx);
-                const uhatx = dx / dist;
-                const uhaty = dy / dist;
-                const px = -uhaty;
-                const py = uhatx;
-                const seed = segIndex * 2.11 + fx * 0.013;
+                const seed = segIndex * 3.17 + from.wx * 0.019 + from.wy * 0.011;
                 const isFinal = ev && (ev.type === 'land' || ev.type === 'crash');
-                const missSide = Math.sin(seed + segIndex * 1.9) >= 0 ? 1 : -1;
-                const missAmt = isFinal ? 14 : 52 + (segIndex % 4) * 10;
 
-                let durationMs = baseMs * (0.82 + dist / 168);
-                durationMs = Math.min(3600, Math.max(baseMs * 0.58, durationMs));
-                if (isFinal) durationMs *= 0.9;
-
-                const hitU = 0.8 + (Math.sin(seed * 2) * 0.5 + 0.5) * 0.07;
-                let hitApplied = false;
-                let bumpWy = 0;
-                const t0 = performance.now();
-
-                function segmentPos(rawU, bumpY) {
-                    const p = aviaEaseInOutCubic(rawU);
-                    const missT = 1 - Math.min(1, rawU / (isFinal ? 0.78 : 0.58));
-                    const curMiss = missAmt * missT * (isFinal ? 0.35 : 1);
-                    const bx = fx + dx * p;
-                    const by = fy + dy * p;
-                    const wig = (isFinal ? 5 : 12) * Math.sin(rawU * Math.PI * 3.2 + seed);
-                    const wig2 = (isFinal ? 3 : 9) * Math.sin(rawU * Math.PI * 1.9 + seed * 1.3);
-                    return {
-                        wx: bx + px * missSide * curMiss + uhatx * wig2 * 0.25,
-                        wy: by + py * missSide * curMiss + uhaty * wig2 * 0.25 + wig + bumpY
-                    };
+                let vx = typeof aviaPlane.vx === 'number' ? aviaPlane.vx : 0;
+                let vy = typeof aviaPlane.vy === 'number' ? aviaPlane.vy : 0;
+                const sdx = tx - aviaPlane.wx;
+                const sdy = ty - aviaPlane.wy;
+                const startDist = Math.hypot(sdx, sdy) || 1;
+                if (Math.hypot(vx, vy) < 48) {
+                    const boot = isFinal ? 100 : 122;
+                    vx = (sdx / startDist) * boot;
+                    vy = (sdy / startDist) * boot;
                 }
 
+                const maxSpeed = isFinal ? 232 : 278;
+                const maxAccel = isFinal ? 460 : 395;
+                const windAmp = isFinal ? 44 : 168;
+                const collectR = isFinal ? 48 : 36;
+                const minWait = Math.max(190, baseMs * 0.32);
+                const maxT = Math.min(6200, baseMs * 3.05 + (startDist / 120) * 440);
+                const arrival = 168;
+
+                const t0 = performance.now();
+                let last = t0;
+                let collected = false;
+
                 function tick(now) {
-                    const rawU = Math.min(1, (now - t0) / durationMs);
+                    const dt = Math.min(0.05, Math.max(0.007, (now - last) / 1000));
+                    last = now;
 
-                    if (!hitApplied && rawU >= hitU && ev && !isFinal) {
-                        hitApplied = true;
-                        if (ev.type === 'prize') bumpWy = -22 - Math.min(8, (ev.add || 1) * 1);
-                        else if (ev.type === 'boost') bumpWy = -17;
-                        else if (ev.type === 'rocket') bumpWy = 20;
-                        else if (ev.type === 'cruise') bumpWy = Math.sin(seed * 5) * 4;
+                    const dx = tx - aviaPlane.wx;
+                    const dy = ty - aviaPlane.wy;
+                    const dist = Math.hypot(dx, dy) || 1;
+                    const ux = dx / dist;
+                    const uy = dy / dist;
+
+                    let spd = maxSpeed;
+                    if (dist < arrival) spd *= 0.1 + 0.9 * Math.max(0.16, dist / arrival);
+
+                    let dvx = ux * spd - vx;
+                    let dvy = uy * spd - vy;
+                    const steerMag = Math.hypot(dvx, dvy);
+                    const steerCap = maxAccel * dt;
+                    if (steerMag > steerCap && steerMag > 0) {
+                        dvx = (dvx / steerMag) * steerCap;
+                        dvy = (dvy / steerMag) * steerCap;
+                    }
+                    vx += dvx;
+                    vy += dvy;
+
+                    const drag = 1 - (isFinal ? 0.19 : 0.25) * dt;
+                    vx *= drag;
+                    vy *= drag;
+
+                    const vm = Math.hypot(vx, vy) || 0.01;
+                    const px = -vy / vm;
+                    const py = vx / vm;
+                    const gust =
+                        Math.sin(now * 0.0026 + seed) * windAmp +
+                        Math.cos(now * 0.00155 + seed * 2.07) * windAmp * 0.46;
+                    vx += px * gust * dt;
+                    vy += py * gust * dt;
+
+                    const jit = (isFinal ? 20 : 72) * dt;
+                    vx += (px * Math.sin(now * 0.0078 + seed * 3) + ux * Math.sin(now * 0.0048 + segIndex * 1.1)) * jit;
+                    vy += (py * Math.sin(now * 0.0078 + seed * 3) + uy * Math.sin(now * 0.0048 + segIndex * 1.1)) * jit;
+
+                    const sp = Math.hypot(vx, vy);
+                    const spCap = maxSpeed * 1.05;
+                    if (sp > spCap) {
+                        vx = (vx / sp) * spCap;
+                        vy = (vy / sp) * spCap;
                     }
 
-                    bumpWy *= 0.9;
-                    const pos = segmentPos(rawU, bumpWy);
-                    aviaPlane.wx = pos.wx;
-                    aviaPlane.wy = pos.wy;
+                    aviaPlane.wx += vx * dt;
+                    aviaPlane.wy += vy * dt;
 
-                    const du = 0.028;
-                    const pA = segmentPos(Math.max(0, rawU - du), bumpWy);
-                    const pB = segmentPos(Math.min(1, rawU + du), bumpWy);
-                    let tax = pB.wx - pA.wx;
-                    let tay = pB.wy - pA.wy;
-                    if (tax * tax + tay * tay < 9) {
-                        tax = Math.cos(pathAng0) * 5;
-                        tay = Math.sin(pathAng0) * 5;
-                    }
-                    let targetAng = Math.atan2(tay, tax);
-                    if (typeof aviaPlane.smoothAngle !== 'number') aviaPlane.smoothAngle = targetAng;
-                    const dAng = aviaWrapPi(targetAng - aviaPlane.smoothAngle);
-                    const maxStep = isFinal ? 0.14 : 0.095;
-                    aviaPlane.smoothAngle += Math.max(-maxStep, Math.min(maxStep, dAng));
+                    const tAng = Math.atan2(vy, vx);
+                    if (typeof aviaPlane.smoothAngle !== 'number') aviaPlane.smoothAngle = tAng;
+                    const dAng = aviaWrapPi(tAng - aviaPlane.smoothAngle);
+                    aviaPlane.smoothAngle += Math.max(-0.11, Math.min(0.11, dAng));
                     aviaPlane.angle = aviaPlane.smoothAngle;
 
-                    if (rawU < 1) requestAnimationFrame(tick);
-                    else {
+                    const elapsed = now - t0;
+
+                    if (!collected && elapsed >= minWait && dist < collectR) {
+                        collected = true;
                         aviaPlane.wx = tx;
                         aviaPlane.wy = ty;
-                        const endA = Math.atan2(ty - fy, tx - fx);
-                        aviaPlane.smoothAngle = endA;
-                        aviaPlane.angle = endA;
+                        let nx = vx;
+                        let ny = vy;
+                        if (ev && !isFinal) {
+                            if (ev.type === 'prize') ny -= 58;
+                            else if (ev.type === 'boost') ny -= 46;
+                            else if (ev.type === 'rocket') ny += 64;
+                            else if (ev.type === 'cruise') ny += Math.sin(seed * 5) * 36;
+                        }
+                        const nmag = Math.hypot(nx, ny) || 1;
+                        const keep = Math.min(maxSpeed * 0.66, Math.max(88, nmag * 0.82));
+                        aviaPlane.vx = (nx / nmag) * keep;
+                        aviaPlane.vy = (ny / nmag) * keep;
                         resolve();
+                        return;
                     }
+
+                    if (elapsed >= maxT) {
+                        aviaPlane.wx = tx;
+                        aviaPlane.wy = ty;
+                        const fsp = Math.min(maxSpeed * 0.58, 118);
+                        aviaPlane.vx = ux * fsp;
+                        aviaPlane.vy = uy * fsp;
+                        resolve();
+                        return;
+                    }
+
+                    requestAnimationFrame(tick);
                 }
                 requestAnimationFrame(tick);
             });
@@ -1783,7 +1816,7 @@ document.addEventListener('DOMContentLoaded', () => {
             aviaIncoming = null;
             aviaPads = [];
             aviaDecoys = [];
-            aviaPlane = { wx: 100, wy: 145, angle: -0.15, smoothAngle: -0.15 };
+            aviaPlane = { wx: 100, wy: 145, angle: -0.15, smoothAngle: -0.15, vx: 0, vy: 0 };
             aviaUpdateCamera();
         }
 
@@ -1831,12 +1864,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (waypoints.length) {
                     aviaPlane.wx = waypoints[0].wx;
                     aviaPlane.wy = waypoints[0].wy;
-                    const a0 = Math.atan2(
-                        waypoints[1] ? waypoints[1].wy - waypoints[0].wy : 0,
-                        waypoints[1] ? waypoints[1].wx - waypoints[0].wx : 1
-                    );
-                    aviaPlane.angle = a0;
-                    aviaPlane.smoothAngle = a0;
+                    if (waypoints.length > 1) {
+                        const ddx = waypoints[1].wx - waypoints[0].wx;
+                        const ddy = waypoints[1].wy - waypoints[0].wy;
+                        const dd = Math.hypot(ddx, ddy) || 1;
+                        aviaPlane.vx = (ddx / dd) * 118;
+                        aviaPlane.vy = (ddy / dd) * 118;
+                        const a0 = Math.atan2(ddy, ddx);
+                        aviaPlane.angle = a0;
+                        aviaPlane.smoothAngle = a0;
+                    } else {
+                        aviaPlane.vx = 115;
+                        aviaPlane.vy = 0;
+                        aviaPlane.angle = 0;
+                        aviaPlane.smoothAngle = 0;
+                    }
                 }
 
                 for (let k = 0; k < events.length; k++) {
