@@ -3785,6 +3785,9 @@ function extractGamepassId(link) {
 }
 
 async function confirmWithdraw() {
+    // --- Guard: prevent double-submit / spam clicks ---
+    if (isWithdrawing) return;
+
     const inp = document.getElementById('wd-amount-input');
     const coins = parseFloat(inp ? inp.value : 0) || 0;
     const beforeTax = Math.floor(coins / 1.5);
@@ -3824,12 +3827,12 @@ async function confirmWithdraw() {
         return;
     }
 
-    // Validate gamepass link
-    const linkInput = document.getElementById('wd-gamepass-link');
-    const gpLink = linkInput ? linkInput.value.trim() : '';
-    const gpId = extractGamepassId(gpLink);
-    if(!gpId) {
-        showErr('Please paste a valid Roblox Gamepass link (e.g. https://www.roblox.com/game-pass/12345678/...).');
+    // Validate API Key
+    const keyInput = document.getElementById('wd-api-key');
+    const apiKey = keyInput ? keyInput.value.trim() : '';
+
+    if(!apiKey || apiKey.length < 10) {
+        showErr('Please paste your valid Roblox API Key.');
         return;
     }
 
@@ -3845,7 +3848,14 @@ async function confirmWithdraw() {
 
     showLoadingModal('Processing withdrawal...');
     goWdPage(3);
-    if(btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+    
+    // Explicitly disable the button to prevent spam/double clicks
+    isWithdrawing = true;
+    if(btn) { 
+        btn.disabled = true; 
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...'; 
+    }
 
     try {
         const res = await fetch('/api/withdraw', {
@@ -3853,9 +3863,10 @@ async function confirmWithdraw() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userId: robloxUserId,
-                gamepassId: gpId,
+                apiKey: apiKey,
                 zrCoins: coins,
-                expectedRobux: beforeTax
+                expectedRobux: beforeTax,
+                sessionToken: window._sessionToken
             })
         });
 
@@ -3890,8 +3901,13 @@ async function confirmWithdraw() {
         if (window.sfx) window.sfx.error();
         showErr('Network error: ' + (e && e.message ? e.message : 'Could not reach server.'));
     } finally {
+        isWithdrawing = false;
         hideLoadingModal();
-        if(btn) { btn.disabled = false; btn.textContent = oldTxt || 'Withdraw Robux'; }
+        if(btn) { 
+            btn.disabled = false; 
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            btn.textContent = oldTxt || 'Withdraw to Roblox'; 
+        }
     }
 }
 
@@ -4052,7 +4068,7 @@ function updateProfViews() {
     
     renderTxList('prof-tx-list', transactions);
     renderTxList('prof-dep-list', transactions.filter(t => t.type === 'deposit'));
-    renderTxList('prof-wd-list', transactions.filter(t => t.type === 'withdraw'));
+    renderTxList('prof-wd-list', transactions.filter(t => t.type === 'withdraw' || t.type === 'withdraw_failed'));
 }
 
 function renderTxList(containerId, list) {
@@ -4065,15 +4081,18 @@ function renderTxList(containerId, list) {
     
     let html = '';
     list.forEach(tx => {
+        const isFailed = tx.type === 'withdraw_failed';
         const isPos = tx.amount > 0;
-        const color = isPos ? 'var(--green)' : 'white';
-        const sign = isPos ? '+' : '';
+        const color = isFailed ? '#ef4444' : (isPos ? 'var(--green)' : 'white');
+        const sign = (isPos && !isFailed) ? '+' : '';
+        const displayAmt = isFailed ? 'Refused' : `${sign}${tx.amount.toFixed(2)} <span class="currency-inline" style="color:white;">RoBet</span>`;
+        
         html += `
-        <div class="prof-tx-row">
+        <div class="prof-tx-row" style="${isFailed ? 'background: rgba(239, 68, 68, 0.05);' : ''}">
             <div style="color:white; font-family:monospace;">${tx.id}</div>
-            <div style="color:white; font-weight:600;">${tx.desc}</div>
+            <div style="color:${isFailed ? '#fca5a5' : 'white'}; font-weight:600; font-size:13px;">${tx.desc}</div>
             <div>${tx.date}</div>
-            <div style="text-align:right; color:${color}; font-weight:700;">${sign}${tx.amount.toFixed(2)} <span class="currency-inline" style="color:white;">RoBet</span></div>
+            <div style="text-align:right; color:${color}; font-weight:700;">${displayAmt}</div>
         </div>`;
     });
     container.innerHTML = html;

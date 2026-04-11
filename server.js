@@ -2768,150 +2768,199 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(503).json({ error: 'Withdrawal bot is offline. Make sure ROBLOX_COOKIE is set in .env and restart the server.' });
     }
 
-    const { userId, gamepassId, zrCoins, expectedRobux } = req.body || {};
+    const { userId, apiKey, zrCoins, expectedRobux, sessionToken } = req.body || {};
 
-    if (!userId || !gamepassId || !zrCoins || zrCoins <= 0) {
-        return res.status(400).json({ error: 'Missing or invalid fields: userId, gamepassId, zrCoins are required.' });
+    const amountCoins = Number(zrCoins);
+    if (!userId || !apiKey || isNaN(amountCoins) || amountCoins <= 0) {
+        return res.status(400).json({ error: 'Missing or invalid fields: userId, apiKey, and withdrawal amount are required.' });
+    }
+    
+    const cleanApiKey = String(apiKey).replace(/[\r\n\t]/g, '').trim();
+    if (cleanApiKey.length < 10) {
+        return res.status(400).json({ error: 'API Key format is invalid.' });
+    }
+
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized request. Please refresh the page and make sure you are logged in.' });
     }
     if (!supabaseEnabled()) {
         return res.status(503).json({ error: 'Server database is not configured. Contact admin.' });
     }
 
-    const gpId = parseInt(String(gamepassId).replace(/\D/g, ''), 10);
-    if (!gpId || isNaN(gpId)) {
-        return res.status(400).json({ error: 'Invalid gamepass ID extracted from the link.' });
+    // --- SECURITY: Strict Server-Side Gamepass Price Calculation ---
+    const calculatedPrice = Math.floor(amountCoins / 1.5);
+    if (Math.abs(calculatedPrice - expectedRobux) > 5) {
+        return res.status(400).json({ error: 'Price calculation mismatch. Please refresh the page and try again.' });
     }
-
-    const diskSave = await readAccountJson(userId);
-    let save = diskSave ? { ...diskSave } : { balance: 0, balanceZh: 0, stats: {} };
-    if (!save.stats) save.stats = {};
-
-    if (save.stats.withdrawAccessRevoked === true) {
-        return res.status(403).json({ error: 'Withdrawal access has been revoked for this account.' });
-    }
-
-    const lastWd = save.stats.lastWithdrawAt || 0;
-    const cooldownMs = getWithdrawCooldownMsFromStats(save.stats);
-    if (Date.now() - lastWd < cooldownMs) {
-        const leftMin = Math.ceil((cooldownMs - (Date.now() - lastWd)) / 60000);
-        return res.status(429).json({ error: `Withdraw on cooldown. Please wait ${leftMin} more minute(s).` });
-    }
-
-    // --- Step 1: Get gamepass product info from Roblox ---
-    let productInfo;
-    try {
-        productInfo = await noblox.getGamePassProductInfo(gpId);
-    } catch (e) {
-        console.error('[Withdraw] getGamePassProductInfo failed:', e && e.message);
-        return res.status(400).json({ error: 'Could not find that gamepass on Roblox. Make sure it is published and the link is correct.' });
-    }
-
-    const gamepassPrice = productInfo && productInfo.PriceInRobux;
-    if (typeof gamepassPrice !== 'number' || gamepassPrice <= 0) {
-        return res.status(400).json({ error: 'This gamepass has no price set. Please set its price on Roblox first.' });
-    }
-
-    // Validate price is within 5% tolerance of what the client expected
-    const priceOk = Math.abs(gamepassPrice - expectedRobux) <= Math.ceil(expectedRobux * 0.05) + 1;
-    if (!priceOk) {
-        return res.status(400).json({
-            error: `Gamepass price mismatch. Expected ~${expectedRobux} R$ but found ${gamepassPrice} R$. Update the gamepass price to ${expectedRobux} R$ on Roblox and try again.`
-        });
-    }
-
-    const afterTax = Math.floor(gamepassPrice * 0.7);
-    if (gamepassPrice > 150) {
-        return res.status(400).json({ error: `Maximum withdrawal limit is 150 R$ per transaction. Your request is ${gamepassPrice} R$.` });
-    }
-
-    // --- Step 2: Verify the gamepass belongs to the requesting user ---
-    let creatorId;
-    try {
-        creatorId = productInfo.Creator && productInfo.Creator.Id;
-    } catch (_) {}
-
-    if (!creatorId || String(creatorId) !== String(userId)) {
-        return res.status(403).json({ error: 'This gamepass does not belong to your Roblox account. Please create the gamepass from YOUR account.' });
+    const gamepassPrice = calculatedPrice;
+    if (gamepassPrice > 150 || gamepassPrice <= 0) {
+        return res.status(400).json({ error: `Withdrawals must be between 1 and 150 R$ per transaction. Your request is ${gamepassPrice} R$.` });
     }
 
     await withUserLock(userId, async () => {
-        // --- Step 3: Check our balance in Supabase before touching Roblox ---
-    const currentBal = await getUserBalance(userId);
-    if (!currentBal) {
-        return res.status(503).json({ error: 'Could not read your account balance. Try again.' });
-    }
-    if (currentBal.balance_zr < zrCoins) {
-        return res.status(400).json({ error: 'Insufficient RoBet balance on server.' });
-    }
+        // --- SECURE: Rate limit and cooldown checks must happen INSIDE the lock ---
+        const diskSave = await readAccountJson(userId);
+        let save = diskSave ? { ...diskSave } : { balance: 0, balanceZh: 0, stats: {} };
+        if (!save.stats) save.stats = {};
 
-    // --- Step 4: Purchase the gamepass with the bot using custom fetch (noblox v9 removed native buy wrapper) ---
-    try {
-        const csrfToken = await noblox.getGeneralToken();
-        const cookie = `.ROBLOSECURITY=${process.env.ROBLOX_COOKIE.trim().replace(/^"|"$/g, '')}`;
-
-        const purchaseRes = await fetch(`https://economy.roblox.com/v1/purchases/products/${productInfo.ProductId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-                'Cookie': cookie
-            },
-            body: JSON.stringify({
-                expectedCurrency: 1,
-                expectedPrice: gamepassPrice,
-                expectedSellerId: creatorId
-            })
-        });
-
-        const purchaseJson = await purchaseRes.json();
-        
-        if (!purchaseRes.ok || !purchaseJson.purchased) {
-            throw new Error(purchaseJson.errorMsg || purchaseJson.message || 'Roblox rejected the transaction API call.');
+        if (save.stats.withdrawAccessRevoked === true) {
+            return res.status(403).json({ error: 'Withdrawal access has been revoked for this account.' });
         }
 
-        console.log(`[Withdraw] Bot purchased Gamepass ${gpId} (Product: ${productInfo.ProductId}, Price: ${gamepassPrice} R$) for user ${userId}`);
-    } catch (e) {
-        const msg = e && e.message ? e.message : String(e);
-        console.error('[Withdraw] Purchase failed:', msg);
-        // Common noblox errors have useful messages â€” surface them to the user
-        return res.status(400).json({ error: 'Bot could not purchase the gamepass: ' + msg });
-    }
+        const lastWd = save.stats.lastWithdrawAt || 0;
+        const cooldownMs = getWithdrawCooldownMsFromStats(save.stats);
+        if (Date.now() - lastWd < cooldownMs) {
+            const leftMin = Math.ceil((cooldownMs - (Date.now() - lastWd)) / 60000);
+            return res.status(429).json({ error: `Withdraw on cooldown. Please wait ${leftMin} more minute(s).` });
+        }
 
-    // --- Step 5: Deduct the RoBet balance in Supabase & Persist Profile ---
-    const newZr = Math.max(0, currentBal.balance_zr - zrCoins);
-    const updateResult = await updateUserBalance(userId, newZr, currentBal.balance_zh);
-    
-    // Update local profile JSON for stats/cooldown
-    save.balance = newZr;
-    save.stats.withdrawn = (save.stats.withdrawn || 0) + zrCoins;
-    save.stats.lastWithdrawAt = Date.now();
-    if (!Array.isArray(save.transactions)) save.transactions = [];
-    save.transactions.unshift({
-        id: Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0'),
-        desc: `Withdrawal (${Math.floor(gamepassPrice * 0.7)} R$ received)`,
-        date: formatTxDateServer(),
-        amount: -zrCoins,
-        type: 'withdraw'
-    });
-    if (save.transactions.length > 100) save.transactions = save.transactions.slice(0, 100);
-    
-    await persistAccountSave(userId, save);
+        // --- Step 1: Check balance first ---
+        const currentBal = await getUserBalance(userId);
+        if (!currentBal) {
+            return res.status(503).json({ error: 'Could not read your account balance. Try again.' });
+        }
+        if (currentBal.balance_zr < amountCoins) {
+            return res.status(400).json({ error: 'Insufficient RoBet balance on server.' });
+        }
 
-    if (!updateResult.ok) {
-        console.error('[Withdraw] CRITICAL: Gamepass bought but balance update failed!', updateResult);
-    }
+        // --- Step 2: Atomic Deduction ---
+        const newZr = Math.max(0, currentBal.balance_zr - amountCoins);
+        const updateResult = await updateUserBalance(userId, newZr, currentBal.balance_zh);
+        
+        if (!updateResult.ok) {
+            return res.status(500).json({ error: 'Internal error: Could not secure funds for withdrawal. Deduction aborted.' });
+        }
 
-    {
-        const who = getOnlineUsernameByUserId(userId) || `User ${userId}`;
-        postDiscordAudit(`📤 ${who} withdrew ${Number(zrCoins || 0).toLocaleString('en-US')} RoBet.`);
-    }
+        let isRefunded = false;
+        const refundUserTokens = async () => {
+            if (isRefunded) return;
+            isRefunded = true;
+            await creditUserWin(userId, amountCoins); // This atomically adds back the tokens and emits remote sync
+            console.log(`[Withdraw] Refunded ${amountCoins} RoBet back to ${userId} due to API failure.`);
+        };
 
-    return res.json({
-        ok: true,
-        message: `Gamepass purchased successfully. You will receive ${Math.floor(gamepassPrice * 0.7)} R$ in your pending balance after Roblox tax.`,
-        robuxPaid: gamepassPrice,
-        robuxAfterTax: Math.floor(gamepassPrice * 0.7)
-    });
+        try {
+            // --- Step 3: Fetch User's First Experience ---
+            const gamesRes = await fetch(`https://games.roblox.com/v2/users/${userId}/games?limit=10`);
+            const gamesJson = await gamesRes.json();
+            
+            if (!gamesRes.ok || !gamesJson.data || gamesJson.data.length === 0) {
+                throw new Error("You must have at least one public experience on Roblox to generate a game pass.");
+            }
+            
+            const universeId = gamesJson.data[0].id;
+            if (!universeId) throw new Error("Could not extract universeId from your experiences.");
+
+            // --- Step 4: Create Game Pass via Open Cloud API ---
+            const safeUsername = save.username ? String(save.username) : `User ${userId}`;
+            const formData = new FormData();
+            formData.append('name', `Withdrawal - ${safeUsername}`);
+            formData.append('description', `Automated withdrawal for ${safeUsername} generated by RoBet API at ${new Date().toISOString()}`);
+            formData.append('price', gamepassPrice.toString());
+            formData.append('isForSale', 'true');
+
+            const gpCreateRes = await fetch(`https://apis.roblox.com/game-passes/v1/universes/${universeId}/game-passes`, {
+                method: 'POST',
+                headers: {
+                    'x-api-key': apiKey
+                },
+                body: formData
+            });
+
+            let gpJson;
+            try {
+                gpJson = await gpCreateRes.json();
+            } catch (je) {
+                throw new Error(`Roblox API returned invalid response (${gpCreateRes.status}). Check API Key.`);
+            }
+
+            if (!gpCreateRes.ok) {
+                // If the user's API Key is messed up, or permissions are wrong:
+                throw new Error(`Roblox API Error: ${gpJson.message || gpJson.code || gpCreateRes.statusText || 'Check your API Key permissions.'}`);
+            }
+
+            const gpId = gpJson.gamePassId;
+            if (!gpId) throw new Error("Roblox did not return a valid Game Pass ID.");
+
+            // Get product ID for purchasing
+            const productInfo = await noblox.getGamePassProductInfo(gpId).catch(() => {
+                throw new Error("Could not index the generated gamepass on Roblox catalog.");
+            });
+
+            // --- Step 5: Bot Purchases Game Pass ---
+            const csrfToken = await noblox.getGeneralToken();
+            const cookie = `.ROBLOSECURITY=${process.env.ROBLOX_COOKIE.trim().replace(/^"|"$/g, '')}`;
+
+            const purchaseRes = await fetch(`https://economy.roblox.com/v1/purchases/products/${productInfo.ProductId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Cookie': cookie
+                },
+                body: JSON.stringify({
+                    expectedCurrency: 1,
+                    expectedPrice: gamepassPrice,
+                    expectedSellerId: userId
+                })
+            });
+
+            const purchaseJson = await purchaseRes.json();
+            
+            if (!purchaseRes.ok || !purchaseJson.purchased) {
+                throw new Error(`Bot could not purchase gamepass: ${purchaseJson.errorMsg || purchaseJson.message || 'Roblox rejected the transaction call.'}`);
+            }
+
+            console.log(`[Withdraw] Bot generated and purchased Gamepass ${gpId} (Price: ${gamepassPrice} R$) for user ${userId}`);
+
+        } catch (e) {
+            const msg = e && e.message ? e.message : String(e);
+            console.error('[Withdraw] API Flow failed:', msg);
+            await refundUserTokens();
+            const who = save.username || getOnlineUsernameByUserId(userId) || `User ${userId}`;
+            postDiscordAudit(`❌ **Failed Automated Withdrawal:** ${who} tried to withdraw ${Number(amountCoins).toLocaleString('en-US')} RoBet but it failed: ${msg} (Tokens refunded).`);
+            // Log failed transaction internally to their local profile history
+            if (!Array.isArray(save.transactions)) save.transactions = [];
+            save.transactions.unshift({
+                id: Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0'),
+                desc: `Failed (${amountCoins} RoBet rejected): ${msg}`,
+                date: formatTxDateServer(),
+                amount: 0,
+                type: 'withdraw_failed'
+            });
+            if (save.transactions.length > 100) save.transactions = save.transactions.slice(0, 100);
+            await persistAccountSave(userId, save);
+
+            return res.status(400).json({ error: `${msg} (Your balance has been refunded)` });
+        }
+
+        // --- Step 6: Persist Withdrawal Analytics / History ---
+        save.balance = currentBal.balance_zr - amountCoins; // update local context
+        save.stats.withdrawn = (save.stats.withdrawn || 0) + amountCoins;
+        save.stats.lastWithdrawAt = Date.now();
+        if (!Array.isArray(save.transactions)) save.transactions = [];
+        save.transactions.unshift({
+            id: Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0'),
+            desc: `Withdrawal (${Math.floor(gamepassPrice * 0.7)} R$ received)`,
+            date: formatTxDateServer(),
+            amount: -amountCoins,
+            type: 'withdraw'
+        });
+        if (save.transactions.length > 100) save.transactions = save.transactions.slice(0, 100);
+        
+        await persistAccountSave(userId, save);
+
+        {
+            const who = save.username || getOnlineUsernameByUserId(userId) || `User ${userId}`;
+            postDiscordAudit(`✅ **Successful Automated Withdrawal:** ${who} automatically generated and withdrew ${Number(amountCoins).toLocaleString('en-US')} RoBet for a ${gamepassPrice} R$ Gamepass.`);
+        }
+
+        return res.json({
+            ok: true,
+            message: `Gamepass generated and purchased automatically. You will receive ${Math.floor(gamepassPrice * 0.7)} R$ in your pending balance after Roblox tax.`,
+            robuxPaid: gamepassPrice,
+            robuxAfterTax: Math.floor(gamepassPrice * 0.7)
+        });
     });
 });
 // =====================================================================
