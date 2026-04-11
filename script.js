@@ -941,15 +941,29 @@ document.addEventListener('DOMContentLoaded', () => {
         let aviaCssH = 320;
         let aviaWaterY = 200;
         let aviaWaterScroll = 0;
-        let aviaPlane = { x: 40, y: 80, angle: -0.35 };
+        /** World Y of the water surface (screen maps via fixed horizon camera). */
+        const AVIA_WORLD_WATER = 310;
+        /** Camera X: world x at left edge = plane.wx - offset (infinite scroll). */
+        let aviaCamX = 0;
+        let aviaPlane = { wx: 120, wy: 145, angle: -0.2 };
         let aviaPads = [];
         let aviaPopups = [];
         let aviaParticles = [];
         let aviaWinGlow = 0;
         let aviaRaf = 0;
         let aviaWaterPattern = null;
-        /** One airborne pickup the plane is flying toward (shown before collection). */
+        let aviaContrail = [];
+        let aviaTrailLastMs = 0;
+        /** One airborne pickup the plane is flying toward (world coords). */
         let aviaIncoming = null;
+
+        function aviaCamY() {
+            return AVIA_WORLD_WATER - aviaWaterY;
+        }
+
+        function aviaUpdateCamera() {
+            aviaCamX = aviaPlane.wx - aviaCssW * 0.4;
+        }
 
         function aviaRoundRect(ctx, x, y, w, h, r) {
             const rr = Math.min(r, w / 2, h / 2);
@@ -960,20 +974,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.arcTo(x, y + h, x, y, rr);
             ctx.arcTo(x, y, x + w, y, rr);
             ctx.closePath();
-        }
-
-        function aviaBuildPads() {
-            const W = aviaCssW;
-            const H = aviaCssH;
-            const waterY0 = aviaWaterY;
-            const deckH = Math.min(50, H * 0.14);
-            const deckW = Math.max(56, W * 0.2);
-            const y = waterY0 - deckH * 0.42;
-            aviaPads = [
-                { x: W * 0.06, y, w: deckW, h: deckH, label: 'DECK A', win: false },
-                { x: W * 0.5 - deckW / 2, y, w: deckW, h: deckH, label: 'WIN ZONE', win: true },
-                { x: W * 0.94 - deckW, y, w: deckW, h: deckH, label: 'DECK B', win: false }
-            ];
         }
 
         function aviaEnsureWaterPattern() {
@@ -1019,30 +1019,45 @@ document.addEventListener('DOMContentLoaded', () => {
             aviaCanvas.style.height = aviaCssH + 'px';
             aviaCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
             aviaWaterY = aviaCssH * 0.58;
-            aviaBuildPads();
             aviaWaterPattern = null;
             aviaEnsureWaterPattern();
+            aviaUpdateCamera();
             aviaDrawStatic();
         }
 
-        function aviaDrawSky(ctx, W, H) {
+        function aviaDrawSky(ctx, W) {
             const g = ctx.createLinearGradient(0, 0, 0, aviaWaterY);
-            g.addColorStop(0, '#1a4a6e');
-            g.addColorStop(0.45, '#2a5f82');
-            g.addColorStop(1, '#3d7aa3');
+            g.addColorStop(0, '#0f2a44');
+            g.addColorStop(0.35, '#1a4a6e');
+            g.addColorStop(0.72, '#2a5f82');
+            g.addColorStop(1, '#3d6f95');
             ctx.fillStyle = g;
             ctx.fillRect(0, 0, W, aviaWaterY + 2);
-            ctx.fillStyle = 'rgba(255,255,255,0.08)';
-            for (let c = 0; c < 5; c++) {
-                const cx = ((c * 137 + 20) % W) + 40;
-                const cy = 30 + (c % 3) * 35;
+            const band = (aviaCamX * 0.06) % 500;
+            ctx.fillStyle = 'rgba(25, 65, 110, 0.2)';
+            ctx.fillRect(-band, 0, W + 500, aviaWaterY);
+        }
+
+        function aviaDrawClouds(ctx, W, camX) {
+            const rowY = aviaWaterY - 32;
+            const spacing = 240;
+            const par = 0.32;
+            const n0 = Math.floor((camX * par) / spacing) - 2;
+            const n1 = Math.ceil((camX * par + W) / spacing) + 3;
+            for (let n = n0; n <= n1; n++) {
+                const worldX = n * spacing + ((n * 83) % 70);
+                const sx = worldX - camX * par;
+                const py = rowY + ((n * 5) % 4) * 6;
+                ctx.fillStyle = 'rgba(200, 230, 255, 0.14)';
                 ctx.beginPath();
-                ctx.ellipse(cx, cy, 50 + c * 8, 18, 0, 0, Math.PI * 2);
+                ctx.ellipse(sx, py, 44, 15, 0, 0, Math.PI * 2);
+                ctx.ellipse(sx + 28, py + 5, 36, 13, 0, 0, Math.PI * 2);
+                ctx.ellipse(sx - 26, py + 3, 32, 12, 0, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
 
-        function aviaDrawWater(ctx, W, H) {
+        function aviaDrawWater(ctx, W, H, camX) {
             const y0 = aviaWaterY;
             const g = ctx.createLinearGradient(0, y0, 0, H);
             g.addColorStop(0, '#0d5a78');
@@ -1051,41 +1066,83 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillStyle = g;
             ctx.fillRect(0, y0, W, H - y0);
             ctx.save();
-            ctx.translate(0, (aviaWaterScroll % 40) * 0.5);
+            ctx.beginPath();
+            ctx.rect(0, y0, W, H - y0);
+            ctx.clip();
+            const off = (camX + aviaWaterScroll) % 160;
+            ctx.translate(-off, (aviaWaterScroll % 20) * 0.3);
             if (aviaWaterPattern) {
                 ctx.fillStyle = aviaWaterPattern;
-                ctx.fillRect(0, y0, W, H - y0 + 40);
+                ctx.fillRect(0, y0, W + off + 200, H - y0 + 40);
             }
             ctx.restore();
-            ctx.strokeStyle = 'rgba(180, 235, 255, 0.18)';
+            ctx.strokeStyle = 'rgba(180, 235, 255, 0.16)';
             ctx.lineWidth = 1;
             for (let w = 0; w < 10; w++) {
                 ctx.beginPath();
                 const baseY = y0 + 12 + w * ((H - y0) / 10);
-                for (let x = 0; x <= W; x += 6) {
-                    const yy = baseY + Math.sin((x + aviaWaterScroll * (1 + w * 0.08)) * 0.035) * (3 + w * 0.4);
-                    if (x === 0) ctx.moveTo(x, yy);
-                    else ctx.lineTo(x, yy);
+                for (let sx = 0; sx <= W; sx += 5) {
+                    const worldX = sx + camX;
+                    const yy = baseY + Math.sin((worldX + aviaWaterScroll * (1 + w * 0.08)) * 0.032) * (3 + w * 0.35);
+                    if (sx === 0) ctx.moveTo(sx, yy);
+                    else ctx.lineTo(sx, yy);
                 }
                 ctx.stroke();
             }
-            ctx.fillStyle = 'rgba(255,255,255,0.06)';
-            for (let k = 0; k < 60; k++) {
-                const sx = ((k * 83 + aviaWaterScroll * 2) % W);
-                const sy = y0 + ((k * 47) % (H - y0 - 4));
+            ctx.fillStyle = 'rgba(255,255,255,0.055)';
+            for (let k = 0; k < 70; k++) {
+                const worldX = k * 83 + aviaWaterScroll * 2;
+                const sx = (worldX % (W + 120)) - 20 + ((camX % 17) * 0.3);
+                const sy = y0 + ((k * 47) % (H - y0 - 6));
                 ctx.fillRect(sx, sy, 2, 1);
             }
         }
 
-        function aviaDrawPads(ctx) {
+        function aviaDrawAmbientIslands(ctx, W, camX, camY) {
+            const chunk = 720;
+            const start = Math.floor(camX / chunk) * chunk - chunk;
+            for (let wx = start; wx < camX + W + chunk * 2; wx += chunk) {
+                const sx = wx - camX;
+                const sy = AVIA_WORLD_WATER - camY - 6;
+                ctx.fillStyle = 'rgba(38, 48, 62, 0.45)';
+                ctx.fillRect(sx + 40, sy - 4, 200, 22);
+                ctx.fillStyle = 'rgba(20, 28, 38, 0.5)';
+                ctx.fillRect(sx + 90, sy - 18, 8, 16);
+            }
+        }
+
+        function aviaDrawLaunchDeck(ctx, W, camX, camY) {
+            const wx0 = 0;
+            const sx = wx0 - camX;
+            if (sx > W + 120 || sx < -280) return;
+            const sy = AVIA_WORLD_WATER - camY - 8;
+            ctx.fillStyle = '#3d4f63';
+            ctx.beginPath();
+            ctx.moveTo(sx - 20, sy + 20);
+            ctx.lineTo(sx + 220, sy + 20);
+            ctx.lineTo(sx + 200, sy - 8);
+            ctx.lineTo(sx - 40, sy - 8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            for (let i = 0; i < 8; i++) ctx.fillRect(sx + 15 + i * 24, sy + 2, 14, 3);
+        }
+
+        function aviaDrawPads(ctx, W, camX, camY) {
             aviaPads.forEach((p) => {
+                const sx = p.wx - camX;
+                const sy = p.wy - camY;
+                if (sx + p.w < -80 || sx > W + 80) return;
                 const isWin = p.win;
                 const glow = isWin ? 0.2 + aviaWinGlow * 0.55 : 0;
                 ctx.save();
                 ctx.shadowColor = isWin ? `rgba(0, 230, 170, ${glow})` : 'rgba(0,0,0,0.5)';
                 ctx.shadowBlur = isWin ? 22 : 10;
                 ctx.fillStyle = isWin ? '#152a22' : '#222e3d';
-                aviaRoundRect(ctx, p.x, p.y, p.w, p.h, 8);
+                aviaRoundRect(ctx, sx, sy, p.w, p.h, 8);
                 ctx.fill();
                 ctx.strokeStyle = isWin ? `rgba(0, 220, 160, ${0.45 + aviaWinGlow * 0.45})` : 'rgba(255,255,255,0.12)';
                 ctx.lineWidth = isWin ? 3 : 2;
@@ -1093,7 +1150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.globalAlpha = 0.2;
                 ctx.fillStyle = '#fff';
                 for (let s = 10; s < p.w - 6; s += 16) {
-                    ctx.fillRect(p.x + s, p.y + 6, 8, p.h - 12);
+                    ctx.fillRect(sx + s, sy + 6, 8, p.h - 12);
                 }
                 ctx.globalAlpha = 1;
                 ctx.shadowBlur = 0;
@@ -1101,21 +1158,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.font = 'bold 11px system-ui, Segoe UI, sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(p.label, p.x + p.w / 2, p.y + p.h * 0.38);
+                ctx.fillText(p.label, sx + p.w / 2, sy + p.h * 0.38);
                 if (isWin) {
                     ctx.font = '600 9px system-ui, sans-serif';
                     ctx.fillStyle = 'rgba(110,231,183,0.85)';
-                    ctx.fillText('LAND HERE TO WIN', p.x + p.w / 2, p.y + p.h * 0.72);
+                    ctx.fillText('LAND HERE TO WIN', sx + p.w / 2, sy + p.h * 0.72);
                 }
                 ctx.restore();
             });
         }
 
-        function aviaDrawIncoming(ctx) {
+        function aviaDrawIncoming(ctx, W, camX, camY) {
             if (!aviaIncoming) return;
             const m = aviaIncoming;
-            const x = m.x;
-            const y = m.y;
+            const x = m.wx - camX;
+            const y = m.wy - camY;
+            if (x < -60 || x > W + 60) return;
             ctx.save();
             ctx.shadowColor = 'rgba(0,0,0,0.45)';
             ctx.shadowBlur = 10;
@@ -1203,10 +1261,27 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.restore();
         }
 
-        function aviaDrawPlane(ctx, x, y, angle) {
+        function aviaDrawPlane(ctx, W, camX, camY) {
+            const sx = aviaPlane.wx - camX;
+            const sy = aviaPlane.wy - camY;
+            if (sx < -80 || sx > W + 80) return;
+            const now = performance.now();
+            const spin = (now * 0.018) % (Math.PI * 2);
             ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(angle);
+            ctx.translate(sx, sy);
+            ctx.rotate(aviaPlane.angle);
+            ctx.fillStyle = 'rgba(120, 200, 255, 0.35)';
+            for (let i = 0; i < 5; i++) {
+                const a = spin + i * 0.9;
+                ctx.beginPath();
+                ctx.arc(-22 + Math.cos(a) * 3, Math.sin(a) * 3, 3 - i * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.fillStyle = '#c1121f';
+            ctx.beginPath();
+            ctx.ellipse(2, -5, 10, 5, 0, 0, Math.PI * 2);
+            ctx.ellipse(2, 5, 10, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
             ctx.fillStyle = '#d62828';
             ctx.beginPath();
             ctx.ellipse(4, 0, 20, 7, 0, 0, Math.PI * 2);
@@ -1222,9 +1297,16 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineTo(32, 14);
             ctx.closePath();
             ctx.fill();
+            ctx.fillStyle = 'rgba(255, 215, 120, 0.9)';
+            ctx.save();
+            ctx.translate(-16, 0);
+            ctx.rotate(spin * 6);
+            ctx.fillRect(-1, -8, 2, 16);
+            ctx.fillRect(-8, -1, 16, 2);
+            ctx.restore();
             ctx.fillStyle = '#ffb703';
             ctx.beginPath();
-            ctx.arc(-16, 0, 6, 0, Math.PI * 2);
+            ctx.arc(-16, 0, 5, 0, Math.PI * 2);
             ctx.fill();
             ctx.strokeStyle = 'rgba(0,0,0,0.35)';
             ctx.lineWidth = 1;
@@ -1232,21 +1314,40 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.restore();
         }
 
-        function aviaDrawPopups(ctx) {
+        function aviaDrawContrail(ctx, camX, camY) {
+            const now = performance.now();
+            aviaContrail = aviaContrail.filter((c) => now - c.born < 450);
+            aviaContrail.forEach((c) => {
+                const t = (now - c.born) / 450;
+                const sx = c.wx - camX;
+                const sy = c.wy - camY;
+                ctx.save();
+                ctx.globalAlpha = (1 - t) * 0.45;
+                ctx.fillStyle = '#7dd3fc';
+                ctx.beginPath();
+                ctx.arc(sx, sy, 4 * (1 - t * 0.5), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        function aviaDrawPopups(ctx, W, camX, camY) {
             const now = performance.now();
             aviaPopups = aviaPopups.filter((p) => now - p.born < p.life);
             aviaPopups.forEach((p) => {
                 const t = (now - p.born) / p.life;
                 const lift = t * 28;
                 const alpha = 1 - t;
+                const sx = p.wx - camX;
+                const sy = p.wy - camY;
                 ctx.save();
                 ctx.globalAlpha = Math.max(0, alpha);
                 ctx.font = 'bold 15px system-ui, sans-serif';
                 const pad = 8;
-                const w = ctx.measureText(p.text).width + pad * 2;
+                const tw = ctx.measureText(p.text).width + pad * 2;
                 const h = 28;
                 ctx.fillStyle = 'rgba(10,20,30,0.85)';
-                aviaRoundRect(ctx, p.x - w / 2, p.y - lift - h, w, h, 8);
+                aviaRoundRect(ctx, sx - tw / 2, sy - lift - h, tw, h, 8);
                 ctx.fill();
                 ctx.strokeStyle = p.color;
                 ctx.lineWidth = 2;
@@ -1254,32 +1355,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fillStyle = p.color;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(p.text, p.x, p.y - lift - h / 2);
+                ctx.fillText(p.text, sx, sy - lift - h / 2);
                 ctx.restore();
             });
         }
 
-        function aviaDrawParticles(ctx) {
+        function aviaDrawParticles(ctx, camX, camY) {
             const now = performance.now();
             aviaParticles = aviaParticles.filter((q) => now - q.born < q.life);
             aviaParticles.forEach((q) => {
                 const t = (now - q.born) / q.life;
+                const sx = q.wx - camX + q.vx * t * 20;
+                const sy = q.wy - camY + q.vy * t * 20 - t * 15;
                 ctx.save();
                 ctx.globalAlpha = 1 - t;
                 ctx.fillStyle = q.color;
                 ctx.beginPath();
-                ctx.arc(q.x + q.vx * t * 20, q.y + q.vy * t * 20 - t * 15, q.r * (1 + t * 2), 0, Math.PI * 2);
+                ctx.arc(sx, sy, q.r * (1 + t * 2), 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
             });
         }
 
-        function aviaSpawnSplash(x, y) {
-            for (let i = 0; i < 36; i++) {
+        function aviaSpawnSplash(wx, wy) {
+            for (let i = 0; i < 40; i++) {
                 aviaParticles.push({
-                    x,
-                    y,
-                    vx: Math.cos((i / 36) * Math.PI * 2) * (0.5 + Math.random()),
+                    wx,
+                    wy,
+                    vx: Math.cos((i / 40) * Math.PI * 2) * (0.5 + Math.random()),
                     vy: -1.2 - Math.random(),
                     r: 2 + Math.random() * 4,
                     born: performance.now(),
@@ -1289,24 +1392,41 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        function aviaPushPopup(x, y, text, color) {
-            aviaPopups.push({ x, y, text, color, born: performance.now(), life: 900 });
+        function aviaPushPopup(wx, wy, text, color) {
+            aviaPopups.push({ wx, wy, text, color, born: performance.now(), life: 900 });
         }
 
         function aviaDrawFrame() {
             const W = aviaCssW;
             const H = aviaCssH;
+            aviaUpdateCamera();
+            const camX = aviaCamX;
+            const camY = aviaCamY();
             aviaCtx.clearRect(0, 0, W, H);
             aviaWaterScroll += 0.45;
             if (aviaWinGlow > 0.02) aviaWinGlow *= 0.965;
             else aviaWinGlow = 0;
-            aviaDrawSky(aviaCtx, W, H);
-            aviaDrawWater(aviaCtx, W, H);
-            aviaDrawPads(aviaCtx);
-            aviaDrawIncoming(aviaCtx);
-            aviaDrawPlane(aviaCtx, aviaPlane.x, aviaPlane.y, aviaPlane.angle);
-            aviaDrawPopups(aviaCtx);
-            aviaDrawParticles(aviaCtx);
+            const now = performance.now();
+            if (now - aviaTrailLastMs > 42) {
+                aviaTrailLastMs = now;
+                if (aviaContrail.length > 22) aviaContrail.shift();
+                aviaContrail.push({
+                    wx: aviaPlane.wx - Math.cos(aviaPlane.angle) * 26,
+                    wy: aviaPlane.wy - Math.sin(aviaPlane.angle) * 26,
+                    born: now
+                });
+            }
+            aviaDrawSky(aviaCtx, W);
+            aviaDrawClouds(aviaCtx, W, camX);
+            aviaDrawWater(aviaCtx, W, H, camX);
+            aviaDrawAmbientIslands(aviaCtx, W, camX, camY);
+            aviaDrawLaunchDeck(aviaCtx, W, camX, camY);
+            aviaDrawPads(aviaCtx, W, camX, camY);
+            aviaDrawIncoming(aviaCtx, W, camX, camY);
+            aviaDrawContrail(aviaCtx, camX, camY);
+            aviaDrawPlane(aviaCtx, W, camX, camY);
+            aviaDrawPopups(aviaCtx, W, camX, camY);
+            aviaDrawParticles(aviaCtx, camX, camY);
         }
 
         function aviaDrawStatic() {
@@ -1329,27 +1449,50 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        function aviaBuildWaypoints(events) {
-            const W = aviaCssW;
-            const H = aviaCssH;
-            const y0 = aviaWaterY;
-            const pts = [{ x: W * 0.06, y: H * 0.24 }];
+        function aviaBuildWaypointsWorld(events) {
+            const waterWorld = AVIA_WORLD_WATER;
+            const baseY = 138;
+            let wx = 100;
+            let wy = baseY;
+            const pts = [{ wx, wy }];
             const n = events.length;
-            if (n === 0) return pts;
+            const deckW = 94;
+            const deckH = 48;
+            const deckY = waterWorld - deckH * 0.78;
+            if (n === 0) {
+                aviaPads = [];
+                return pts;
+            }
             for (let i = 0; i < n - 1; i++) {
-                const t = (i + 1) / n;
-                pts.push({
-                    x: W * (0.1 + t * 0.68) + Math.sin(i * 2.1) * W * 0.07,
-                    y: H * (0.14 + ((i * 3) % 5) * 0.07)
-                });
+                wx += 192 + (i % 5) * 20 + Math.sin(i * 1.95) * 44;
+                wy = baseY + Math.sin(i * 2.35) * 54 + ((i * 5) % 3) * 16;
+                wy = Math.max(86, Math.min(wy, waterWorld - 102));
+                pts.push({ wx, wy });
             }
             const last = events[n - 1];
             if (last && last.type === 'land') {
-                const win = aviaPads.find((p) => p.win);
-                if (win) pts.push({ x: win.x + win.w / 2, y: win.y + win.h * 0.32 });
+                wx += 205;
+                const c0 = wx;
+                aviaPads = [
+                    { wx: c0, wy: deckY, w: deckW, h: deckH, label: 'DECK A', win: false },
+                    { wx: c0 + deckW + 16, wy: deckY, w: deckW, h: deckH, label: 'WIN ZONE', win: true },
+                    { wx: c0 + (deckW + 16) * 2, wy: deckY, w: deckW, h: deckH, label: 'DECK B', win: false }
+                ];
+                const winPad = aviaPads.find((p) => p.win);
+                pts.push({ wx: winPad.wx + winPad.w / 2, wy: deckY + winPad.h * 0.3 });
             } else {
+                wx += 188;
+                const c0 = wx + 55;
+                aviaPads = [
+                    { wx: c0, wy: deckY, w: deckW, h: deckH, label: 'DECK A', win: false },
+                    { wx: c0 + deckW + 16, wy: deckY, w: deckW, h: deckH, label: 'WIN ZONE', win: true },
+                    { wx: c0 + (deckW + 16) * 2, wy: deckY, w: deckW, h: deckH, label: 'DECK B', win: false }
+                ];
                 const seed = (n * 37 + 13) % 100;
-                pts.push({ x: W * (0.22 + seed * 0.0056), y: y0 + 32 });
+                pts.push({
+                    wx: c0 + deckW * 1.5 + (seed / 100 - 0.45) * 75,
+                    wy: waterWorld + 34
+                });
             }
             return pts;
         }
@@ -1357,12 +1500,16 @@ document.addEventListener('DOMContentLoaded', () => {
         function aviaAnimateSegment(from, to, durationMs) {
             return new Promise((resolve) => {
                 const t0 = performance.now();
+                const fx = from.wx;
+                const fy = from.wy;
+                const tx = to.wx;
+                const ty = to.wy;
                 function tick(now) {
                     const u = Math.min(1, (now - t0) / durationMs);
                     const e = 1 - Math.pow(1 - u, 2.2);
-                    aviaPlane.x = from.x + (to.x - from.x) * e;
-                    aviaPlane.y = from.y + (to.y - from.y) * e;
-                    aviaPlane.angle = Math.atan2(to.y - from.y, to.x - from.x);
+                    aviaPlane.wx = fx + (tx - fx) * e;
+                    aviaPlane.wy = fy + (ty - fy) * e;
+                    aviaPlane.angle = Math.atan2(ty - fy, tx - fx);
                     if (u < 1) requestAnimationFrame(tick);
                     else resolve();
                 }
@@ -1395,9 +1542,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (aviaStatusEl) aviaStatusEl.textContent = 'Round in progress…';
             aviaPopups = [];
             aviaParticles = [];
+            aviaContrail = [];
             aviaWinGlow = 0;
             aviaIncoming = null;
-            aviaPlane = { x: aviaCssW * 0.06, y: aviaCssH * 0.24, angle: -0.3 };
+            aviaPads = [];
+            aviaPlane = { wx: 100, wy: 145, angle: -0.15 };
+            aviaUpdateCamera();
         }
 
         function aviaLogLine(cls, text) {
@@ -1440,43 +1590,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ms = aviaDelays[typeof data.speed === 'number' ? data.speed : aviaSpeedIdx] || 340;
                 let runMult = 1;
                 const events = Array.isArray(data.events) ? data.events : [];
-                const waypoints = aviaBuildWaypoints(events);
+                const waypoints = aviaBuildWaypointsWorld(events);
+                if (waypoints.length) {
+                    aviaPlane.wx = waypoints[0].wx;
+                    aviaPlane.wy = waypoints[0].wy;
+                }
 
                 for (let k = 0; k < events.length; k++) {
-                    const from = waypoints[k] || aviaPlane;
+                    const from = waypoints[k] || { wx: aviaPlane.wx, wy: aviaPlane.wy };
                     const to = waypoints[k + 1] || from;
                     const ev = events[k];
-                    if (ev.type === 'prize') aviaIncoming = { x: to.x, y: to.y, kind: 'prize', add: ev.add };
-                    else if (ev.type === 'boost') aviaIncoming = { x: to.x, y: to.y, kind: 'boost', mult: ev.mult };
-                    else if (ev.type === 'rocket') aviaIncoming = { x: to.x, y: to.y, kind: 'rocket' };
-                    else if (ev.type === 'cruise') aviaIncoming = { x: to.x, y: to.y, kind: 'cruise' };
-                    else if (ev.type === 'land') aviaIncoming = { x: to.x, y: to.y, kind: 'land' };
-                    else if (ev.type === 'crash') aviaIncoming = { x: to.x, y: to.y, kind: 'crash' };
+                    if (ev.type === 'prize') aviaIncoming = { wx: to.wx, wy: to.wy, kind: 'prize', add: ev.add };
+                    else if (ev.type === 'boost') aviaIncoming = { wx: to.wx, wy: to.wy, kind: 'boost', mult: ev.mult };
+                    else if (ev.type === 'rocket') aviaIncoming = { wx: to.wx, wy: to.wy, kind: 'rocket' };
+                    else if (ev.type === 'cruise') aviaIncoming = { wx: to.wx, wy: to.wy, kind: 'cruise' };
+                    else if (ev.type === 'land') aviaIncoming = { wx: to.wx, wy: to.wy, kind: 'land' };
+                    else if (ev.type === 'crash') aviaIncoming = { wx: to.wx, wy: to.wy, kind: 'crash' };
                     else aviaIncoming = null;
 
                     await aviaAnimateSegment(from, to, ms);
                     aviaIncoming = null;
-                    const px = aviaPlane.x;
-                    const py = aviaPlane.y;
+                    const px = aviaPlane.wx;
+                    const py = aviaPlane.wy;
 
                     if (ev.type === 'prize') {
                         runMult += ev.add || 0;
-                        aviaPushPopup(px, py - 20, `+${ev.add}x`, '#34d399');
+                        aviaPushPopup(px, py - 22, `+${ev.add}x`, '#34d399');
                         aviaLogLine('prize', `Prize +${ev.add}x  →  ${runMult.toFixed(2)}x`);
                     } else if (ev.type === 'boost') {
                         runMult *= ev.mult || 1;
-                        aviaPushPopup(px, py - 24, `×${ev.mult}`, '#a78bfa');
+                        aviaPushPopup(px, py - 26, `×${ev.mult}`, '#a78bfa');
                         aviaLogLine('boost', `Boost ×${ev.mult}  →  ${runMult.toFixed(2)}x`);
                     } else if (ev.type === 'rocket') {
                         runMult = typeof ev.after === 'number' ? ev.after : runMult * 0.5;
-                        aviaPushPopup(px, py - 18, '−50%', '#fb923c');
+                        aviaPushPopup(px, py - 20, '−50%', '#fb923c');
                         aviaLogLine('rocket', `Rocket! Halved  →  ${runMult.toFixed(2)}x`);
                     } else if (ev.type === 'cruise') {
-                        aviaPushPopup(px, py - 16, '···', 'rgba(148,163,184,0.95)');
+                        aviaPushPopup(px, py - 18, '···', 'rgba(148,163,184,0.95)');
                         aviaLogLine('cruise', 'In flight…');
                     } else if (ev.type === 'crash') {
-                        aviaSpawnSplash(px, aviaWaterY + 8);
-                        aviaPushPopup(px, aviaWaterY - 10, 'SPLASH!', '#f87171');
+                        aviaSpawnSplash(px, AVIA_WORLD_WATER + 18);
+                        aviaPushPopup(px, py - 36, 'SPLASH!', '#f87171');
                         if (aviaMultEl) {
                             aviaMultEl.textContent = '—';
                             aviaMultEl.className = 'avia-mult-value avia-lose';
