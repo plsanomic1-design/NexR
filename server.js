@@ -4425,14 +4425,6 @@ function caseHashStr(s) {
     return Math.abs(h);
 }
 
-const CASE_RARITY_ICON = {
-    common: '#94a3b8',
-    uncommon: '#4ade80',
-    rare: '#38bdf8',
-    epic: '#c084fc',
-    legendary: '#fbbf24'
-};
-
 function buildCaseCoverDataUrl(hex, caseId) {
     const c = caseStrokeForUi(hex);
     const v = caseHashStr(caseId) % 4;
@@ -4449,24 +4441,6 @@ function buildCaseCoverDataUrl(hex, caseId) {
     return caseSvgDataUrl(
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">${inner}</svg>`
     );
-}
-
-function buildCaseItemIconDataUrl(rarity, itemId) {
-    const c = CASE_RARITY_ICON[String(rarity || 'common').toLowerCase()] || CASE_RARITY_ICON.common;
-    const v = caseHashStr(String(itemId) + String(rarity)) % 5;
-    let inner = '';
-    if (v === 0) {
-        inner = `<path d="M50 14 L72 42 L50 86 L28 42 Z" stroke="${c}" stroke-width="2.5" fill="none" stroke-linejoin="round"/><path d="M50 14 V86 M28 42 h44" stroke="${c}" stroke-width="1" opacity="0.42"/>`;
-    } else if (v === 1) {
-        inner = `<path d="M50 12 L58 38 L86 42 L64 58 L70 88 L50 74 L30 88 L36 58 L14 42 L42 38 Z" stroke="${c}" stroke-width="2" fill="none" stroke-linejoin="round"/>`;
-    } else if (v === 2) {
-        inner = `<path d="M50 10 L58 34 L84 38 L64 52 L70 80 L50 68 L30 80 L36 52 L16 38 L42 34 Z" stroke="${c}" stroke-width="1.9" fill="none" stroke-linejoin="round"/>`;
-    } else if (v === 3) {
-        inner = `<circle cx="50" cy="50" r="26" stroke="${c}" stroke-width="2.4" fill="none"/><circle cx="50" cy="50" r="14" fill="${c}" fill-opacity="0.14"/><path d="M50 24v52M24 50h52" stroke="${c}" stroke-width="1" opacity="0.35"/>`;
-    } else {
-        inner = `<path d="M50 8 L56 36 L86 40 L62 56 L68 90 L50 76 L32 90 L38 56 L14 40 L44 36 Z" stroke="${c}" stroke-width="2" fill="none" stroke-linejoin="round"/>`;
-    }
-    return caseSvgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">${inner}</svg>`);
 }
 
 /**
@@ -4747,18 +4721,48 @@ function buildCasesDataSync() {
     });
     for (const c of base) {
         c.image = buildCaseCoverDataUrl(c.color, c.id);
-        for (const it of c.items) {
-            it.icon = buildCaseItemIconDataUrl(it.rarity, it.id);
-        }
     }
     return base;
 }
 
 let CASES_DATA = buildCasesDataSync();
 
+async function fetchRobloxAssetThumbUrlMap(assetIds) {
+    const map = new Map();
+    const uniq = [...new Set(assetIds.filter((n) => Number.isFinite(n) && n > 0))];
+    const CHUNK = 100;
+    for (let i = 0; i < uniq.length; i += CHUNK) {
+        const chunk = uniq.slice(i, i + CHUNK);
+        const url = `https://thumbnails.roblox.com/v1/assets?assetIds=${chunk.join(
+            ','
+        )}&returnPolicy=PlaceHolder&size=420x420&format=Png&isCircular=false`;
+        try {
+            const res = await fetch(url);
+            const j = await res.json();
+            for (const row of j.data || []) {
+                if (row.imageUrl && row.targetId != null) map.set(row.targetId, row.imageUrl);
+            }
+        } catch (e) {
+            console.error('[Cases] Thumbnail batch failed:', e && e.message);
+        }
+    }
+    return map;
+}
+
 async function hydrateCaseItemThumbnails() {
-    // Prize icons are inline SVG data URLs from buildCasesDataSync (transparent, no Roblox JPEG squares).
-    return;
+    const ids = [];
+    for (const c of CASES_DATA) {
+        for (const it of c.items) {
+            if (it.assetId) ids.push(it.assetId);
+        }
+    }
+    const thumbMap = await fetchRobloxAssetThumbUrlMap(ids);
+    for (const c of CASES_DATA) {
+        for (const it of c.items) {
+            const u = thumbMap.get(it.assetId);
+            if (u) it.icon = u;
+        }
+    }
 }
 
 
@@ -5192,10 +5196,10 @@ app.use(express.static(ROOT));
 
 hydrateCaseItemThumbnails()
     .then(() => {
-        console.log('[Cases] Using inline SVG art for case covers and prize icons.');
+        console.log('[Cases] Roblox catalog thumbnails loaded for case items.');
     })
     .catch((e) => {
-        console.error('[Cases] Case art init failed:', e && e.message);
+        console.error('[Cases] Thumbnail hydrate failed (items may lack icons until restart):', e && e.message);
     })
     .finally(() => {
         server.listen(PORT, () => {
