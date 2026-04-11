@@ -1802,9 +1802,9 @@ input:checked + .slider:before { transform: translateX(14px); }
 
 /* ===== Case open modal: chromeless / transparent — only title, controls, item art, win value ===== */
 #cb-open-modal.cb-modal-backdrop {
-    background: rgba(0, 0, 0, 0.25);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
 }
 #cb-open-modal .cb-modal.cb-open-modal-inner {
     background: transparent !important;
@@ -1846,6 +1846,8 @@ input:checked + .slider:before { transform: translateX(14px); }
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
+    height: 158px;
+    min-height: 158px;
 }
 #cb-open-modal .cb-spinner-arrow {
     border-top-color: rgba(255, 255, 255, 0.9);
@@ -1855,16 +1857,38 @@ input:checked + .slider:before { transform: translateX(14px); }
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
-    padding: 6px 4px;
+    padding: 6px 5px 8px;
+    min-height: 100px;
+    justify-content: flex-start;
 }
-#cb-open-modal .cb-spinner-track .cb-horiz-item-name,
+#cb-open-modal .cb-spinner-track .cb-horiz-item-name {
+    max-width: 118px;
+    font-size: 9px;
+    line-height: 1.2;
+    font-weight: 700;
+    color: #e8eef7;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 1), 0 0 2px rgba(0, 0, 0, 1);
+    margin-top: 2px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
 #cb-open-modal .cb-spinner-track .cb-horiz-item-val {
-    display: none;
+    display: block;
+    max-width: 118px;
+    font-size: 10px;
+    line-height: 1.25;
+    font-weight: 800;
+    color: #f1f5f9;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 1), 0 0 2px rgba(0, 0, 0, 1);
+    margin-top: 3px;
 }
 #cb-open-modal .cb-spinner-track .cb-horiz-item-img {
-    width: 56px;
-    height: 56px;
-    margin-bottom: 0;
+    width: 52px;
+    height: 52px;
+    margin-bottom: 2px;
+    flex-shrink: 0;
     filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.65));
 }
 #cb-open-modal .cb-spinner-track .cb-horiz-item.cb-spin-item--win {
