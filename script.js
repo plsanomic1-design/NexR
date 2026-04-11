@@ -3784,6 +3784,9 @@ function extractGamepassId(link) {
     return m ? m[1] : null;
 }
 
+// --- WITHDRAW FLOW ---
+let isWithdrawing = false;
+
 async function confirmWithdraw() {
     // --- Guard: prevent double-submit / spam clicks ---
     if (isWithdrawing) return;
