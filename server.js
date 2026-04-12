@@ -595,6 +595,7 @@ function clientTxToRow(userId, tx) {
         user_id: String(userId),
         amount: num(tx.amount, 0),
         currency: 'robet',
+        type: normalizeDbTxType(tx.type),
         status: 'completed',
         game_name: packTxGameName(tx.desc, tx.id),
         reference_id: coerceTxReferenceId(clientRef)
@@ -658,6 +659,7 @@ async function persistAccountSave(userId, save, ignoreBalance = false) {
         user_id: String(userId),
         amount: 0,
         currency: 'robet',
+        type: 'account_profile',
         status: 'ok',
         game_name: profileJson,
         reference_id: PROFILE_REF_UUID
