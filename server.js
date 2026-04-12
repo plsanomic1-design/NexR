@@ -1287,11 +1287,25 @@ async function deductUserBet(userId, betAmount) {
     if (!supabaseEnabled()) return { ok: false, error: 'Database not configured' };
     const bal = await getUserBalance(uid);
     if (!bal) return { ok: false, error: 'Could not read balance. Try again.' };
-    if (bal.balance_zr < bet - 0.001) return { ok: false, error: 'Insufficient balance.' };
-    const newBalance = Math.max(0, Math.round((bal.balance_zr - bet) * 100) / 100);
-    const result = await updateUserBalance(uid, newBalance, bal.balance_zh);
+    const totalBal = bal.balance_zr + (bal.balance_zh || 0);
+    if (totalBal < bet - 0.001) return { ok: false, error: 'Insufficient balance.' };
+    
+    let newZr = bal.balance_zr;
+    let newZh = bal.balance_zh || 0;
+    
+    if (newZr >= bet) {
+        newZr -= bet;
+    } else {
+        const diff = bet - newZr;
+        newZr = 0;
+        newZh -= diff;
+    }
+    
+    newZr = Math.max(0, Math.round(newZr * 100) / 100);
+    newZh = Math.max(0, Math.round(newZh * 100) / 100);
+    const result = await updateUserBalance(uid, newZr, newZh);
     if (!result.ok) return { ok: false, error: 'Could not update balance. Try again.' };
-    return { ok: true, newBalance, balanceZh: bal.balance_zh };
+    return { ok: true, newBalance: newZr + newZh, balanceZh: newZh };
 }
 
 /**
@@ -1304,15 +1318,16 @@ async function creditUserWin(userId, winAmount) {
     if (!supabaseEnabled()) return { ok: false, error: 'Database not configured' };
     const bal = await getUserBalance(uid);
     if (!bal) return { ok: false, error: 'Could not read balance' };
-    let newBalance = bal.balance_zr;
+    let newZr = bal.balance_zr;
+    let newZh = bal.balance_zh || 0;
     let result = { ok: true };
     if (winAmount > 0) {
-        newBalance = Math.round((bal.balance_zr + winAmount) * 100) / 100;
-        result = await updateUserBalance(uid, newBalance, bal.balance_zh);
+        newZr = Math.round((newZr + winAmount) * 100) / 100;
+        result = await updateUserBalance(uid, newZr, newZh);
     }
     // Push the authoritative balance to every open tab for this user
-    emitBalanceRemoteSync(io, uid, { balance: newBalance, balanceZh: bal.balance_zh, stats: {} });
-    return { ok: result.ok, newBalance, balanceZh: bal.balance_zh };
+    emitBalanceRemoteSync(io, uid, { balance: newZr + newZh, balanceZh: newZh, stats: {} });
+    return { ok: result.ok, newBalance: newZr + newZh, balanceZh: newZh };
 }
 
 /** Server-side mines multiplier (mirrors client getMulti) */
