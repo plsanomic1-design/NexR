@@ -534,7 +534,7 @@ async function addTransaction(userId, amount, currency, type, gameName) {
     const row = {
         user_id: String(userId),
         amount: num(amount, 0),
-        currency: currency || 'zr',
+        currency: currency || 'robet',
         type: normalizeDbTxType(type),
         status: 'completed',
         game_name: gameName != null ? String(gameName) : '',
@@ -594,8 +594,7 @@ function clientTxToRow(userId, tx) {
     return {
         user_id: String(userId),
         amount: num(tx.amount, 0),
-        currency: 'zr',
-        type: normalizeDbTxType(tx.type),
+        currency: 'robet',
         status: 'completed',
         game_name: packTxGameName(tx.desc, tx.id),
         reference_id: coerceTxReferenceId(clientRef)
@@ -658,8 +657,7 @@ async function persistAccountSave(userId, save, ignoreBalance = false) {
     const profileRow = {
         user_id: String(userId),
         amount: 0,
-        currency: 'zr',
-        type: 'account_profile',
+        currency: 'robet',
         status: 'ok',
         game_name: profileJson,
         reference_id: PROFILE_REF_UUID
@@ -764,7 +762,7 @@ async function persistAccountProfileOnly(userId, save) {
     const profileRow = {
         user_id: String(userId),
         amount: 0,
-        currency: 'zr',
+        currency: 'robet',
         type: 'account_profile',
         status: 'ok',
         game_name: profileJson,
@@ -3615,7 +3613,7 @@ async function saveBansSync() {
         const row = {
             user_id: '0',
             amount: 0,
-            currency: 'zr',
+            currency: 'robet',
             type: 'system_config',
             status: 'ok',
             game_name: payload,
