@@ -399,7 +399,7 @@ function mergeFlipIntoBalance(save) {
 
 /**
  * @param {number} userId
- * @returns {Promise<{ balance_zr: number, balance_zh: number } | null>}
+ * @returns {Promise<{ balance: number } | null>}
  */
 async function getUserBalance(userId) {
     if (!supabaseEnabled()) return null;
@@ -624,8 +624,7 @@ async function persistAccountSave(userId, save, ignoreBalance = false) {
     const uid = encodeURIComponent(String(userId));
 
     if (!ignoreBalance) {
-        const balanceZr = typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0;
-        const balResult = await updateUserBalance(userId, balanceZr);
+        const balResult = await updateUserBalance(userId, typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0);
         if (!balResult.ok) {
             return {
                 ok: false,
@@ -916,7 +915,7 @@ async function loadOrCreateAccountSave(rawUserId) {
     return {
         robloxUserId: uid,
         balance: 0,
-        balanceZh: 0,
+
         stats: {},
         transactions: [],
         savedAt: Date.now()
@@ -1273,7 +1272,7 @@ function getCusState(userId) {
 // =====================================================================
 
 /**
- * Atomically deduct a bet from Supabase. Returns { ok, newBalance, balanceZh } or { ok:false, error }.
+ * Atomically deduct a bet from Supabase. Returns { ok, newBalance } or { ok:false, error }.
  * Tolerates up to 0.001 floating-point error.
  */
 async function deductUserBet(userId, betAmount) {
@@ -2407,7 +2406,7 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                     try {
                         const bal = await getUserBalance(uid);
                         if (bal) {
-                            const newBal = bal.balance_zr + depositAmount; // legacy balance_zh is merged on next login via loadAccountFromSupabase
+                            const newBal = bal.balance + depositAmount;
                             // Persist a webhook receipt row so replays after restart are blocked
                             await supabaseFetch('transactions', {
                                 method: 'POST',
@@ -2415,7 +2414,7 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                                 body: JSON.stringify({
                                     user_id: String(uid),
                                     amount: depositAmount,
-                                    currency: 'zr',
+                                    currency: 'robet',
                                     type: 'crypto_deposit_webhook',
                                     status: 'completed',
                                     game_name: `NOWPayments order: ${order_id}`,
@@ -2898,15 +2897,15 @@ app.get('/api/deposit/robux/status', async (req, res) => {
 // ===================================
 
 app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
-    let { userId, coin, address, extraId, zhAmount, sessionToken } = req.body;
+    let { userId, coin, address, extraId, zhAmount: robetAmount, sessionToken } = req.body;
     // SECURITY FIX: Validate session token before parsing userId
     if (!validateSessionToken(userId, sessionToken)) {
         return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
     }
     userId = parseRobloxUserIdStrict(userId);
-    zhAmount = parseInt(zhAmount, 10);
+    robetAmount = parseInt(robetAmount, 10);
     
-    if (!userId || !coin || !address || isNaN(zhAmount) || zhAmount < 1800) {
+    if (!userId || !coin || !address || isNaN(robetAmount) || robetAmount < 1800) {
         return res.status(400).json({ error: 'Invalid request. Minimum is 1800 RoBet.' });
     }
     
@@ -2914,12 +2913,12 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
         // Use the dedicated fast balance read so we always get the live number from Supabase
         const bal = await getUserBalance(userId);
         const currentBalance = bal ? bal.balance : 0;
-        if (!bal || currentBalance < zhAmount) {
+        if (!bal || currentBalance < robetAmount) {
             return res.status(400).json({ error: `Insufficient balance. You have ${Math.floor(currentBalance)} RoBet.` });
         }
 
         // Deduct directly via updateUserBalance (the single source of truth)
-        const newBalance = Math.round((currentBalance - zhAmount) * 100) / 100;
+        const newBalance = Math.round((currentBalance - robetAmount) * 100) / 100;
         const updateResult = await updateUserBalance(userId, newBalance);
         if (!updateResult.ok) {
             return res.status(500).json({ error: 'Could not process withdrawal. Try again.' });
@@ -2928,7 +2927,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
         emitBalanceRemoteSync(io, userId, { balance: newBalance, stats: {} });
 
         // Fiat value estimation: 1 RoBet = 0.007 EUR
-        const fiatValue = parseFloat((zhAmount * 0.007).toFixed(2));
+        const fiatValue = parseFloat((robetAmount * 0.007).toFixed(2));
 
         // Look up username from in-memory connected players (best-effort)
         let wdUsername = 'Unknown';
@@ -2943,7 +2942,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
             coin: coin,
             address: address,
             extraId: extraId || '',
-            zhAmount: zhAmount,
+            zhAmount: robetAmount,
             fiatAmount: fiatValue,
             fiatCurrency: 'eur',
             status: 'pending',
@@ -2957,7 +2956,7 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
             maximumFractionDigits: 2
         })} ${String(wdReq.fiatCurrency || 'eur').toUpperCase()}`;
         postDiscordAudit(
-            `📤 ${wdUsername || `User ${userId}`} requested withdraw ${zhAmount.toLocaleString(
+            `📤 ${wdUsername || `User ${userId}`} requested withdraw ${robetAmount.toLocaleString(
                 'en-US'
             )} RoBet (~${fiatLabel}) to ${String(coin || '').toUpperCase()}.`
         );
@@ -3080,9 +3079,9 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         return res.status(503).json({ error: 'Withdrawal bot is offline. Make sure ROBLOX_COOKIE is set in .env and restart the server.' });
     }
 
-    const { userId, apiKey, zrCoins, expectedRobux, sessionToken } = req.body || {};
+    const { userId, apiKey, zrCoins: robetCoins, expectedRobux, sessionToken } = req.body || {};
 
-    const amountCoins = Number(zrCoins);
+    const amountCoins = Number(robetCoins);
     if (!userId || !apiKey || isNaN(amountCoins) || amountCoins <= 0) {
         return res.status(400).json({ error: 'Missing or invalid fields: userId, apiKey, and withdrawal amount are required.' });
     }
@@ -3136,7 +3135,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         }
 
         // --- Step 2: Atomic Deduction ---
-        const newZr = Math.max(0, currentBal.balance_zr - amountCoins);
+        const newZr = Math.max(0, currentBal.balance - amountCoins);
         const updateResult = await updateUserBalance(userId, newZr);
         
         if (!updateResult.ok) {
@@ -3245,7 +3244,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         }
 
         // --- Step 6: Persist Withdrawal Analytics / History ---
-        save.balance = currentBal.balance_zr - amountCoins; // update local context
+        save.balance = currentBal.balance - amountCoins; // update local context
         save.stats.withdrawn = (save.stats.withdrawn || 0) + amountCoins;
         save.stats.lastWithdrawAt = Date.now();
         if (!Array.isArray(save.transactions)) save.transactions = [];
@@ -3517,7 +3516,6 @@ function emitBalanceRemoteSync(io, rawUserId, save) {
     const payload = {
         userId: String(rawUserId),
         balance: typeof save.balance === 'number' ? save.balance : 0,
-        balanceZh: typeof save.balanceZh === 'number' ? save.balanceZh : 0,
         stats
     };
     // SECURITY: Only deliver to the specific user's own sockets â€” never broadcast to all.
@@ -3952,8 +3950,7 @@ io.on('connection', (socket) => {
         onlinePlayers.set(socket.id, {
             userId: uid,
             username,
-            balance: data.balance || 0,
-            balanceZh: data.balanceZh || 0
+            balance: data.balance || 0
         });
         // SECURITY: Store authenticated userId on server-side socket object.
         // All subsequent handlers use socket.data.userId — never the client-supplied payload.
@@ -3984,7 +3981,7 @@ io.on('connection', (socket) => {
         await withUserLock(userId, async () => {
             const deduct = await deductUserBet(userId, betVal);
             if (!deduct.ok) return socket.emit('notification', {type: 'error', text: deduct.error || 'Insufficient balance.'});
-            socket.emit('balance:update', { balance: deduct.newBalance, balanceZh: deduct.balanceZh });
+            socket.emit('balance:update', { balance: deduct.newBalance });
             crashGame.players.set(String(userId), { userId, username, bet: betVal, auto, cashedOut: false, winAmt: 0 });
             io.emit('crash:playerJoined', { userId: String(userId), username, bet: betVal });
         });
@@ -4427,7 +4424,6 @@ io.on('connection', (socket) => {
                         robloxUserId: p.userId,
                         username: p.username || qRaw,
                         balance: typeof p.balance === 'number' ? p.balance : 0,
-                        balanceZh: typeof p.balanceZh === 'number' ? p.balanceZh : 0,
                         stats: {},
                         isLocalOnly: true
                     };
@@ -4469,7 +4465,6 @@ io.on('connection', (socket) => {
             userId: emitUserId,
             username: save.username || save.robloxUsername || qRaw,
             balance: save.balance || 0,
-            balanceZh: save.balanceZh || 0,
             rigState,
             wdCooldownEndsAt: hasWdCooldown ? wdCooldownEndsAt : 0,
             withdrawCooldownMinutes,
@@ -4558,7 +4553,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('admin:update_balance', async ({ targetUserId, newBalance, newBalanceZh }) => {
+    socket.on('admin:update_balance', async ({ targetUserId, newBalance }) => {
         if (!socket.isAdminMod) return;
 
         try {
@@ -4582,7 +4577,6 @@ io.on('connection', (socket) => {
                         ...inMem,
                         robloxUserId: tid,
                         balance: typeof inMem.balance === 'number' ? inMem.balance : 0,
-                        balanceZh: typeof inMem.balanceZh === 'number' ? inMem.balanceZh : 0,
                         isLocalOnly: true
                     };
                 } else {
@@ -4591,7 +4585,6 @@ io.on('connection', (socket) => {
             }
 
             if (typeof newBalance === 'number' && newBalance >= 0) save.balance = newBalance;
-            if (typeof newBalanceZh === 'number' && newBalanceZh >= 0) save.balanceZh = newBalanceZh;
 
             if (supabaseEnabled()) {
                 if (!save.isLocalOnly) {

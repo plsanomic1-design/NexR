@@ -3903,7 +3903,7 @@ async function requestCryptoWithdraw() {
     const coin = document.getElementById('wd-crypto-coin').value;
     const address = document.getElementById('wd-crypto-address').value.trim();
     const extraId = document.getElementById('wd-crypto-extra').value.trim();
-    const zhAmount = parseInt(document.getElementById('wd-crypto-amount').value, 10);
+    const robetAmount = parseInt(document.getElementById('wd-crypto-amount').value, 10);
     const errEl = document.getElementById('wd-crypto-error-msg');
     const btn = document.getElementById('wd-crypto-submit-btn');
     
@@ -3912,8 +3912,8 @@ async function requestCryptoWithdraw() {
     };
     if (errEl) errEl.style.display = 'none';
     
-    if (isNaN(zhAmount) || zhAmount < 1800) {
-        return showErr("Minimum withdrawal is 1800 ZH$.");
+    if (isNaN(robetAmount) || robetAmount < 1800) {
+        return showErr("Minimum withdrawal is 1800 RoBet.");
     }
     if (!address) {
         return showErr("Please provide your destination wallet address.");
@@ -3937,7 +3937,7 @@ async function requestCryptoWithdraw() {
         const res = await fetch('/api/withdraw/crypto/request', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: robloxUserId, coin, address, extraId, zhAmount, sessionToken: window._sessionToken })
+            body: JSON.stringify({ userId: robloxUserId, coin, address, extraId, robetAmount, sessionToken: window._sessionToken })
         });
         const data = await res.json();
         
@@ -4115,7 +4115,7 @@ async function loadProfileCryptoWd() {
             return `
             <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:6px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <div style="font-size:14px; font-weight:bold; color:white; margin-bottom:4px;">${wd.zhAmount} ZH$ &nbsp;<i class="fa-solid fa-arrow-right-long" style="opacity:0.5; font-size:10px;"></i>&nbsp; <span style="text-transform:uppercase; color:var(--accent);">${wd.coin}</span></div>
+                    <div style="font-size:14px; font-weight:bold; color:white; margin-bottom:4px;">${wd.zhAmount} RoBet &nbsp;<i class="fa-solid fa-arrow-right-long" style="opacity:0.5; font-size:10px;"></i>&nbsp; <span style="text-transform:uppercase; color:var(--accent);">${wd.coin}</span></div>
                     <div style="font-size:11px; color:var(--text-secondary); margin-bottom:2px;">Wallet: ${wd.address}</div>
                     <div style="font-size:10px; color:var(--text-secondary);">${dateStr}</div>
                 </div>
@@ -5250,7 +5250,7 @@ if (socket) {
                     <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
                         <div>
                             <div style="font-size:12px; color:var(--text-secondary);">Amount to Send</div>
-                            <div style="font-size:16px; font-weight:800; color:var(--green);">${req.fiatAmount} EUR <span style="font-size:12px; font-weight:normal; color:var(--text-secondary);">(${req.zhAmount} ZH$)</span></div>
+                            <div style="font-size:16px; font-weight:800; color:var(--green);">${req.fiatAmount} EUR <span style="font-size:12px; font-weight:normal; color:var(--text-secondary);">(${req.zhAmount} RoBet)</span></div>
                         </div>
                         <div style="text-align:right;">
                             <div style="font-size:12px; color:var(--text-secondary);">Coin</div>
