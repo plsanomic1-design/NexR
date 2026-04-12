@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/game/blackjack/start', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, deck: newDeck, bet: bjBetAmt })
+                    body: JSON.stringify({ userId: robloxUserId, deck: newDeck, bet: bjBetAmt, sessionToken: window._sessionToken })
                 });
                 const data = await res.json();
                 if (!res.ok) { endGame(data.error || 'Error starting', 'var(--red)'); return; }
@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 GSM.update('blackjack', { pHand: pHand, dHand: dHand, deck: cDeck });
                 if(getScore(pHand) === 21) {
                     endGame('Blackjack! You Win', 'var(--gold)');
-                    fetch('/api/game/blackjack/result', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: robloxUserId, outcome: 'blackjack' }) }).catch(()=>{});
+                    fetch('/api/game/blackjack/result', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: robloxUserId, outcome: 'blackjack', sessionToken: window._sessionToken }) }).catch(()=>{});
                 }
             } catch(e) {
                 endGame('Error starting', 'var(--red)');
@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/game/blackjack/hit', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId })
+                    body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
                 });
                 const data = await res.json();
                 if(data.error) throw new Error(data.error);
@@ -249,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/game/blackjack/stand', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId })
+                    body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
                 });
                 const data = await res.json();
                 if(data.error) throw new Error(data.error);
@@ -362,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const res = await fetch('/api/game/mines/cashout', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ userId: robloxUserId, revealed: mRevealed })
+                        body: JSON.stringify({ userId: robloxUserId, revealed: mRevealed, sessionToken: window._sessionToken })
                     });
                     const data = await res.json();
                     if(data.logic) mGrid = data.logic;
@@ -383,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const res = await fetch('/api/game/mines/start', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ userId: robloxUserId, bombs, bet: currentBet })
+                        body: JSON.stringify({ userId: robloxUserId, bombs, bet: currentBet, sessionToken: window._sessionToken })
                     });
                     const startData = await res.json();
                     if (!res.ok) {
@@ -434,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/game/mines/click', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, tileIdx: i })
+                    body: JSON.stringify({ userId: robloxUserId, tileIdx: i, sessionToken: window._sessionToken })
                 });
                 const data = await res.json();
                 
@@ -470,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const resCo = await fetch('/api/game/mines/cashout', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userId: robloxUserId, revealed: mRevealed })
+                                body: JSON.stringify({ userId: robloxUserId, revealed: mRevealed, sessionToken: window._sessionToken })
                             });
                             const dataCo = await resCo.json();
                             if (dataCo.logic) mGrid = dataCo.logic;
@@ -628,7 +628,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     await fetch('/api/game/towers/cashout', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ userId: robloxUserId, curRow })
+                        body: JSON.stringify({ userId: robloxUserId, curRow, sessionToken: window._sessionToken })
                     });
                 } catch(e) { console.error('[Towers cashout]', e); }
                 endTowers(true);
@@ -646,7 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const res = await fetch('/api/game/towers/start', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ userId: robloxUserId, rows: rows, width: cfg.w, bombs: cfg.b, bet: curBet, diff })
+                        body: JSON.stringify({ userId: robloxUserId, rows: rows, width: cfg.w, bombs: cfg.b, bet: curBet, diff, sessionToken: window._sessionToken })
                     });
                     const startData = await res.json();
                     if(!res.ok) {
@@ -696,7 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/game/towers/click', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, row: r, col: c })
+                    body: JSON.stringify({ userId: robloxUserId, row: r, col: c, sessionToken: window._sessionToken })
                 });
                 const data = await res.json();
                 tileEl.classList.remove('loading');
@@ -730,7 +730,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             await fetch('/api/game/towers/cashout', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userId: robloxUserId, curRow })
+                                body: JSON.stringify({ userId: robloxUserId, curRow, sessionToken: window._sessionToken })
                             });
                         } catch (e) {
                             console.error('[Towers auto cashout]', e);
@@ -884,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/game/dice', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, target, isOver, multi, bet: parseFloat(betInp.value) || 0 })
+                    body: JSON.stringify({ userId: robloxUserId, target, isOver, multi, bet: parseFloat(betInp.value) || 0, sessionToken: window._sessionToken })
                 });
                 const data = await res.json();
                 
@@ -1848,7 +1848,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({
                         userId: robloxUserId,
                         bet,
-                        speed: aviaSpeedIdx
+                        speed: aviaSpeedIdx,
+                        sessionToken: window._sessionToken
                     })
                 });
                 const data = await res.json().catch(() => ({}));
@@ -2225,7 +2226,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/game/plinko', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, pRows, pDiff, bet })
+                    body: JSON.stringify({ userId: robloxUserId, pRows, pDiff, bet, sessionToken: window._sessionToken })
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));

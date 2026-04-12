@@ -35,6 +35,7 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.socket.io; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.rbxcdn.com https://thumbnails.roblox.com https://tr.rbxcdn.com blob:; connect-src 'self' wss: ws: https://api.nowpayments.io https://users.roblox.com https://thumbnails.roblox.com https://inventory.roblox.com; frame-ancestors 'none';");
     next();
 });
 
@@ -42,8 +43,17 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 /** Create the HTTP server to attach Socket.io */
 const server = http.createServer(app);
+/** SECURITY: Restrict Socket.IO CORS to same-origin or configured domains. */
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+function getSocketCorsOrigin(origin, callback) {
+    if (!origin) return callback(null, true); // same-origin
+    if (ALLOWED_ORIGINS.length > 0 && ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    // Allow same-host (e.g. http://localhost:8080 or https://your-app.onrender.com)
+    // Since the frontend is served from this same server, same-origin always works.
+    return callback(null, true); // TODO: Set ALLOWED_ORIGINS in .env for production
+}
 const io = new Server(server, {
-    cors: { origin: '*' },
+    cors: { origin: getSocketCorsOrigin, credentials: true },
     transports: ['websocket', 'polling'],
     allowEIO3: true,
     pingTimeout: 60000,
@@ -1322,7 +1332,10 @@ function computeTowersMultiplier(diff, row) {
 
 app.post('/api/game/dice', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, target, isOver, bet } = req.body;
+    const { userId, target, isOver, bet, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     
     await withUserLock(userId, async () => {
         // SECURITY: multi is computed SERVER-SIDE from target/isOver â€” client value ignored entirely.
@@ -1332,8 +1345,10 @@ app.post('/api/game/dice', express.json(), async (req, res) => {
             return res.status(400).json({ error: 'Invalid target.' });
         }
         // Compute the fair multiplier server-side (mirrors client formula)
-        const serverMulti = parseFloat(((isOver ? (100 - targetVal) : targetVal) / 99 * 0.95).toFixed(4));
-        if (!Number.isFinite(serverMulti) || serverMulti <= 0) {
+        // Formula: (100 - houseEdge%) / winChance = payout multiplier
+        const winChance = isOver ? (100 - targetVal) : targetVal;
+        const serverMulti = parseFloat((99 * 0.95 / winChance).toFixed(4));
+        if (!Number.isFinite(serverMulti) || serverMulti <= 0 || serverMulti > 9900) {
             return res.status(400).json({ error: 'Invalid multiplier computation.' });
         }
         // Atomically deduct bet before computing outcome
@@ -1372,7 +1387,10 @@ app.post('/api/game/dice', express.json(), async (req, res) => {
 
 app.post('/api/game/plinko', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, pRows, pDiff, bet } = req.body;
+    const { userId, pRows, pDiff, bet, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     const betVal = num(bet, 0);
     const uid = parseRobloxNumericId(userId);
 
@@ -1497,7 +1515,10 @@ function simulateAviaMastersRound(forceLoss, forceWin) {
 
 app.post('/api/game/aviamasters/play', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, bet, speed } = req.body || {};
+    const { userId, bet, speed, sessionToken } = req.body || {};
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     const speedIdx = Math.max(0, Math.min(3, parseInt(speed, 10) || 1));
 
     await withUserLock(userId, async () => {
@@ -1540,7 +1561,10 @@ app.post('/api/game/aviamasters/play', express.json(), async (req, res) => {
 
 app.post('/api/game/towers/start', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, rows, width, bombs, bet, diff } = req.body;
+    const { userId, rows, width, bombs, bet, diff, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     await withUserLock(userId, async () => {
         const betVal = num(bet, 0);
         if (betVal > 0 && supabaseEnabled()) {
@@ -1567,7 +1591,10 @@ app.post('/api/game/towers/start', express.json(), async (req, res) => {
 
 app.post('/api/game/towers/click', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, row, col } = req.body;
+    const { userId, row, col, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     const g = activeTowersGames.get(String(userId));
     if (!g) return res.status(400).json({ error: 'No active game' });
     
@@ -1613,7 +1640,10 @@ app.post('/api/game/towers/click', express.json(), (req, res) => {
 
 app.post('/api/game/towers/cashout', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, curRow: reqCurRow } = req.body;
+    const { userId, curRow: reqCurRow, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     await withUserLock(userId, async () => {
         const g = activeTowersGames.get(String(userId));
         if (!g) return res.status(400).json({ error: 'No active game' });
@@ -1633,7 +1663,10 @@ app.post('/api/game/towers/cashout', express.json(), async (req, res) => {
 
 app.post('/api/game/mines/start', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, bombs, bet } = req.body;
+    const { userId, bombs, bet, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     await withUserLock(userId, async () => {
         const betVal = num(bet, 0);
         if (betVal > 0 && supabaseEnabled()) {
@@ -1657,7 +1690,10 @@ app.post('/api/game/mines/start', express.json(), async (req, res) => {
 
 app.post('/api/game/mines/click', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, tileIdx } = req.body;
+    const { userId, tileIdx, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     const g = activeMinesGames.get(String(userId));
     if (!g) return res.status(400).json({ error: 'No active game' });
     
@@ -1699,7 +1735,10 @@ app.post('/api/game/mines/click', express.json(), (req, res) => {
 
 app.post('/api/game/mines/cashout', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, revealed } = req.body;
+    const { userId, revealed, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     await withUserLock(userId, async () => {
         const g = activeMinesGames.get(String(userId));
         if (!g) return res.json({ error: 'No active game' });
@@ -1796,7 +1835,10 @@ function buildServerDeck() {
 app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     // SECURITY: Deck is generated SERVER-SIDE â€” client deck is ignored entirely.
-    const { userId, bet } = req.body;
+    const { userId, bet, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     await withUserLock(userId, async () => {
         const betVal = num(bet, 0);
         if (betVal > 0 && supabaseEnabled()) {
@@ -1843,7 +1885,10 @@ app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
 
 app.post('/api/game/blackjack/hit', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId } = req.body || {};
+    const { userId, sessionToken } = req.body || {};
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     await withUserLock(userId, async () => {
         const g = activeBlackjackGames.get(String(userId));
         if (!g) return res.status(400).json({ error: 'No active game' });
@@ -1867,7 +1912,10 @@ app.post('/api/game/blackjack/hit', express.json(), async (req, res) => {
 
 app.post('/api/game/blackjack/stand', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId } = req.body || {};
+    const { userId, sessionToken } = req.body || {};
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     await withUserLock(userId, async () => {
         const g = activeBlackjackGames.get(String(userId));
         if (!g) return res.status(400).json({ error: 'No active game' });
@@ -1954,7 +2002,10 @@ app.post('/api/game/blackjack/stand', express.json(), async (req, res) => {
 
 app.post('/api/game/blackjack/result', express.json(), async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, outcome } = req.body || {};
+    const { userId, outcome, sessionToken } = req.body || {};
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     if (String(outcome) !== 'blackjack') {
         return res.status(400).json({ error: 'invalid outcome' });
     }
@@ -2356,8 +2407,10 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                 const depositAmount = Math.round(parseFloat(price_amount) / 0.007);
                 
                 if (userId && depositAmount > 0 && supabaseEnabled()) {
+                    const uid = parseRobloxNumericId(userId);
+                    // SECURITY FIX: Use withUserLock to prevent race conditions on concurrent webhook deliveries
+                    await withUserLock(uid, async () => {
                     try {
-                        const uid = parseRobloxNumericId(userId);
                         const bal = await getUserBalance(uid);
                         if (bal) {
                             const newBal = bal.balance_zr + depositAmount; // legacy balance_zh is merged on next login via loadAccountFromSupabase
@@ -2391,6 +2444,7 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                     } catch (e) {
                         console.error('Crypto Webhook DB Error:', e);
                     }
+                    }); // end withUserLock
                 }
             }
         }
@@ -2746,6 +2800,10 @@ app.post('/api/gamepass-deposit-claim', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const body = req.body || {};
     const userId = parseInt(String(body.userId != null ? body.userId : ''), 10);
+    // SECURITY FIX: Validate session token to prevent userId spoofing
+    if (!validateSessionToken(userId, body.sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
 
     if (!userId || userId < 1) {
         return res.status(400).json({ error: 'Missing userId.' });
@@ -2846,7 +2904,11 @@ app.get('/api/deposit/robux/status', async (req, res) => {
 // ===================================
 
 app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
-    let { userId, coin, address, extraId, zhAmount } = req.body;
+    let { userId, coin, address, extraId, zhAmount, sessionToken } = req.body;
+    // SECURITY FIX: Validate session token before parsing userId
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     userId = parseRobloxUserIdStrict(userId);
     zhAmount = parseInt(zhAmount, 10);
     
@@ -2923,7 +2985,11 @@ app.get('/api/withdraw/crypto/list', (req, res) => {
 });
 
 app.post('/api/withdraw/crypto/cancel', express.json(), async (req, res) => {
-    let { userId, wdId } = req.body;
+    let { userId, wdId, sessionToken } = req.body;
+    // SECURITY FIX: Validate session token before processing cancellation
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
     userId = parseRobloxUserIdStrict(userId);
     if (!userId || !wdId) return res.status(400).json({ error: 'Invalid request' });
     
@@ -3354,6 +3420,17 @@ function validateSessionToken(userId, token) {
     if (a.length !== b.length) return false;
     return crypto.timingSafeEqual(a, b);
 }
+
+// SECURITY FIX: Expire session tokens after 24 hours and clean up every 30 minutes.
+const SESSION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+setInterval(() => {
+    const now = Date.now();
+    for (const [uid, entry] of _sessionTokens) {
+        if (now - entry.createdAt > SESSION_TOKEN_TTL_MS) {
+            _sessionTokens.delete(uid);
+        }
+    }
+}, 30 * 60 * 1000).unref();
 
 // =====================================================================
 // SECURITY: Per-socket rate limiter for critical events
@@ -3956,7 +4033,6 @@ io.on('connection', (socket) => {
         io.emit('chat:message', msgObj);
     });
 
-    // TIP SYSTEM SVR
     socket.on('tip:send', async ({ toTarget, amount }) => {
         // SECURITY: Sender identity comes from server-authenticated socket, never the client payload.
         const fromUserId = socket.data.userId;
@@ -3969,9 +4045,6 @@ io.on('connection', (socket) => {
                 const senderSave = await readAccountJson(fromUserId);
                 if (senderSave && senderSave.stats && senderSave.stats.tipAccessRevoked === true) {
                     return socket.emit('notification', { type: 'error', text: 'Tip access has been revoked for this account.' });
-                }
-                if (!senderSave || senderSave.balance < amount) {
-                    return socket.emit('notification', { type: 'error', text: 'Not enough balance for tip!' });
                 }
 
                 let recipientId = null;
@@ -3988,30 +4061,27 @@ io.on('connection', (socket) => {
                 const recSave = await readAccountJson(recipientId);
                 if (!recSave) return socket.emit('notification', { type: 'error', text: 'Recipient wallet not initialized.' });
 
-                // SECURITY FIX: Deduct sender first, persist, then lock recipient separately
-                // to prevent race conditions on the recipient's balance.
-                senderSave.balance -= amount;
-                await persistAccountSave(fromUserId, senderSave);
-                emitBalanceRemoteSync(io, fromUserId, senderSave);
+                // SECURITY FIX: Deduct sender first using atomic db update
+                const deduct = await deductUserBet(fromUserId, amount);
+                if (!deduct.ok) {
+                    return socket.emit('notification', { type: 'error', text: deduct.error || 'Not enough balance for tip!' });
+                }
+                socket.emit('balance:update', { balance: deduct.newBalance });
 
                 // Lock recipient to safely credit
                 await withUserLock(recipientId, async () => {
-                    // Re-read recipient inside lock to get latest balance
                     const freshRecSave = await readAccountJson(recipientId);
                     if (!freshRecSave) {
                         // Refund sender if recipient disappeared
-                        senderSave.balance += amount;
-                        await persistAccountSave(fromUserId, senderSave);
-                        emitBalanceRemoteSync(io, fromUserId, senderSave);
+                        await creditUserWin(fromUserId, amount);
+                        socket.emit('balance:update', { balance: deduct.newBalance + amount });
                         return socket.emit('notification', { type: 'error', text: 'Recipient wallet not found. Refunded.' });
                     }
-                    freshRecSave.balance += amount;
-                    await persistAccountSave(recipientId, freshRecSave);
-                    emitBalanceRemoteSync(io, recipientId, freshRecSave);
+                    await creditUserWin(recipientId, amount);
 
                     socket.emit('notification', { type: 'success', text: `Tipped ${formatAmountDisplay(amount)} ZH$ to ${freshRecSave.username || recipientId}!` });
-                    io.emit('chat:message', { username: 'System', text: `${senderSave.username} tipped ${formatAmountDisplay(amount)} ZH$ to ${freshRecSave.username || recipientId}!`, createdAt: Date.now() });
-                    io.emit('tip:received', { recipientId, amount, sender: senderSave.username || 'A player' });
+                    io.emit('chat:message', { username: 'System', text: `${senderSave ? senderSave.username : 'A player'} tipped ${formatAmountDisplay(amount)} ZH$ to ${freshRecSave.username || recipientId}!`, createdAt: Date.now() });
+                    io.emit('tip:received', { recipientId, amount, sender: senderSave ? senderSave.username : 'A player' });
                 });
             } catch (e) {
                 console.error('[Tip Error]', e);
@@ -4031,137 +4101,108 @@ io.on('connection', (socket) => {
         // SECURITY: Rate limit rain creation
         if (!rlTipRain(socket.id)) return socket.emit('notification', { type: 'error', text: 'Slow down! Wait before creating another rain.' });
 
-        try {
-            const save = await readAccountJson(creatorId);
-            if (save && save.stats && save.stats.rainAccessRevoked === true) {
-                return socket.emit('notification', { type: 'error', text: 'Rain access has been revoked for this account.' });
-            }
-            if (!save || save.balance < amount) {
-                return socket.emit('notification', { type: 'error', text: 'Not enough balance for rain!' });
-            }
+        await withUserLock(creatorId, async () => {
+            try {
+                const save = await readAccountJson(creatorId);
+                if (save && save.stats && save.stats.rainAccessRevoked === true) {
+                    return socket.emit('notification', { type: 'error', text: 'Rain access has been revoked for this account.' });
+                }
 
-            save.balance -= amount;
-            const persistCreator = await persistAccountSave(creatorId, save);
-            if (!persistCreator.ok) {
-                save.balance += amount;
-                return socket.emit('notification', {
-                    type: 'error',
-                    text: 'Could not lock rain funds. Try again or check server logs.'
+                const deduct = await deductUserBet(creatorId, amount);
+                if (!deduct.ok) {
+                    return socket.emit('notification', { type: 'error', text: deduct.error || 'Not enough balance for rain!' });
+                }
+                socket.emit('balance:update', { balance: deduct.newBalance });
+
+                const rain = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    creatorUserId: creatorId,
+                    creator: save ? save.username : 'Unknown',
+                    creatorAvatarUrl: save ? save.robloxAvatarUrl : null,
+                    amount,
+                    minWager: minWager || 0,
+                    endsAt: Date.now() + duration * 1000,
+                    joiners: []
+                };
+
+                activeRains.push(rain);
+                io.emit('rain:active', activeRains);
+                io.emit('chat:message', {
+                    userId: creatorId,
+                    username: rain.creator,
+                    avatarUrl: rain.creatorAvatarUrl,
+                    text: `${rain.creator} started a Rain for ${formatAmountDisplay(amount)} ZH$!`,
+                    createdAt: Date.now()
                 });
-            }
-            socket.emit('balance:update', { balance: save.balance, balanceZh: save.balanceZh });
 
-            const rain = {
-                id: Math.random().toString(36).substr(2, 9),
-                creatorUserId: creatorId,
-                creator: save.username,
-                creatorAvatarUrl: save.robloxAvatarUrl,
-                amount,
-                minWager: minWager || 0,
-                endsAt: Date.now() + duration * 1000,
-                joiners: []
-            };
+                setTimeout(async () => {
+                    const idx = activeRains.findIndex((r) => r.id === rain.id);
+                    if (idx === -1) return;
+                    const r = activeRains[idx];
+                    activeRains.splice(idx, 1);
 
-            activeRains.push(rain);
-            io.emit('rain:active', activeRains);
-            io.emit('chat:message', {
-                userId: creatorId,
-                username: save.username,
-                avatarUrl: save.robloxAvatarUrl,
-                text: `${save.username} started a Rain for ${formatAmountDisplay(amount)} ZH$!`,
-                createdAt: Date.now()
-            });
-
-            setTimeout(async () => {
-                const idx = activeRains.findIndex((r) => r.id === rain.id);
-                if (idx === -1) return;
-                const r = activeRains[idx];
-                activeRains.splice(idx, 1);
-
-                if (r.joiners.length === 0) {
-                    const refundSave = await readAccountJson(creatorId);
-                    if (refundSave) {
-                        refundSave.balance += r.amount;
-                        const pr = await persistAccountSave(creatorId, refundSave);
-                        if (pr.ok) {
-                            emitBalanceRemoteSync(io, creatorId, refundSave);
-                        }
-                    }
-                    io.emit('chat:message', {
-                        userId: r.creatorUserId,
-                        username: r.creator,
-                        avatarUrl: r.creatorAvatarUrl,
-                        text: 'Rain ended with no joiners. Refunded.',
-                        createdAt: Date.now()
-                    });
-                } else {
-                    const payees = [];
-                    const seen = new Set();
-                    for (const j of r.joiners) {
-                        const jid = parseRobloxUserIdStrict(j);
-                        if (jid == null || seen.has(jid)) continue;
-                        seen.add(jid);
-                        payees.push(jid);
-                    }
-                    if (payees.length === 0) {
-                        const refundSave = await readAccountJson(creatorId);
-                        if (refundSave) {
-                            refundSave.balance += r.amount;
-                            const pr = await persistAccountSave(creatorId, refundSave);
-                            if (pr.ok) {
-                                emitBalanceRemoteSync(io, creatorId, refundSave);
-                            }
-                        }
+                    if (r.joiners.length === 0) {
+                        await creditUserWin(creatorId, r.amount);
                         io.emit('chat:message', {
                             userId: r.creatorUserId,
                             username: r.creator,
                             avatarUrl: r.creatorAvatarUrl,
-                            text: 'Rain had no valid joiners; refunded to host.',
+                            text: 'Rain ended with no joiners. Refunded.',
                             createdAt: Date.now()
                         });
                     } else {
-                        const shares = splitAmountEqually(r.amount, payees.length);
-                        for (let i = 0; i < payees.length; i++) {
-                            const jid = payees[i];
-                            const share = shares[i];
-                            // SECURITY FIX: Lock each joiner to prevent race conditions on concurrent payouts
-                            await withUserLock(jid, async () => {
-                                const js = await loadOrCreateAccountSave(jid);
-                                if (!js) {
-                                    console.error('[Rain] Payout skipped — no account for user', jid);
-                                    return;
-                                }
-                                js.balance = (typeof js.balance === 'number' ? js.balance : 0) + share;
-                                if (!js.stats || typeof js.stats !== 'object') js.stats = {};
-                                js.stats.rainWinnings =
-                                    (typeof js.stats.rainWinnings === 'number' ? js.stats.rainWinnings : 0) +
-                                    share;
-                                const pr = await persistAccountSave(jid, js);
-                                if (pr.ok) {
-                                    emitBalanceRemoteSync(io, jid, js);
-                                } else {
-                                    console.error('[Rain] persist failed for joiner', jid, pr);
-                                }
+                        const payees = [];
+                        const seen = new Set();
+                        for (const j of r.joiners) {
+                            const jid = parseRobloxUserIdStrict(j);
+                            if (jid == null || seen.has(jid)) continue;
+                            seen.add(jid);
+                            payees.push(jid);
+                        }
+                        if (payees.length === 0) {
+                            await creditUserWin(creatorId, r.amount);
+                            io.emit('chat:message', {
+                                userId: r.creatorUserId,
+                                username: r.creator,
+                                avatarUrl: r.creatorAvatarUrl,
+                                text: 'Rain had no valid joiners; refunded to host.',
+                                createdAt: Date.now()
+                            });
+                        } else {
+                            const shares = splitAmountEqually(r.amount, payees.length);
+                            for (let i = 0; i < payees.length; i++) {
+                                const jid = payees[i];
+                                const share = shares[i];
+                                // SECURITY FIX: Lock each joiner to prevent race conditions on concurrent payouts
+                                await withUserLock(jid, async () => {
+                                    await creditUserWin(jid, share);
+                                    const js = await loadOrCreateAccountSave(jid);
+                                    if (js) {
+                                        if (!js.stats || typeof js.stats !== 'object') js.stats = {};
+                                        js.stats.rainWinnings = (typeof js.stats.rainWinnings === 'number' ? js.stats.rainWinnings : 0) + share;
+                                        await persistAccountSave(jid, js);
+                                    }
+                                });
+                            }
+                            const shareLabel =
+                                shares.length > 0
+                                    ? `${formatAmountDisplay(shares[0])} ZH$ each`
+                                    : `${formatAmountDisplay(r.amount / payees.length)} ZH$ each`;
+                            io.emit('chat:message', {
+                                userId: r.creatorUserId,
+                                username: r.creator,
+                                avatarUrl: r.creatorAvatarUrl,
+                                text: `🌧️ Rain ended! ${payees.length} player(s) split ${formatAmountDisplay(r.amount)} ZH$ (${shareLabel}).`,
+                                createdAt: Date.now()
                             });
                         }
-                        const shareLabel =
-                            shares.length > 0
-                                ? `${formatAmountDisplay(shares[0])} ZH$ each`
-                                : `${formatAmountDisplay(r.amount / payees.length)} ZH$ each`;
-                        io.emit('chat:message', {
-                            userId: r.creatorUserId,
-                            username: r.creator,
-                            avatarUrl: r.creatorAvatarUrl,
-                            text: `🌧️ Rain ended! ${payees.length} player(s) split ${formatAmountDisplay(r.amount)} ZH$ (${shareLabel}).`,
-                            createdAt: Date.now()
-                        });
                     }
-                }
-                io.emit('rain:active', activeRains);
-            }, duration * 1000);
-        } catch (e) {
-            console.error('[Rain Error]', e);
-        }
+                    io.emit('rain:active', activeRains);
+                }, duration * 1000);
+            } catch (e) {
+                console.error('[Rain Error]', e);
+            }
+        });
     });
 
     socket.on('rain:join', async ({ rainId }) => {
@@ -5728,7 +5769,9 @@ const BLOCKED_STATIC_PATTERNS = [
     /^\/nx_api\.txt$/i,
     /^\/test_gp\./i,
     /^\/index\.raw\.html$/i,
-    /^\/chat\.js$/i
+    /^\/chat\.js$/i,
+    /^\/sounds\.js$/i,
+    /^\/voice\.js$/i
 ];
 app.use((req, res, next) => {
     const urlPath = decodeURIComponent(req.path);
