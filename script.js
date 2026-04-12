@@ -3937,7 +3937,7 @@ async function requestCryptoWithdraw() {
         const res = await fetch('/api/withdraw/crypto/request', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: robloxUserId, coin, address, extraId, zhAmount })
+            body: JSON.stringify({ userId: robloxUserId, coin, address, extraId, zhAmount, sessionToken: window._sessionToken })
         });
         const data = await res.json();
         
@@ -4136,7 +4136,7 @@ async function cancelCryptoWd(wdId) {
         const res = await fetch('/api/withdraw/crypto/cancel', {
             method: 'POST',
             headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ userId: robloxUserId, wdId })
+            body: JSON.stringify({ userId: robloxUserId, wdId, sessionToken: window._sessionToken })
         });
         const data = await res.json();
         if(!data.ok) throw new Error(data.error || 'Failed to cancel');
