@@ -36,7 +36,7 @@ app.use((req, res, next) => {
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.socket.io https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://*.rbxcdn.com https://thumbnails.roblox.com https://tr.rbxcdn.com https://api.dicebear.com blob:; connect-src 'self' wss: ws: https://api.nowpayments.io https://users.roblox.com https://thumbnails.roblox.com https://inventory.roblox.com; frame-ancestors 'none';");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.socket.io https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://*.rbxcdn.com https://thumbnails.roblox.com https://tr.rbxcdn.com https://api.dicebear.com blob:; connect-src 'self' wss: ws: https://api.nowpayments.io https://users.roblox.com https://thumbnails.roblox.com https://inventory.roblox.com https://unpkg.com; frame-ancestors 'none';");
     next();
 });
 

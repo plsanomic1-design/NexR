@@ -21,7 +21,7 @@
             window.eval = function() {};
         })();
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&family=DM+Sans:wght@700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css?v=12">
     <script src="sounds.js"></script>
@@ -37,25 +37,22 @@
     <div class="app-shell">
     <div class="sidebar">
         <div class="sidebar-logo" onclick="document.querySelector('[data-view=home]').click()" title="Home">
-            <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="brandGradNav" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
-                        <stop stop-color="#00e5b0"/>
-                        <stop offset="1" stop-color="#00a87e"/>
-                    </linearGradient>
-                    <filter id="rGlow">
-                        <feGaussianBlur stdDeviation="1.5" result="blur"/>
-                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                    </filter>
-                </defs>
-                <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
-                <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
-                <!-- R letterform -->
-                <g filter="url(#rGlow)">
-                    <path d="M12 10 L12 28 L15 28 L15 22 L18 22 L23 28 L27 28 L21.5 21 C25 20 26 16 26 13 C26 9.5 23 10 18 10 L12 10 Z M15 13 L18 13 C21 13 22 14 22 16 C22 18 21 19 18 19 L15 19 Z" fill="url(#brandGradNav)"/>
-                </g>
-            </svg>
-            <span class="sidebar-logo-word">Ro<span class="sidebar-logo-accent">Bet</span></span>
+            <div class="logo-icon">
+                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <text
+                        x="18" y="18"
+                        font-family="Georgia, serif"
+                        font-size="28"
+                        font-weight="700"
+                        text-anchor="middle"
+                        dominant-baseline="central"
+                        fill="none"
+                        stroke="#1D9E75"
+                        stroke-width="1.4"
+                    >R</text>
+                </svg>
+            </div>
+            <div class="logo-text">Ro <span>Bet</span></div>
         </div>
 
         <div class="nav-links">
@@ -154,26 +151,22 @@
 
         <nav class="topbar">
             <div class="topbar-brand" onclick="document.querySelector('[data-view=home]').click()" title="Home">
-                <span class="brand-mark brand-mark--sm" aria-hidden="true">
-                    <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
-                        <defs>
-                            <linearGradient id="brandGradTop" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
-                                <stop stop-color="#00e5b0"/>
-                                <stop offset="1" stop-color="#00a87e"/>
-                            </linearGradient>
-                            <filter id="nGlowTop">
-                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
-                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                            </filter>
-                        </defs>
-                        <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
-                        <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
-                        <g filter="url(#nGlowTop)">
-                            <path d="M12 10 L12 28 L15 28 L15 22 L18 22 L23 28 L27 28 L21.5 21 C25 20 26 16 26 13 C26 9.5 23 10 18 10 L12 10 Z M15 13 L18 13 C21 13 22 14 22 16 C22 18 21 19 18 19 L15 19 Z" fill="url(#brandGradTop)"/>
-                        </g>
+                <div class="logo-icon logo-icon--sm">
+                    <svg width="28" height="28" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <text
+                            x="18" y="18"
+                            font-family="Georgia, serif"
+                            font-size="28"
+                            font-weight="700"
+                            text-anchor="middle"
+                            dominant-baseline="central"
+                            fill="none"
+                            stroke="#1D9E75"
+                            stroke-width="1.4"
+                        >R</text>
                     </svg>
-                </span>
-                <span class="topbar-logo-text">Ro<span class="logo-highlight">Bet</span></span>
+                </div>
+                <div class="logo-text logo-text--sm">Ro <span>Bet</span></div>
             </div>
             <div class="top-nav-links">
                 <a href="#" class="active" data-view="home">Home</a>
@@ -1897,26 +1890,22 @@
       <div class="zr-footer__inner">
         <div class="zr-footer__brand">
           <div class="zr-footer__logo">
-            <span class="brand-mark" aria-hidden="true">
-              <svg width="34" height="34" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
-                <defs>
-                  <linearGradient id="brandGradFoot" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
-                    <stop stop-color="#00e5b0"/>
-                    <stop offset="1" stop-color="#00a87e"/>
-                  </linearGradient>
-                  <filter id="nGlowFoot">
-                    <feGaussianBlur stdDeviation="1.5" result="blur"/>
-                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                  </filter>
-                </defs>
-                <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
-                <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
-                <g filter="url(#nGlowFoot)">
-                  <path d="M12 10 L12 28 L15 28 L15 22 L18 22 L23 28 L27 28 L21.5 21 C25 20 26 16 26 13 C26 9.5 23 10 18 10 L12 10 Z M15 13 L18 13 C21 13 22 14 22 16 C22 18 21 19 18 19 L15 19 Z" fill="url(#brandGradFoot)"/>
-                </g>
-              </svg>
-            </span>
-            <div class="zr-footer__name">Ro<span class="logo-highlight">Bet</span></div>
+            <div class="logo-icon logo-icon--sm" style="flex-shrink:0;">
+                <svg width="28" height="28" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <text
+                        x="18" y="18"
+                        font-family="Georgia, serif"
+                        font-size="28"
+                        font-weight="700"
+                        text-anchor="middle"
+                        dominant-baseline="central"
+                        fill="none"
+                        stroke="#1D9E75"
+                        stroke-width="1.4"
+                    >R</text>
+                </svg>
+            </div>
+            <div class="logo-text logo-text--sm">Ro <span>Bet</span></div>
           </div>
           <p class="zr-footer__desc">
             RoBet is an entertainment platform with internal virtual credits (<strong>RoBet</strong>). No real&#8209;money gambling.
