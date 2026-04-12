@@ -35,7 +35,8 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.socket.io; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.rbxcdn.com https://thumbnails.roblox.com https://tr.rbxcdn.com blob:; connect-src 'self' wss: ws: https://api.nowpayments.io https://users.roblox.com https://thumbnails.roblox.com https://inventory.roblox.com; frame-ancestors 'none';");
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.socket.io https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://*.rbxcdn.com https://thumbnails.roblox.com https://tr.rbxcdn.com https://api.dicebear.com blob:; connect-src 'self' wss: ws: https://api.nowpayments.io https://users.roblox.com https://thumbnails.roblox.com https://inventory.roblox.com; frame-ancestors 'none';");
     next();
 });
 
@@ -5769,9 +5770,7 @@ const BLOCKED_STATIC_PATTERNS = [
     /^\/nx_api\.txt$/i,
     /^\/test_gp\./i,
     /^\/index\.raw\.html$/i,
-    /^\/chat\.js$/i,
-    /^\/sounds\.js$/i,
-    /^\/voice\.js$/i
+    /^\/chat\.js$/i
 ];
 app.use((req, res, next) => {
     const urlPath = decodeURIComponent(req.path);
