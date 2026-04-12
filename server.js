@@ -406,7 +406,7 @@ async function getUserBalance(userId) {
     const uid = encodeURIComponent(String(userId));
     let res;
     try {
-        res = await supabaseFetch(`user_balances?user_id=eq.${uid}&select=balance_zr,balance_zh`);
+        res = await supabaseFetch(`user_balances?user_id=eq.${uid}&select=balance`);
     } catch (e) {
         lastSupabaseBalanceError = formatNodeFetchError(e);
         console.error('getUserBalance network error:', lastSupabaseBalanceError);
@@ -441,11 +441,10 @@ async function getUserBalance(userId) {
     lastSupabaseBalanceError = '';
     // Empty DB (e.g. new Supabase project): no row yet — treat as 0 so games/sync work; first write upserts via updateUserBalance.
     if (rows.length === 0) {
-        return { balance_zr: 0, balance_zh: 0 };
+        return { balance: 0 };
     }
     return {
-        balance_zr: num(rows[0].balance_zr, 0),
-        balance_zh: num(rows[0].balance_zh, 0)
+        balance: num(rows[0].balance, 0)
     };
 }
 
@@ -454,15 +453,14 @@ async function getUserBalance(userId) {
  * Flow: SELECT row â†’ PATCH if exists, else INSERT.
  * @returns {Promise<{ ok: true } | { ok: false, step: string, detail: string, status?: number }>}
  */
-async function updateUserBalance(userId, balanceZr, legacyBalanceZh = 0) {
+async function updateUserBalance(userId, balance) {
     if (!supabaseEnabled()) {
         return { ok: false, step: 'config', detail: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY' };
     }
     const uid = encodeURIComponent(String(userId));
     const row = {
         user_id: String(userId),
-        balance_zr: balanceZr + legacyBalanceZh,
-        balance_zh: 0,
+        balance: balance,
         updated_at: new Date().toISOString()
     };
 
@@ -494,8 +492,7 @@ async function updateUserBalance(userId, balanceZr, legacyBalanceZh = 0) {
                 method: 'PATCH',
                 headers: { Prefer: 'return=minimal' },
                 body: JSON.stringify({
-                    balance_zr: row.balance_zr,
-                    balance_zh: 0,
+                    balance: row.balance,
                     updated_at: row.updated_at
                 })
             });
@@ -628,7 +625,7 @@ async function persistAccountSave(userId, save, ignoreBalance = false) {
 
     if (!ignoreBalance) {
         const balanceZr = typeof save.balance === 'number' && save.balance >= 0 ? save.balance : 0;
-        const balResult = await updateUserBalance(userId, balanceZr, 0);
+        const balResult = await updateUserBalance(userId, balanceZr);
         if (!balResult.ok) {
             return {
                 ok: false,
@@ -807,7 +804,7 @@ async function loadAccountFromSupabase(userId) {
     // Build a minimal save we can always return if transactions fail
     const baseSave = {
         robloxUserId: userId,
-        balance: bal.balance_zr + (bal.balance_zh || 0),
+        balance: bal.balance,
         transactions: [],
         savedAt: Date.now()
     };
@@ -856,7 +853,7 @@ async function loadAccountFromSupabase(userId) {
 
     const save = {
         robloxUserId: userId,
-        balance: bal.balance_zr + (bal.balance_zh || 0),
+        balance: bal.balance,
         transactions: clientTxs.slice(0, 100),
         savedAt: typeof profile.savedAt === 'number' ? profile.savedAt : Date.now()
     };
@@ -1287,25 +1284,11 @@ async function deductUserBet(userId, betAmount) {
     if (!supabaseEnabled()) return { ok: false, error: 'Database not configured' };
     const bal = await getUserBalance(uid);
     if (!bal) return { ok: false, error: 'Could not read balance. Try again.' };
-    const totalBal = bal.balance_zr + (bal.balance_zh || 0);
-    if (totalBal < bet - 0.001) return { ok: false, error: 'Insufficient balance.' };
-    
-    let newZr = bal.balance_zr;
-    let newZh = bal.balance_zh || 0;
-    
-    if (newZr >= bet) {
-        newZr -= bet;
-    } else {
-        const diff = bet - newZr;
-        newZr = 0;
-        newZh -= diff;
-    }
-    
-    newZr = Math.max(0, Math.round(newZr * 100) / 100);
-    newZh = Math.max(0, Math.round(newZh * 100) / 100);
-    const result = await updateUserBalance(uid, newZr, newZh);
+    if (bal.balance < bet - 0.001) return { ok: false, error: 'Insufficient balance.' };
+    const newBalance = Math.max(0, Math.round((bal.balance - bet) * 100) / 100);
+    const result = await updateUserBalance(uid, newBalance);
     if (!result.ok) return { ok: false, error: 'Could not update balance. Try again.' };
-    return { ok: true, newBalance: newZr + newZh, balanceZh: newZh };
+    return { ok: true, newBalance };
 }
 
 /**
@@ -1318,16 +1301,15 @@ async function creditUserWin(userId, winAmount) {
     if (!supabaseEnabled()) return { ok: false, error: 'Database not configured' };
     const bal = await getUserBalance(uid);
     if (!bal) return { ok: false, error: 'Could not read balance' };
-    let newZr = bal.balance_zr;
-    let newZh = bal.balance_zh || 0;
+    let newBalance = bal.balance;
     let result = { ok: true };
     if (winAmount > 0) {
-        newZr = Math.round((newZr + winAmount) * 100) / 100;
-        result = await updateUserBalance(uid, newZr, newZh);
+        newBalance = Math.round((bal.balance + winAmount) * 100) / 100;
+        result = await updateUserBalance(uid, newBalance);
     }
     // Push the authoritative balance to every open tab for this user
-    emitBalanceRemoteSync(io, uid, { balance: newZr + newZh, balanceZh: newZh, stats: {} });
-    return { ok: result.ok, newBalance: newZr + newZh, balanceZh: newZh };
+    emitBalanceRemoteSync(io, uid, { balance: newBalance, stats: {} });
+    return { ok: result.ok, newBalance };
 }
 
 /** Server-side mines multiplier (mirrors client getMulti) */
@@ -1415,7 +1397,7 @@ app.post('/api/game/plinko', express.json(), async (req, res) => {
         if (betVal > 0 && uid && supabaseEnabled()) {
             const deduct = await deductUserBet(userId, betVal);
             if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-            emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+            emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, stats: {} });
         }
 
         const rows = parseInt(pRows) || 16;
@@ -1542,11 +1524,7 @@ app.post('/api/game/aviamasters/play', express.json(), async (req, res) => {
         if (betVal > 0 && supabaseEnabled()) {
             const deduct = await deductUserBet(userId, betVal);
             if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), {
-                balance: deduct.newBalance,
-                balanceZh: deduct.balanceZh,
-                stats: {}
-            });
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
         }
 
         const forceLoss = getCusState(userId).check();
@@ -1587,7 +1565,7 @@ app.post('/api/game/towers/start', express.json(), async (req, res) => {
             const deduct = await deductUserBet(userId, betVal);
             if (!deduct.ok) return res.status(400).json({ error: deduct.error });
             // Immediately push depleted balance to all tabs
-            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
         }
         let logic = [];
         for(let r=0; r<rows; r++) {
@@ -1689,7 +1667,7 @@ app.post('/api/game/mines/start', express.json(), async (req, res) => {
             const deduct = await deductUserBet(userId, betVal);
             if (!deduct.ok) return res.status(400).json({ error: deduct.error });
             // Immediately push depleted balance to all tabs
-            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
         }
         const nb = Math.min(Math.max(parseInt(bombs) || 3, 1), 24);
         let mGrid = Array(25).fill(false);
@@ -1860,7 +1838,7 @@ app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
         if (betVal > 0 && supabaseEnabled()) {
             const deduct = await deductUserBet(userId, betVal);
             if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
         }
         let forceLoss = getCusState(userId).check();
         let forceWin = getCusState(userId).checkWin();
@@ -2187,7 +2165,7 @@ app.post('/api/account-sync', async (req, res) => {
     // SECURITY: Strip any balance fields â€” client CANNOT set balance via account-sync.
     // Balance is ONLY ever written by deductUserBet / creditUserWin on the server.
     delete save.balance;
-    delete save.balanceZh;
+    
     delete save.flipBalance;
     if (!supabaseEnabled()) {
         return res.status(200).json({ ok: true, _isDisabled: true });
@@ -2444,7 +2422,7 @@ app.post('/api/deposit/crypto/webhook', express.json(), async (req, res) => {
                                     reference_id: String(order_id).slice(0, 200)
                                 })
                             }).catch(() => {});
-                            const result = await updateUserBalance(uid, newBal, 0); // we pass 0 here because it's merged naturally or zeroed
+                            const result = await updateUserBalance(uid, newBal); // we pass 0 here because it's merged naturally or zeroed
                             if (result.ok) {
                                 emitBalanceRemoteSync(io, uid, { balance: newBal, stats: {} });
                                 console.log(`Credited ${depositAmount} RoBet (crypto) to user ${uid}`);
@@ -2935,14 +2913,14 @@ app.post('/api/withdraw/crypto/request', express.json(), async (req, res) => {
     await withUserLock(userId, async () => {
         // Use the dedicated fast balance read so we always get the live number from Supabase
         const bal = await getUserBalance(userId);
-        const currentBalance = bal ? (bal.balance_zr + (bal.balance_zh || 0)) : 0;
+        const currentBalance = bal ? bal.balance : 0;
         if (!bal || currentBalance < zhAmount) {
             return res.status(400).json({ error: `Insufficient balance. You have ${Math.floor(currentBalance)} RoBet.` });
         }
 
         // Deduct directly via updateUserBalance (the single source of truth)
         const newBalance = Math.round((currentBalance - zhAmount) * 100) / 100;
-        const updateResult = await updateUserBalance(userId, newBalance, 0);
+        const updateResult = await updateUserBalance(userId, newBalance);
         if (!updateResult.ok) {
             return res.status(500).json({ error: 'Could not process withdrawal. Try again.' });
         }
@@ -3134,7 +3112,7 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
     await withUserLock(userId, async () => {
         // --- SECURE: Rate limit and cooldown checks must happen INSIDE the lock ---
         const diskSave = await readAccountJson(userId);
-        let save = diskSave ? { ...diskSave } : { balance: 0, balanceZh: 0, stats: {} };
+        let save = diskSave ? { ...diskSave } : { balance: 0, stats: {} };
         if (!save.stats) save.stats = {};
 
         if (save.stats.withdrawAccessRevoked === true) {
@@ -3153,13 +3131,13 @@ app.post('/api/withdraw', express.json(), async (req, res) => {
         if (!currentBal) {
             return res.status(503).json({ error: 'Could not read your account balance. Try again.' });
         }
-        if (currentBal.balance_zr < amountCoins) {
+        if (currentBal.balance < amountCoins) {
             return res.status(400).json({ error: 'Insufficient RoBet balance on server.' });
         }
 
         // --- Step 2: Atomic Deduction ---
         const newZr = Math.max(0, currentBal.balance_zr - amountCoins);
-        const updateResult = await updateUserBalance(userId, newZr, currentBal.balance_zh);
+        const updateResult = await updateUserBalance(userId, newZr);
         
         if (!updateResult.ok) {
             return res.status(500).json({ error: 'Internal error: Could not secure funds for withdrawal. Deduction aborted.' });
@@ -4628,7 +4606,7 @@ io.on('connection', (socket) => {
                     }
                 } else {
                     // Was skipping persist for "local only" users — balance never hit Supabase, so games saw no row / errors.
-                    const balRes = await updateUserBalance(tid, num(save.balance, 0), num(save.balanceZh, 0));
+                    const balRes = await updateUserBalance(tid, num(save.balance), num(save.balanceZh, 0));
                     if (!balRes.ok) {
                         return socket.emit('admin:action_result', {
                             ok: false,
@@ -5503,13 +5481,13 @@ app.post('/api/cases/open', express.json(), async (req, res) => {
                 error: 'Could not read balance from the database. Check Supabase URL/keys on the server.'
             });
         }
-        const currentBalance = bal.balance_zr + (bal.balance_zh || 0);
+        const currentBalance = bal.balance;
         if (currentBalance < caseData.price) {
             return res.status(400).json({ error: `Insufficient balance. Need ${caseData.price} RoBet.` });
         }
 
         const newBalance = Math.round((currentBalance - caseData.price) * 100) / 100;
-        const updateResult = await updateUserBalance(uid, newBalance, 0);
+        const updateResult = await updateUserBalance(uid, newBalance);
         if (!updateResult.ok) return res.status(500).json({ error: 'Could not deduct balance.' });
 
         // Roll item BEFORE we respond (all server-side, no client can manipulate)
@@ -5518,7 +5496,7 @@ app.post('/api/cases/open', express.json(), async (req, res) => {
         // Credit the item value back if it's worth something
         if (item.value > 0) {
             const finalBalance = Math.round((newBalance + item.value) * 100) / 100;
-            await updateUserBalance(uid, finalBalance, 0);
+            await updateUserBalance(uid, finalBalance);
             emitBalanceRemoteSync(io, uid, { balance: finalBalance, stats: {} });
             return res.json({ ok: true, item, newBalance: finalBalance });
         }
@@ -5579,7 +5557,7 @@ app.post('/api/battles/create', express.json(), async (req, res) => {
             endedAt: 0
         };
         caseBattles.set(id, battle);
-        emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+        emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, stats: {} });
         io.emit('battles:list_update', serializeCaseBattlesList());
         res.json({ battle: battleToClient(battle) });
     });
@@ -5612,7 +5590,7 @@ app.post('/api/battles/:battleId/join', express.json(), async (req, res) => {
         }
         const uname = getOnlineUsernameByUserId(uid) || `User${uid}`;
         b.players.push({ userId: uid, username: uname, isBot: false, total: 0, rolls: [] });
-        emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, balanceZh: deduct.balanceZh, stats: {} });
+        emitBalanceRemoteSync(io, uid, { balance: deduct.newBalance, stats: {} });
         io.emit(`battle:${battleId}:update`, battleToClient(b));
         io.emit('battles:list_update', serializeCaseBattlesList());
         if (b.players.length >= b.maxPlayers) {
