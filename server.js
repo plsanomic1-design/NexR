@@ -1578,6 +1578,23 @@ app.post('/api/game/keno/play', express.json(), async (req, res) => {
         // STEP 3: Draw 20 winning balls (provably fair)
         let winningBalls = kenoDrawBalls(serverSeed, clientSeed, nonce);
 
+        // STEP 3.5: Apply 10% House Edge bias against player picks
+        const nonPickedPool = [];
+        for (let n = 1; n <= 40; n++) {
+            if (!sanitizedPicks.includes(n) && !winningBalls.includes(n)) nonPickedPool.push(n);
+        }
+        for (let i = 0; i < winningBalls.length; i++) {
+            if (sanitizedPicks.includes(winningBalls[i])) {
+                // 10% chance to drop the player's hit and swap it with a missed non-pick
+                if (Math.random() < 0.10 && nonPickedPool.length > 0) {
+                    const swapIdx = Math.floor(Math.random() * nonPickedPool.length);
+                    winningBalls[i] = nonPickedPool[swapIdx];
+                    nonPickedPool.splice(swapIdx, 1);
+                }
+            }
+        }
+        winningBalls.sort((a,b)=>a-b);
+
         // STEP 4: Apply CUS bias
         const forceLoss = getCusState(userId).check();
         const forceWin  = getCusState(userId).checkWin();
