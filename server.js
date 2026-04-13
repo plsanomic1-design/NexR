@@ -1504,16 +1504,11 @@ const KENO_MULTIPLIERS = {
         10: [0, 0, 0, 1.3, 3, 5.5, 10, 22, 65, 100, 140]
     },
     high: {
-        1:  [0, 4.9],
-        2:  [0, 0, 6.0],
-        3:  [0, 0, 2.5, 22],
-        4:  [0, 0, 2, 5, 35],
-        5:  [0, 0, 1.7, 3.5, 12, 38],
-        6:  [0, 0, 1.4, 3, 6, 14, 50],
-        7:  [0, 0, 1.2, 2.2, 5, 10, 22, 60],
-        8:  [0, 0, 0.9, 2, 4, 9, 18, 40, 120],
-        9:  [0, 0, 0.8, 1.7, 3, 7, 14, 30, 90, 400],
-        10: [0, 0, 0, 1.6, 4, 7, 14, 30, 90, 150, 200]
+        1: [0, 0], 2: [0, 0, 0], 3: [0, 0, 0, 0], 4: [0, 0, 0, 0, 35],
+        5: [0, 0, 0, 0, 12, 38], 6: [0, 0, 0, 0, 6, 14, 50],
+        7: [0, 0, 0, 0, 5, 10, 22, 60], 8: [0, 0, 0, 0, 4, 9, 18, 40, 120],
+        9: [0, 0, 0, 0, 3, 7, 14, 30, 90, 400],
+        10: [0, 0, 0, 0, 4, 7, 14, 30, 90, 150, 200]
     }
 };
 
@@ -1578,15 +1573,15 @@ app.post('/api/game/keno/play', express.json(), async (req, res) => {
         // STEP 3: Draw 20 winning balls (provably fair)
         let winningBalls = kenoDrawBalls(serverSeed, clientSeed, nonce);
 
-        // STEP 3.5: Apply 35% House Edge bias against player picks
+        // STEP 3.5: Apply 45% House Edge bias against player picks
         const nonPickedPool = [];
         for (let n = 1; n <= 40; n++) {
             if (!sanitizedPicks.includes(n) && !winningBalls.includes(n)) nonPickedPool.push(n);
         }
         for (let i = 0; i < winningBalls.length; i++) {
             if (sanitizedPicks.includes(winningBalls[i])) {
-                // 35% chance to drop the player's hit and swap it with a missed non-pick
-                if (Math.random() < 0.35 && nonPickedPool.length > 0) {
+                // 45% chance to drop the player's hit and swap it with a missed non-pick
+                if (Math.random() < 0.45 && nonPickedPool.length > 0) {
                     const swapIdx = Math.floor(Math.random() * nonPickedPool.length);
                     winningBalls[i] = nonPickedPool[swapIdx];
                     nonPickedPool.splice(swapIdx, 1);
