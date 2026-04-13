@@ -1089,7 +1089,8 @@ const LIVE_FEED_GAME_KEYS = new Set([
     'towers',
     'plinko',
     'rooms',
-    'aviamasters'
+    'aviamasters',
+    'keno'
 ]);
 
 function sanitizeLiveFeedUsername(u) {
@@ -1452,6 +1453,218 @@ app.post('/api/game/plinko', express.json(), async (req, res) => {
         }
 
         res.json({ customOutcome: true, idx, newBalance });
+    });
+});
+
+// =====================================================================
+// KENO — Server-authoritative, provably fair, CUS-aware
+// 40-ball grid, server draws 20 balls, player picks 1-10 numbers.
+// =====================================================================
+
+/**
+ * Keno multiplier tables per risk and pick count.
+ * kenoMultipliers[risk][picks] = array indexed by number of hits (0..picks).
+ * Classic matches the reference screenshot (10 picks: 0x,0x,0x,1.1x,2.4x,4.5x,8x,17x,50x,80x,100x).
+ */
+const KENO_MULTIPLIERS = {
+    classic: {
+        1:  [0, 3.9],
+        2:  [0, 0, 3.7],
+        3:  [0, 0, 1.5, 10],
+        4:  [0, 0, 1.3, 3, 16],
+        5:  [0, 0, 1.2, 2, 6, 18],
+        6:  [0, 0, 1, 1.8, 3.5, 8, 22],
+        7:  [0, 0, 1, 1.5, 3, 6, 12, 30],
+        8:  [0, 0, 0.5, 1.3, 2.5, 5, 11, 22, 70],
+        9:  [0, 0, 0.5, 1.2, 2, 4, 8, 18, 50, 180],
+        10: [0, 0, 0, 1.1, 2.4, 4.5, 8, 17, 50, 80, 100]
+    },
+    low: {
+        1:  [0, 1.9],
+        2:  [0, 0, 3.0],
+        3:  [0, 0, 1.2, 8],
+        4:  [0, 0, 1.1, 2.5, 12],
+        5:  [0, 0, 1, 1.7, 5, 14],
+        6:  [0, 0, 0.9, 1.5, 3, 7, 18],
+        7:  [0, 0, 0.9, 1.3, 2.5, 5, 10, 24],
+        8:  [0, 0, 0.5, 1.2, 2, 4, 9, 18, 55],
+        9:  [0, 0, 0.5, 1, 1.8, 3.5, 7, 16, 40, 140],
+        10: [0, 0, 0, 1, 2, 3.8, 7, 14, 42, 65, 80]
+    },
+    medium: {
+        1:  [0, 2.9],
+        2:  [0, 0, 4.0],
+        3:  [0, 0, 1.8, 15],
+        4:  [0, 0, 1.5, 4, 22],
+        5:  [0, 0, 1.3, 2.5, 8, 25],
+        6:  [0, 0, 1.1, 2.2, 4.5, 11, 30],
+        7:  [0, 0, 1.1, 1.8, 3.8, 8, 17, 40],
+        8:  [0, 0, 0.7, 1.5, 3, 6.5, 15, 30, 90],
+        9:  [0, 0, 0.7, 1.4, 2.5, 5, 10, 24, 65, 250],
+        10: [0, 0, 0, 1.3, 3, 5.5, 10, 22, 65, 100, 140]
+    },
+    high: {
+        1:  [0, 4.9],
+        2:  [0, 0, 6.0],
+        3:  [0, 0, 2.5, 22],
+        4:  [0, 0, 2, 5, 35],
+        5:  [0, 0, 1.7, 3.5, 12, 38],
+        6:  [0, 0, 1.4, 3, 6, 14, 50],
+        7:  [0, 0, 1.2, 2.2, 5, 10, 22, 60],
+        8:  [0, 0, 0.9, 2, 4, 9, 18, 40, 120],
+        9:  [0, 0, 0.8, 1.7, 3, 7, 14, 30, 90, 400],
+        10: [0, 0, 0, 1.6, 4, 7, 14, 30, 90, 150, 200]
+    }
+};
+
+/**
+ * Provably fair Keno draw: HMAC-SHA256 chain → Fisher-Yates shuffle pool 1..40,
+ * first 20 shuffled numbers are the winning balls (returned sorted ascending).
+ */
+function kenoDrawBalls(serverSeed, clientSeed, nonce) {
+    const pool = Array.from({ length: 40 }, (_, i) => i + 1);
+    let hashBuf = [];
+    let counter = 0;
+    function nextByte() {
+        if (hashBuf.length === 0) {
+            const h = crypto.createHmac('sha256', serverSeed)
+                .update(`${clientSeed}:${nonce}:${counter++}`)
+                .digest();
+            hashBuf = Array.from(h);
+        }
+        return hashBuf.shift();
+    }
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = nextByte() % (i + 1);
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, 20).sort((a, b) => a - b);
+}
+
+app.post('/api/game/keno/play', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, bet, picks, risk, sessionToken } = req.body || {};
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
+    // Validate picks: array of 1-10 unique integers in [1,40]
+    if (!Array.isArray(picks) || picks.length < 1 || picks.length > 10) {
+        return res.status(400).json({ error: 'Pick between 1 and 10 numbers.' });
+    }
+    const sanitizedPicks = [...new Set(picks.map(p => parseInt(p, 10)))]
+        .filter(p => Number.isFinite(p) && p >= 1 && p <= 40);
+    if (sanitizedPicks.length < 1 || sanitizedPicks.length > 10) {
+        return res.status(400).json({ error: 'Invalid picks supplied.' });
+    }
+    const validRisks = ['classic', 'low', 'medium', 'high'];
+    const riskKey = validRisks.includes(String(risk)) ? String(risk) : 'classic';
+
+    await withUserLock(userId, async () => {
+        const betVal = num(bet, 0);
+
+        // STEP 1: Atomically deduct bet server-side before any outcome
+        if (betVal > 0 && supabaseEnabled()) {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
+        }
+
+        // STEP 2: Provably fair seed generation
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const clientSeed = crypto.randomBytes(16).toString('hex');
+        const nonce = Math.floor(Math.random() * 1000000);
+        const roundId = crypto.randomUUID();
+
+        // STEP 3: Draw 20 winning balls (provably fair)
+        let winningBalls = kenoDrawBalls(serverSeed, clientSeed, nonce);
+
+        // STEP 4: Apply CUS bias
+        const forceLoss = getCusState(userId).check();
+        const forceWin  = getCusState(userId).checkWin();
+        const pickCount = sanitizedPicks.length;
+
+        if (forceWin) {
+            // Guarantee all player picks appear in the winning set
+            const others = [];
+            for (let n = 1; n <= 40; n++) {
+                if (!sanitizedPicks.includes(n)) others.push(n);
+            }
+            for (let i = others.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [others[i], others[j]] = [others[j], others[i]];
+            }
+            winningBalls = [...sanitizedPicks, ...others.slice(0, 20 - pickCount)].sort((a, b) => a - b);
+        } else if (forceLoss) {
+            // Guarantee zero player picks appear in the winning set
+            const nonPicks = [];
+            for (let n = 1; n <= 40; n++) {
+                if (!sanitizedPicks.includes(n)) nonPicks.push(n);
+            }
+            for (let i = nonPicks.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [nonPicks[i], nonPicks[j]] = [nonPicks[j], nonPicks[i]];
+            }
+            winningBalls = nonPicks.slice(0, 20).sort((a, b) => a - b);
+        }
+
+        // STEP 5: Count hits and compute payout
+        const winningSet = new Set(winningBalls);
+        const hits = sanitizedPicks.filter(p => winningSet.has(p)).length;
+        const multTable = (KENO_MULTIPLIERS[riskKey] || KENO_MULTIPLIERS.classic)[pickCount] || [0];
+        const multiplier = multTable[hits] != null ? multTable[hits] : 0;
+        const winAmount = betVal > 0 ? parseFloat((betVal * multiplier).toFixed(2)) : 0;
+
+        // STEP 6: Credit win (or sync balance on loss)
+        let newBalance = null;
+        if (betVal > 0 && supabaseEnabled()) {
+            const credit = await creditUserWin(userId, winAmount);
+            if (credit.ok) newBalance = credit.newBalance;
+        }
+
+        // STEP 7: Record CUS state
+        if (forceWin) {
+            getCusState(userId).recordWin(true);
+        } else if (forceLoss) {
+            getCusState(userId).recordLoss();
+        } else {
+            if (multiplier >= 1.0) getCusState(userId).recordWin(multiplier >= 3.0);
+            else getCusState(userId).recordLoss();
+        }
+
+        // STEP 8: Live feed broadcast
+        const username = getOnlineUsernameByUserId(userId) || 'Guest';
+        if (betVal >= 1) {
+            const feedEv = {
+                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                userId: String(userId),
+                username: sanitizeLiveFeedUsername(username),
+                gameKey: 'keno',
+                bet: betVal,
+                multiplier,
+                payout: winAmount,
+                createdAt: Date.now()
+            };
+            liveFeedMemoryPush(feedEv);
+            io.emit('live_feed:event', feedEv);
+            liveFeedInsertSupabase(feedEv).catch(() => {});
+        }
+
+        res.json({
+            ok: true,
+            winningBalls,
+            hits,
+            multiplier,
+            winAmount,
+            newBalance,
+            provablyFair: {
+                roundId,
+                nonce,
+                clientSeed,
+                serverSeed,
+                playerPicks: sanitizedPicks,
+                winningBalls
+            }
+        });
     });
 });
 

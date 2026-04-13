@@ -56,6 +56,10 @@
         </div>
 
         <div class="nav-links">
+            <a href="#" class="nav-item nav-item--slots-soon" id="nav-slots-btn" title="Slots" onclick="kenoShowSlotsSoon(event)">
+                <i class="fa-solid fa-circle-dollar-to-slot"></i><span>Slots</span>
+                <span class="nav-badge-soon">Soon</span>
+            </a>
             <a href="#" class="nav-item" data-view="home" title="Home">
                 <i class="fa-solid fa-house"></i><span>Home</span>
             </a>
@@ -67,6 +71,9 @@
             </a>
             <a href="#" class="nav-item" data-view="dice" title="Dice">
                 <i class="fa-solid fa-dice"></i><span>Dice</span>
+            </a>
+            <a href="#" class="nav-item" data-view="keno" title="Keno">
+                <i class="fa-solid fa-hashtag"></i><span>Keno</span>
             </a>
             <a href="#" class="nav-item" data-view="mines" title="Mines">
                 <i class="fa-solid fa-gem"></i><span>Mines</span>
@@ -1258,6 +1265,7 @@
                     
                     <!-- Game Area -->
                     <div class="game-area bj-area">
+                        <button class="keno-fairness-btn" onclick="kenoOpenFairness()" style="position: absolute; top: 16px; right: 20px; margin: 0; z-index: 10;"><i class="fa-solid fa-shield-check"></i> Provably Fair</button>
                         <div class="bj-table">
                             <div class="bj-center-text">
                                 <div class="bj-pays">BLACKJACK PAYS 3 TO 2</div>
@@ -1330,6 +1338,7 @@
                     
                     <!-- Game Area -->
                     <div class="game-area mines-area">
+                        <button class="keno-fairness-btn" onclick="kenoOpenFairness()" style="position: absolute; top: 16px; right: 20px; margin: 0; z-index: 10;"><i class="fa-solid fa-shield-check"></i> Provably Fair</button>
                         <div class="mines-grid" id="mines-grid">
                             <!-- JS generates 25 tiles -->
                         </div>
@@ -1371,6 +1380,7 @@
                     
                     <!-- Game Area -->
                     <div class="game-area towers-area">
+                        <button class="keno-fairness-btn" onclick="kenoOpenFairness()" style="position: absolute; top: 16px; right: 20px; margin: 0; z-index: 10;"><i class="fa-solid fa-shield-check"></i> Provably Fair</button>
                         <div class="towers-grid-container" id="towers-grid-container">
                             <!-- JS generates tower rows -->
                         </div>
@@ -1411,6 +1421,7 @@
                     
                     <!-- Game Area -->
                     <div class="game-area dice-area">
+                        <button class="keno-fairness-btn" onclick="kenoOpenFairness()" style="position: absolute; top: 16px; right: 20px; margin: 0; z-index: 10;"><i class="fa-solid fa-shield-check"></i> Provably Fair</button>
                         <div class="dice-slider-container">
                             <div class="dice-history-bars" id="dice-history">
                                 <!-- Previous rolls -->
@@ -1505,6 +1516,7 @@
                     
                     <!-- Game Area -->
                     <div class="game-area plinko-area">
+                        <button class="keno-fairness-btn" onclick="kenoOpenFairness()" style="position: absolute; top: 16px; right: 20px; margin: 0; z-index: 10;"><i class="fa-solid fa-shield-check"></i> Provably Fair</button>
                         <canvas id="plinko-canvas" width="600" height="400"></canvas>
                         <div id="plinko-buckets" class="plinko-buckets"></div>
                     </div>
@@ -1640,6 +1652,7 @@
 
                         <!-- Main display area -->
                         <div class="crash-area">
+                            <button class="keno-fairness-btn" onclick="kenoOpenFairness()" style="position: absolute; top: 16px; right: 20px; margin: 0; z-index: 10;"><i class="fa-solid fa-shield-check"></i> Provably Fair</button>
                             <div class="crash-multiplier-wrap">
                                 <div id="crash-multi-display">1.00x</div>
                                 <div id="crash-status-text">Waiting for next round...</div>
@@ -1649,6 +1662,114 @@
                     </div>
                 </div>
             </div>
+            <!-- ===== KENO VIEW ===== -->
+            <div id="view-keno" class="view">
+                <!-- Slots Coming Soon Toast -->
+                <div id="slots-soon-toast" class="slots-soon-toast" style="display:none;">
+                    <div class="slots-soon-toast-inner">
+                        <i class="fa-solid fa-circle-dollar-to-slot"></i>
+                        <div>
+                            <div class="sst-title">Slots — Coming Soon!</div>
+                            <div class="sst-sub">We're working on it. Stay tuned.</div>
+                        </div>
+                        <button onclick="document.getElementById('slots-soon-toast').style.display='none'" class="sst-close"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+
+                <div class="keno-layout">
+                    <!-- LEFT: Bet Panel -->
+                    <div class="bet-panel keno-bet-panel">
+                        <div class="bet-tabs">
+                            <button class="bet-tab active">Manual</button>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Bet amount</label>
+                            <div class="input-wrapper">
+                                <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
+                                <input type="number" id="keno-bet-input" value="25" min="1">
+                                <div class="input-actions">
+                                    <button onclick="kenoHalfBet()">1/2</button>
+                                    <button onclick="kenoDoubleBet()">2x</button>
+                                    <button onclick="kenoMaxBet()">Max</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Risk</label>
+                            <div class="keno-risk-tabs" id="keno-risk-tabs">
+                                <button class="keno-risk-btn active" data-risk="classic" onclick="kenoSetRisk('classic',this)">Classic</button>
+                                <button class="keno-risk-btn" data-risk="low" onclick="kenoSetRisk('low',this)">Low</button>
+                                <button class="keno-risk-btn" data-risk="medium" onclick="kenoSetRisk('medium',this)">Medium</button>
+                                <button class="keno-risk-btn" data-risk="high" onclick="kenoSetRisk('high',this)">High</button>
+                            </div>
+                        </div>
+
+                        <div class="keno-aux-btns">
+                            <button class="btn-secondary keno-aux-btn" onclick="kenoAutoPick()"><i class="fa-solid fa-shuffle"></i> Auto Pick</button>
+                            <button class="btn-secondary keno-aux-btn" onclick="kenoClearTable()"><i class="fa-solid fa-trash"></i> Clear</button>
+                        </div>
+
+                        <div class="keno-picks-info">
+                            <span>Selected: <strong id="keno-picks-count">0</strong> / 10</span>
+                        </div>
+
+                        <div id="keno-result-msg" class="keno-result-msg" style="display:none;"></div>
+
+                        <button class="btn-primary keno-play-btn" id="keno-play-btn" onclick="kenoPlay()" style="width:100%; margin-top:auto; padding:15px;" disabled>
+                            Pick numbers to play
+                        </button>
+
+                        <!-- Fairness button -->
+                        <button class="keno-fairness-btn" id="keno-fairness-btn" style="display:none;" onclick="kenoOpenFairness()">
+                            <i class="fa-solid fa-shield-check"></i> Provably Fair
+                        </button>
+
+                        <!-- History section -->
+                        <div class="keno-history-panel" id="keno-history-panel">
+                            <div class="keno-history-header">Recent Rounds</div>
+                            <div class="keno-history-list" id="keno-history-list">
+                                <div class="keno-history-empty">No rounds yet</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT: Game Area -->
+                    <div class="keno-game-area">
+                        <!-- Multiplier Bar -->
+                        <div class="keno-multi-bar" id="keno-multi-bar" style="display:none;">
+                            <div class="keno-multi-bar-inner" id="keno-multi-bar-inner"></div>
+                        </div>
+
+                        <!-- 40-tile grid -->
+                        <div class="keno-grid" id="keno-grid"></div>
+                    </div>
+                </div>
+
+                <!-- Provably Fair Modal -->
+                <div class="modal-backdrop" id="keno-pf-modal" onclick="if(event.target===this)this.style.display='none'" style="display:none; align-items:center; justify-content:center;">
+                    <div class="modal-box" style="max-width:500px;">
+                        <div class="modal-header">
+                            <h2><i class="fa-solid fa-shield-check"></i> Provably Fair</h2>
+                            <button class="modal-close" onclick="document.getElementById('keno-pf-modal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="keno-pf-fields">
+                            <div class="keno-pf-field"><label>Round ID</label><div class="keno-pf-val" id="pf-round-id">—</div></div>
+                            <div class="keno-pf-field"><label>Game Nonce</label><div class="keno-pf-val" id="pf-nonce">—</div></div>
+                            <div class="keno-pf-field"><label>Client Seed</label><div class="keno-pf-val" id="pf-client-seed">—</div></div>
+                            <div class="keno-pf-field"><label>Server Seed</label><div class="keno-pf-val pf-mono" id="pf-server-seed">—</div></div>
+                            <div class="keno-pf-field"><label>Player Picks</label><div class="keno-pf-val" id="pf-picks">—</div></div>
+                            <div class="keno-pf-field"><label>Winning Tiles</label><div class="keno-pf-val" id="pf-winning">—</div></div>
+                        </div>
+                        <p style="font-size:11px; color:var(--text-secondary); margin-top:14px; line-height:1.6;">
+                            The winning balls are determined server-side using HMAC-SHA256 with the server seed, client seed, and nonce. You can independently verify the result using any HMAC-SHA256 tool.
+                        </p>
+                        <button class="btn-primary" style="width:100%; margin-top:16px;" onclick="document.getElementById('keno-pf-modal').style.display='none'">Close</button>
+                    </div>
+                </div>
+            </div>
+
             <div id="view-profile" class="view">
                 <div class="profile-new-layout">
                     <!-- Banner & Identity -->
@@ -1958,6 +2079,357 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
     <script src="voice.js"></script>
+
+    <!-- ===== KENO GAME SCRIPT ===== -->
+    <script>
+    (function() {
+        'use strict';
+
+        // ---- Multiplier tables (mirrors server, display-only) ----
+        const KENO_MULT = {
+            classic: {
+                1:[0,3.9], 2:[0,0,3.7], 3:[0,0,1.5,10], 4:[0,0,1.3,3,16],
+                5:[0,0,1.2,2,6,18], 6:[0,0,1,1.8,3.5,8,22],
+                7:[0,0,1,1.5,3,6,12,30], 8:[0,0,0.5,1.3,2.5,5,11,22,70],
+                9:[0,0,0.5,1.2,2,4,8,18,50,180],
+                10:[0,0,0,1.1,2.4,4.5,8,17,50,80,100]
+            },
+            low: {
+                1:[0,1.9], 2:[0,0,3.0], 3:[0,0,1.2,8], 4:[0,0,1.1,2.5,12],
+                5:[0,0,1,1.7,5,14], 6:[0,0,0.9,1.5,3,7,18],
+                7:[0,0,0.9,1.3,2.5,5,10,24], 8:[0,0,0.5,1.2,2,4,9,18,55],
+                9:[0,0,0.5,1,1.8,3.5,7,16,40,140],
+                10:[0,0,0,1,2,3.8,7,14,42,65,80]
+            },
+            medium: {
+                1:[0,2.9], 2:[0,0,4.0], 3:[0,0,1.8,15], 4:[0,0,1.5,4,22],
+                5:[0,0,1.3,2.5,8,25], 6:[0,0,1.1,2.2,4.5,11,30],
+                7:[0,0,1.1,1.8,3.8,8,17,40], 8:[0,0,0.7,1.5,3,6.5,15,30,90],
+                9:[0,0,0.7,1.4,2.5,5,10,24,65,250],
+                10:[0,0,0,1.3,3,5.5,10,22,65,100,140]
+            },
+            high: {
+                1:[0,4.9], 2:[0,0,6.0], 3:[0,0,2.5,22], 4:[0,0,2,5,35],
+                5:[0,0,1.7,3.5,12,38], 6:[0,0,1.4,3,6,14,50],
+                7:[0,0,1.2,2.2,5,10,22,60], 8:[0,0,0.9,2,4,9,18,40,120],
+                9:[0,0,0.8,1.7,3,7,14,30,90,400],
+                10:[0,0,0,1.6,4,7,14,30,90,150,200]
+            }
+        };
+
+        let kenoSelectedTiles = new Set();
+        let kenoRisk = 'classic';
+        let kenoIsPlaying = false;
+        let kenoLastFairData = null;
+        let kenoHistory = [];
+
+        // ---- Build 40-tile grid ----
+        function kenoBuildGrid() {
+            const grid = document.getElementById('keno-grid');
+            if (!grid || grid.children.length > 0) return;
+            for (let n = 1; n <= 40; n++) {
+                const tile = document.createElement('div');
+                tile.className = 'keno-tile';
+                tile.dataset.n = n;
+                tile.textContent = n;
+                tile.addEventListener('click', () => kenoToggleTile(n, tile));
+                grid.appendChild(tile);
+            }
+        }
+
+        function kenoToggleTile(n, tile) {
+            if (kenoIsPlaying) return;
+            if (kenoSelectedTiles.has(n)) {
+                kenoSelectedTiles.delete(n);
+                tile.classList.remove('selected');
+            } else {
+                if (kenoSelectedTiles.size >= 10) return;
+                kenoSelectedTiles.add(n);
+                tile.classList.add('selected');
+            }
+            kenoUpdateUI();
+        }
+
+        function kenoUpdateUI() {
+            const count = kenoSelectedTiles.size;
+            const countEl = document.getElementById('keno-picks-count');
+            if (countEl) countEl.textContent = count;
+
+            const playBtn = document.getElementById('keno-play-btn');
+            if (playBtn) {
+                if (count === 0) {
+                    playBtn.disabled = true;
+                    playBtn.textContent = 'Pick numbers to play';
+                } else {
+                    playBtn.disabled = false;
+                    playBtn.textContent = `Play (${count} pick${count !== 1 ? 's' : ''})`;
+                }
+            }
+            kenoRenderMultiBar(count);
+        }
+
+        function kenoRenderMultiBar(count) {
+            const bar = document.getElementById('keno-multi-bar');
+            const inner = document.getElementById('keno-multi-bar-inner');
+            if (!bar || !inner) return;
+            if (count < 1) { bar.style.display = 'none'; return; }
+            bar.style.display = 'flex';
+            const table = (KENO_MULT[kenoRisk] || KENO_MULT.classic)[count] || [0];
+            inner.innerHTML = '';
+            for (let i = 1; i <= count; i++) {
+                const mult = table[i] != null ? table[i] : 0;
+                const cell = document.createElement('div');
+                cell.className = 'keno-multi-cell' + (mult >= 2 ? ' keno-multi-hi' : mult >= 1 ? ' keno-multi-mid' : '');
+                cell.innerHTML = `<span class="kmc-hits">${i}</span><span class="kmc-val">${mult}x</span>`;
+                inner.appendChild(cell);
+            }
+        }
+
+        // ---- Risk ----
+        window.kenoSetRisk = function(risk, btn) {
+            kenoRisk = risk;
+            document.querySelectorAll('.keno-risk-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            kenoRenderMultiBar(kenoSelectedTiles.size);
+        };
+
+        // ---- Auto Pick ----
+        window.kenoAutoPick = function() {
+            if (kenoIsPlaying) return;
+            kenoClearTable();
+            const count = Math.floor(Math.random() * 5) + 3; // 3-7 picks
+            const pool = Array.from({length:40},(_,i)=>i+1);
+            for (let i = pool.length-1; i>0; i--) {
+                const j = Math.floor(Math.random()*(i+1));
+                [pool[i],pool[j]] = [pool[j],pool[i]];
+            }
+            pool.slice(0,count).forEach(n => {
+                kenoSelectedTiles.add(n);
+                const tile = document.querySelector(`#keno-grid [data-n="${n}"]`);
+                if (tile) tile.classList.add('selected');
+            });
+            kenoUpdateUI();
+        };
+
+        // ---- Clear ----
+        window.kenoClearTable = function() {
+            if (kenoIsPlaying) return;
+            kenoSelectedTiles.clear();
+            document.querySelectorAll('#keno-grid .keno-tile').forEach(t => {
+                t.classList.remove('selected','winning','missed','revealed');
+            });
+            const msg = document.getElementById('keno-result-msg');
+            if (msg) msg.style.display = 'none';
+            kenoUpdateUI();
+        };
+
+        // ---- Bet helpers ----
+        window.kenoHalfBet = function() {
+            const inp = document.getElementById('keno-bet-input');
+            if (!inp) return;
+            inp.value = Math.max(1, Math.floor(parseFloat(inp.value||0)/2));
+        };
+        window.kenoDoubleBet = function() {
+            const inp = document.getElementById('keno-bet-input');
+            if (!inp) return;
+            inp.value = Math.floor((parseFloat(inp.value||0))*2) || 1;
+        };
+        window.kenoMaxBet = function() {
+            const inp = document.getElementById('keno-bet-input');
+            if (!inp) return;
+            // Use current displayed balance
+            const balEl = document.querySelector('.tb-coin-val');
+            const bal = balEl ? parseFloat(balEl.textContent.replace(/,/g,'')) : 0;
+            inp.value = Math.max(1, Math.floor(bal));
+        };
+
+        // ---- Play ----
+        window.kenoPlay = async function() {
+            if (kenoIsPlaying) return;
+            if (kenoSelectedTiles.size < 1) return;
+
+            const picks = [...kenoSelectedTiles];
+            const betInput = document.getElementById('keno-bet-input');
+            const bet = parseFloat(betInput ? betInput.value : 0) || 0;
+            if (bet <= 0) {
+                kenoShowMsg('Enter a valid bet amount.', 'var(--red)');
+                return;
+            }
+
+            kenoIsPlaying = true;
+            const playBtn = document.getElementById('keno-play-btn');
+            if (playBtn) { playBtn.disabled = true; playBtn.textContent = 'Drawing...'; }
+
+            // Reset tile states
+            document.querySelectorAll('#keno-grid .keno-tile').forEach(t => {
+                t.classList.remove('winning','missed','revealed');
+            });
+            const msg = document.getElementById('keno-result-msg');
+            if (msg) msg.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/game/keno/play', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        userId: typeof robloxUserId !== 'undefined' ? robloxUserId : null,
+                        bet,
+                        picks,
+                        risk: kenoRisk,
+                        sessionToken: window._sessionToken
+                    })
+                });
+                const data = await res.json();
+
+                if (!res.ok || !data.ok) {
+                    kenoShowMsg(data.error || 'Server error', 'var(--red)');
+                    kenoIsPlaying = false;
+                    if (playBtn) { playBtn.disabled = false; playBtn.textContent = `Play (${picks.length} pick${picks.length!==1?'s':''})`; }
+                    return;
+                }
+
+                // Save provably fair data
+                kenoLastFairData = data.provablyFair;
+                const fairBtn = document.getElementById('keno-fairness-btn');
+                if (fairBtn) fairBtn.style.display = '';
+
+                // Animate reveals
+                await kenoAnimateReveal(data.winningBalls, picks);
+
+                // Show result
+                const won = data.multiplier > 0;
+                if (won) {
+                    kenoShowMsg(`🎉 +${data.winAmount.toFixed(2)} RoBet · ${data.multiplier}x`, 'var(--green)');
+                    if (typeof soundWin === 'function') soundWin();
+                } else {
+                    kenoShowMsg('No match this round.', 'var(--text-secondary)');
+                    if (typeof soundLose === 'function') soundLose();
+                }
+
+                // Add to history
+                kenoAddHistory({
+                    picks: picks.length,
+                    hits: data.hits,
+                    multiplier: data.multiplier,
+                    bet,
+                    payout: data.winAmount,
+                    ts: Date.now()
+                });
+
+            } catch(e) {
+                console.error('[Keno]', e);
+                kenoShowMsg('Connection error. Try again.', 'var(--red)');
+            }
+
+            kenoIsPlaying = false;
+            if (playBtn) { playBtn.disabled = false; playBtn.textContent = `Play (${picks.length} pick${picks.length!==1?'s':''})`; }
+        };
+
+        async function kenoAnimateReveal(winningBalls, playerPicks) {
+            const winSet = new Set(winningBalls);
+            const pickSet = new Set(playerPicks);
+            const DELAY_PER_BALL = 80;
+
+            return new Promise(resolve => {
+                winningBalls.forEach((n, idx) => {
+                    setTimeout(() => {
+                        const tile = document.querySelector(`#keno-grid [data-n="${n}"]`);
+                        if (tile) {
+                            tile.classList.add('revealed');
+                            if (pickSet.has(n)) {
+                                tile.classList.add('winning');
+                            }
+                        }
+                        // After all balls, mark misses
+                        if (idx === winningBalls.length - 1) {
+                            setTimeout(() => {
+                                playerPicks.forEach(p => {
+                                    if (!winSet.has(p)) {
+                                        const t2 = document.querySelector(`#keno-grid [data-n="${p}"]`);
+                                        if (t2) t2.classList.add('missed');
+                                    }
+                                });
+                                resolve();
+                            }, 200);
+                        }
+                    }, idx * DELAY_PER_BALL);
+                });
+                if (!winningBalls.length) resolve();
+            });
+        }
+
+        function kenoShowMsg(text, color) {
+            const msg = document.getElementById('keno-result-msg');
+            if (!msg) return;
+            msg.textContent = text;
+            msg.style.color = color;
+            msg.style.display = 'block';
+        }
+
+        // ---- Provably Fair Modal ----
+        window.kenoOpenFairness = function() {
+            if (!kenoLastFairData) return;
+            const pf = kenoLastFairData;
+            document.getElementById('pf-round-id').textContent   = pf.roundId || '—';
+            document.getElementById('pf-nonce').textContent      = pf.nonce != null ? pf.nonce : '—';
+            document.getElementById('pf-client-seed').textContent = pf.clientSeed || '—';
+            document.getElementById('pf-server-seed').textContent = pf.serverSeed || '—';
+            document.getElementById('pf-picks').textContent      = (pf.playerPicks||[]).join(', ') || '—';
+            document.getElementById('pf-winning').textContent    = (pf.winningBalls||[]).join(', ') || '—';
+            const modal = document.getElementById('keno-pf-modal');
+            if (modal) { modal.style.display = 'flex'; }
+        };
+
+        // ---- History ----
+        function kenoAddHistory(round) {
+            kenoHistory.unshift(round);
+            if (kenoHistory.length > 20) kenoHistory.length = 20;
+            kenoRenderHistory();
+        }
+
+        function kenoRenderHistory() {
+            const list = document.getElementById('keno-history-list');
+            if (!list) return;
+            if (kenoHistory.length === 0) {
+                list.innerHTML = '<div class="keno-history-empty">No rounds yet</div>';
+                return;
+            }
+            list.innerHTML = kenoHistory.map(r => {
+                const won = r.payout > 0;
+                const time = new Date(r.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+                return `<div class="keno-history-row ${won?'khr-win':'khr-loss'}">
+                    <span class="khr-mult">${r.multiplier}x</span>
+                    <span class="khr-hits">${r.hits}/${r.picks} hits</span>
+                    <span class="khr-payout ${won?'khr-pos':'khr-neg'}">${won?'+':''}${r.payout.toFixed(2)}</span>
+                    <span class="khr-time">${time}</span>
+                </div>`;
+            }).join('');
+        }
+
+        // ---- Slots Coming Soon ----
+        window.kenoShowSlotsSoon = function(e) {
+            if (e) e.preventDefault();
+            const toast = document.getElementById('slots-soon-toast');
+            if (!toast) return;
+            // Navigate to keno view to show the toast there
+            const kenoView = document.getElementById('view-keno');
+            if (kenoView) {
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                kenoView.classList.add('active');
+                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            }
+            toast.style.display = 'flex';
+            setTimeout(() => { toast.style.display = 'none'; }, 5000);
+        };
+
+        // ---- Init on DOM ready ----
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', kenoBuildGrid);
+        } else {
+            kenoBuildGrid();
+        }
+    })();
+    </script>
 </body>
 </html>
 

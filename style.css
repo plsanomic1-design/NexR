@@ -3150,3 +3150,274 @@ input:checked + .slider { background: var(--accent); border-color: var(--accent)
 .chat-join-btn:active {
     transform: translateY(1px);
 }
+
+/* =========================================
+   KENO & SLOTS TOAST
+========================================= */
+
+.keno-layout {
+    display: flex;
+    gap: 24px;
+    height: 100%;
+}
+@media(max-width:960px) {
+    .keno-layout { flex-direction: column-reverse; height: auto; }
+}
+
+/* LEFT PANEL */
+.keno-bet-panel {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+@media(max-width:960px) {
+    .keno-bet-panel { width: 100%; max-width: none; }
+}
+
+.keno-risk-tabs {
+    display: flex;
+    background: var(--bg-input);
+    border-radius: var(--radius-sm);
+    padding: 4px;
+    border: 1px solid var(--border-subtle);
+}
+.keno-risk-btn {
+    flex: 1;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    padding: 8px 0;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.keno-risk-btn:hover { color: var(--text-primary); }
+.keno-risk-btn.active {
+    background: var(--accent);
+    color: #0b1b26;
+    box-shadow: 0 2px 8px rgba(0,200,150,0.3);
+}
+
+.keno-aux-btns {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.keno-aux-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.keno-picks-info {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 16px;
+}
+.keno-picks-info strong { color: var(--text-primary); }
+.keno-result-msg {
+    text-align: center;
+    margin-bottom: 12px;
+    font-weight: 700;
+    font-size: 14px;
+    min-height: 20px;
+}
+.keno-play-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.keno-fairness-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 12px;
+    margin: 12px auto 0;
+    cursor: pointer;
+    transition: var(--transition);
+    display: block;
+}
+.keno-fairness-btn:hover { background: var(--bg-glass); color: var(--text-primary); }
+
+.keno-history-panel { margin-top: 24px; }
+.keno-history-header { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.05em; }
+.keno-history-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.keno-history-empty { font-size: 12px; color: var(--text-dim); text-align: center; padding: 12px; }
+.keno-history-row {
+    display: grid;
+    grid-template-columns: 44px 70px 1fr 50px;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--bg-input);
+}
+.khr-win { border-left: 2px solid var(--green); }
+.khr-loss { border-left: 2px solid var(--text-dim); opacity: 0.7; }
+.khr-mult { color: var(--text-primary); }
+.khr-hits { color: var(--text-secondary); }
+.khr-payout { text-align: right; font-family: var(--font-display); }
+.khr-pos { color: var(--green); }
+.khr-neg { color: var(--text-dim); }
+.khr-time { text-align: right; color: var(--text-dim); font-size: 10px; }
+
+/* RIGHT PANEL */
+.keno-game-area {
+    flex: 1;
+    background: var(--bg-panel);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: var(--shadow-card);
+}
+
+.keno-multi-bar {
+    width: 100%;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: center;
+}
+.keno-multi-bar-inner {
+    display: flex;
+    background: var(--bg-input);
+    border-radius: 8px;
+    padding: 4px;
+    gap: 4px;
+    border: 1px solid var(--border-subtle);
+    overflow-x: auto;
+    max-width: 100%;
+}
+.keno-multi-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    padding: 4px 8px;
+    background: var(--bg-panel-light);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+}
+.kmc-hits { font-size: 10px; margin-bottom: 2px; }
+.kmc-val { font-size: 12px; font-weight: 800; color: var(--text-primary); font-family: var(--font-display); }
+.keno-multi-mid { background: rgba(247,147,26,0.1); color: var(--gold); border: 1px solid var(--gold-dim); }
+.keno-multi-mid .kmc-val { color: var(--gold); }
+.keno-multi-hi { background: rgba(0,200,150,0.15); border: 1px solid var(--accent-border); }
+.keno-multi-hi .kmc-val { color: var(--accent); text-shadow: var(--shadow-glow); }
+
+.keno-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 10px;
+    width: 100%;
+    max-width: 600px;
+}
+@media(max-width:600px) { .keno-grid { grid-template-columns: repeat(5, 1fr); gap: 6px; } }
+
+.keno-tile {
+    aspect-ratio: 1;
+    background: var(--bg-panel-light);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.02), 0 2px 8px rgba(0,0,0,0.2);
+    border: 1px solid var(--border-subtle);
+}
+.keno-tile:hover {
+    transform: translateY(-2px);
+    background: var(--bg-glass-hover);
+    color: var(--text-primary);
+}
+.keno-tile:active { transform: scale(0.95); }
+.keno-tile.selected {
+    background: #5c3c12;
+    color: #ffd166;
+    border: 2px solid #ff9f1c;
+    box-shadow: 0 4px 14px rgba(255,159,28,0.25);
+    transform: translateY(-2px);
+}
+.keno-tile.winning {
+    background: var(--accent);
+    color: #0b1b26;
+    border: 2px solid #fff;
+    box-shadow: 0 0 16px var(--accent-glow);
+    animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 2;
+}
+.keno-tile.missed {
+    opacity: 0.4;
+    filter: grayscale(1);
+}
+.keno-tile.revealed:not(.winning) {
+    background: #2a1f44;
+    color: #a78bfa;
+    border: 1px solid #7c3aed;
+    animation: scaleIn 0.3s;
+}
+
+/* PF MODAL */
+.keno-pf-fields { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.keno-pf-field { background: var(--bg-input); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-subtle); }
+.keno-pf-field label { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; display: block; font-weight: 700; }
+.keno-pf-val { font-size: 12px; color: var(--text-primary); font-weight: 600; word-break: break-all; }
+.pf-mono { font-family: monospace; font-size: 11px; }
+
+/* SLOTS SOON TOAST */
+.slots-soon-toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    animation: slideUpSpring 0.5s cubic-bezier(0.34,1.56,0.64,1);
+}
+.slots-soon-toast-inner {
+    background: var(--bg-panel);
+    border: 1px solid var(--orange);
+    border-radius: var(--radius-md);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 8px 32px rgba(255,144,68,0.25);
+}
+.slots-soon-toast-inner i.fa-circle-dollar-to-slot {
+    font-size: 24px;
+    color: var(--orange);
+}
+.sst-title { font-weight: 800; font-size: 14px; margin-bottom: 2px; }
+.sst-sub { font-size: 12px; color: var(--text-secondary); }
+.sst-close {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px;
+}
+.sst-close:hover { color: var(--text-primary); }
