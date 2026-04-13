@@ -2285,7 +2285,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let cAuto = 2.0;
         let cMulti = 1.00;
         let cCrashPoint = 1.00;
-        let startTime = 0;
+        let startTime = 0;         // server-authoritative start timestamp (for cashout timing)
+        let roundDisplayStart = 0; // local timestamp set at crash:start (drives the visual animation)
         let animFrame = null;
         let crashCountdownInterval = null;
         let hasCashedOut = false;
@@ -2500,7 +2501,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             if (cState === 'running') {
-                const elapsed = Math.max(0, Date.now() - startTime);
+                // Use roundDisplayStart (set to Date.now() on crash:start) so the visual
+                // always begins from 1.00x regardless of server clock or network lag.
+                const elapsed = Math.max(0, Date.now() - roundDisplayStart);
                 cMulti = 1.0 * Math.pow(Math.E, elapsed * 0.00006);
 
                 if (cBet > 0 && !hasCashedOut) {
@@ -2525,7 +2528,11 @@ document.addEventListener('DOMContentLoaded', () => {
             cState = 'starting';
             cBet = 0;
             hasCashedOut = false;
+            startTime = 0;         // reset so stale value can't bleed into next round
+            roundDisplayStart = 0;
+            cMulti = 1.0;
             display.style.color = 'white';
+            display.textContent = '1.00x'; // show clean multiplier until countdown starts
             statusText.textContent = 'Next round starting…';
             statusText.style.color = 'var(--text-secondary)';
             crashPlayBtn.textContent = 'Join next game';
@@ -2562,6 +2569,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (cState === 'running') {
                 clearCrashCountdown();
                 stopCrashAnimLoop();
+                // When syncing mid-round, anchor display to the server's round start time
+                // so the multiplier shown accurately reflects where the round actually is.
+                roundDisplayStart = normalizeCrashStartTime(data.startTime);
                 display.style.color = 'white';
                 statusText.textContent = 'Current payout';
                 statusText.style.color = 'var(--text-secondary)';
@@ -2607,8 +2617,8 @@ document.addEventListener('DOMContentLoaded', () => {
             clearCrashCountdown();
             stopCrashAnimLoop();
             cState = 'running';
-            startTime = normalizeCrashStartTime(data.startTime);
-            // Reset multiplier to exactly 1.00x at round start so animation begins cleanly
+            startTime = normalizeCrashStartTime(data.startTime); // kept for reference / sync
+            roundDisplayStart = Date.now(); // always start the visual clock from NOW (1.00x)
             cMulti = 1.0;
             display.textContent = '1.00x';
             display.style.color = 'white';

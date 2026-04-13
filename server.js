@@ -3529,7 +3529,8 @@ const crashGame = {
     startTime: 0,
     flightTimeMs: 0,
     players: new Map(), // userId -> { userId, username, bet, auto, cashedOut, winAmt }
-    timeoutTick: null
+    timeoutTick: null,
+    startingTimeout: null  // handle for the 5s countdown before each round
 };
 
 async function processCrashCashout(userId, cashoutMultiplier) {
@@ -3569,22 +3570,31 @@ function tickCrash() {
 }
 
 function runCrashStarting() {
-    // Clear any stale tick from a previous round
+    // Clear any stale tick or pending start from a previous round
     if (crashGame.timeoutTick != null) {
         clearTimeout(crashGame.timeoutTick);
         crashGame.timeoutTick = null;
+    }
+    if (crashGame.startingTimeout != null) {
+        clearTimeout(crashGame.startingTimeout);
+        crashGame.startingTimeout = null;
     }
     crashGame.state = 'starting';
     crashGame.players.clear();
     io.emit('crash:starting', { countdown: 5.0 });
     
-    setTimeout(() => {
+    crashGame.startingTimeout = setTimeout(() => {
+        crashGame.startingTimeout = null;
         runCrashRunning();
     }, 5000);
 }
 
 function runCrashRunning() {
-    // Clear any stale tick before starting new round
+    // Clear any stale tick or starting timeout before beginning new round
+    if (crashGame.startingTimeout != null) {
+        clearTimeout(crashGame.startingTimeout);
+        crashGame.startingTimeout = null;
+    }
     if (crashGame.timeoutTick != null) {
         clearTimeout(crashGame.timeoutTick);
         crashGame.timeoutTick = null;
