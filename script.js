@@ -3599,8 +3599,40 @@ function goDepPage(num) {
 }
 
 function showComingSoon() {
-    showGameToast('This payment method is coming soon! 🚀', 'var(--accent)');
     if (window.sfx) window.sfx.notification();
+    const el = document.createElement('div');
+    el.style.cssText = `
+        position:fixed;bottom:34px;left:50%;transform:translateX(-50%) translateY(24px);opacity:0;
+        background:#ef4444; /* pure red variable shade */
+        border:2px solid #b91c1c;
+        color:#ffffff;
+        padding:12px 20px;
+        border-radius:12px;
+        font-family:'Outfit','Inter',system-ui,sans-serif;
+        box-shadow:0 8px 32px rgba(239, 68, 68, 0.4);
+        z-index:99999;
+        display:flex;
+        align-items:center;
+        gap:16px;
+        transition:opacity 0.3s cubic-bezier(0.34,1.56,0.64,1),transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    `;
+    el.innerHTML = `
+        <i class="fa-solid fa-circle-exclamation" style="font-size:24px; color:#ffffff;"></i>
+        <div style="text-align:left;">
+            <div style="font-weight:800;font-size:14px;margin-bottom:2px;color:#ffffff;">Coming soon!</div>
+            <div style="font-size:12px;opacity:0.9;">This payment method is tightly under construction.</div>
+        </div>
+    `;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+        el.style.opacity = '1';
+        el.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(-50%) translateY(12px)';
+        setTimeout(() => el.remove(), 350);
+    }, 4000);
 }
 
 // ===== WITHDRAW MODAL =====
