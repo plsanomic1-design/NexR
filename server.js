@@ -2088,6 +2088,29 @@ app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
             while(pScore>21 && aces>0) { pScore-=10; aces--; }
             if (pScore === 21) pHand[0] = {suitLetter: 'C', value: '5', score: 5, isRed: false};
         }
+        // Check for natural blackjack immediately on deal
+        const pScoreInit = bjHandScore(pHand);
+        const dScoreInit = bjHandScore(dHand);
+        const pNaturalInit = pHand.length === 2 && pScoreInit === 21;
+        const dNaturalInit = dHand.length === 2 && dScoreInit === 21;
+
+        if (pNaturalInit) {
+            // Natural blackjack — resolve immediately, no further action needed from client
+            if (betVal > 0 && supabaseEnabled()) {
+                if (dNaturalInit) {
+                    // Both have blackjack — push, return bet
+                    const r = await creditUserWin(userId, betVal);
+                    return res.json({ deck, pHand, dHand, naturalBlackjack: true, dNatural: true, outcome: 'push', newBalance: r.newBalance });
+                } else {
+                    const r = await creditUserWin(userId, 2.5 * betVal);
+                    getCusState(userId).recordWin(true);
+                    return res.json({ deck, pHand, dHand, naturalBlackjack: true, dNatural: false, outcome: 'blackjack', newBalance: r.newBalance });
+                }
+            }
+            // Supabase disabled — just signal the client
+            return res.json({ deck, pHand, dHand, naturalBlackjack: true, dNatural: dNaturalInit, outcome: dNaturalInit ? 'push' : 'blackjack' });
+        }
+
         // Store FULL hand + deck state so server can authoritatively compute outcomes
         activeBlackjackGames.set(String(userId), {
             bet: betVal,
@@ -3538,6 +3561,7 @@ function tickCrash() {
     }
     
     if (elapsed >= crashGame.flightTimeMs) {
+        crashGame.timeoutTick = null;
         runCrashCrashed();
     } else {
         crashGame.timeoutTick = setTimeout(tickCrash, 50);
@@ -3545,6 +3569,11 @@ function tickCrash() {
 }
 
 function runCrashStarting() {
+    // Clear any stale tick from a previous round
+    if (crashGame.timeoutTick != null) {
+        clearTimeout(crashGame.timeoutTick);
+        crashGame.timeoutTick = null;
+    }
     crashGame.state = 'starting';
     crashGame.players.clear();
     io.emit('crash:starting', { countdown: 5.0 });
@@ -3555,6 +3584,11 @@ function runCrashStarting() {
 }
 
 function runCrashRunning() {
+    // Clear any stale tick before starting new round
+    if (crashGame.timeoutTick != null) {
+        clearTimeout(crashGame.timeoutTick);
+        crashGame.timeoutTick = null;
+    }
     crashGame.state = 'running';
     
     let forceLossTriggered = false;
@@ -3570,7 +3604,8 @@ function runCrashRunning() {
     }
     
     if (forceLossTriggered) {
-        crashGame.target = 1.00;
+        // Minimum crash point of 1.01 so flightTimeMs > 0 and the round is visible
+        crashGame.target = 1.01;
         for (const [uid, p] of crashGame.players.entries()) {
             getCusState(p.userId).recordLoss();
         }
@@ -3579,20 +3614,29 @@ function runCrashRunning() {
         crashGame.target = 3.0 + (Math.random() * 5.0);
     } else {
         const e = 100;
-        crashGame.target = Math.max(1.00, (e / (e - Math.random() * e)) * 1.004); // 1.4% winning number boost
+        // Clamp random to [0.001, 0.98] so target never collapses to <=1.01 too quickly
+        const r = 0.001 + Math.random() * 0.979;
+        crashGame.target = Math.max(1.01, (e / (e - r * e)) * 1.004);
         if (crashGame.target > 1000) crashGame.target = 1000;
     }
     
-    crashGame.flightTimeMs = (Math.log(crashGame.target) / 0.00006);
+    crashGame.flightTimeMs = Math.log(crashGame.target) / 0.00006;
     crashGame.startTime = Date.now();
     
-    io.emit('crash:start', { startTime: crashGame.startTime });
+    io.emit('crash:start', { startTime: crashGame.startTime, target: crashGame.target });
     tickCrash();
 }
 
 function runCrashCrashed() {
+    // Cancel any pending tick immediately
+    if (crashGame.timeoutTick != null) {
+        clearTimeout(crashGame.timeoutTick);
+        crashGame.timeoutTick = null;
+    }
     crashGame.state = 'crashed';
-    io.emit('crash:crashed', { target: crashGame.target });
+    // Emit the real crash point and the precise elapsed flight time so the client
+    // can draw the graph at the exact crash point (avoiding visual over-shoot).
+    io.emit('crash:crashed', { target: crashGame.target, flightTimeMs: crashGame.flightTimeMs });
     
     for (const [uid, p] of crashGame.players.entries()) {
         if (!p.cashedOut) {

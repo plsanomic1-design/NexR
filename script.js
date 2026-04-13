@@ -196,6 +196,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 cDeck = data.deck;
                 pHand = data.pHand;
                 dHand = data.dHand;
+
+                // Server resolved natural blackjack atomically — no separate /result call needed
+                if (data.naturalBlackjack) {
+                    if (data.outcome === 'push') {
+                        endGame('Push \u2014 Dealer also has Blackjack', 'var(--text-secondary)');
+                    } else {
+                        endGame('Blackjack! You Win', 'var(--gold)');
+                    }
+                    return;
+                }
                 
                 bjHitBtn.disabled = false;
                 bjStandBtn.disabled = false;
@@ -204,14 +214,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 renderHands();
                 GSM.update('blackjack', { pHand: pHand, dHand: dHand, deck: cDeck });
-                if(getScore(pHand) === 21) {
-                    endGame('Blackjack! You Win', 'var(--gold)');
-                    fetch('/api/game/blackjack/result', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: robloxUserId, outcome: 'blackjack', sessionToken: window._sessionToken }) }).catch(()=>{});
-                }
             } catch(e) {
                 endGame('Error starting', 'var(--red)');
             }
         });
+
 
         bjHitBtn.addEventListener('click', async () => {
             if(!isPlaying) return;
@@ -2601,6 +2608,9 @@ document.addEventListener('DOMContentLoaded', () => {
             stopCrashAnimLoop();
             cState = 'running';
             startTime = normalizeCrashStartTime(data.startTime);
+            // Reset multiplier to exactly 1.00x at round start so animation begins cleanly
+            cMulti = 1.0;
+            display.textContent = '1.00x';
             display.style.color = 'white';
             statusText.textContent = 'Current payout';
             statusText.style.color = 'var(--text-secondary)';
@@ -2609,9 +2619,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 crashPlayBtn.style.background = 'var(--green)';
                 crashPlayBtn.disabled = false;
             }
-            let elapsed = Date.now() - startTime;
-            cMulti = 1.0 * Math.pow(Math.E, Math.max(0, elapsed) * 0.00006);
-            display.textContent = cMulti.toFixed(2) + 'x';
             animFrame = requestAnimationFrame(updateCrash);
         });
 
@@ -2624,7 +2631,10 @@ document.addEventListener('DOMContentLoaded', () => {
             display.style.color = '#ff6b6b';
             statusText.textContent = 'Crashed';
             statusText.style.color = '#ff6b6b';
-            drawGraph(Math.max(0, Date.now() - startTime), cMulti);
+            // Use the server-provided exact flight time for the graph so it renders at the
+            // precise crash multiplier, not at whatever elapsed time the client happened to be at.
+            const crashElapsed = data.flightTimeMs != null ? data.flightTimeMs : Math.max(0, Date.now() - startTime);
+            drawGraph(crashElapsed, cMulti);
             
             if(typeof soundLose === 'function' && !hasCashedOut && cBet > 0) soundLose();
             if(!hasCashedOut && cBet > 0) postLiveFeedRound('crash', cBet, 0, -cBet);
