@@ -5274,7 +5274,7 @@ const CASES_DATA_BASE = [
     },
     {
         id: 'standard',
-        name: 'ZephR$ Standard',
+        name: 'RoBet Standard',
         price: 500,
         image: '',
         color: '#a855f7',
@@ -5431,7 +5431,7 @@ const CASES_DATA_BASE = [
     },
     {
         id: 'supreme',
-        name: 'ZephR$ Supreme',
+        name: 'RoBet Supreme',
         price: 50000,
         image: '',
         color: '#facc15',
