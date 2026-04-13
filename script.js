@@ -3099,7 +3099,7 @@ function renderLiveFeedRows(events) {
         // Use user's roblox avatar if available, fallback to dicebear
         const fallbackDicebear = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user)}&backgroundColor=2c2f4a`;
         let avatarUrl = fallbackDicebear;
-        if (ev.userId && ev.userId === robloxUserId && typeof robloxAvatarUrl === 'string') {
+        if (ev.userId && String(ev.userId) === String(robloxUserId) && typeof robloxAvatarUrl === 'string') {
             avatarUrl = robloxAvatarUrl;
         } else if (ev.userId) {
             avatarUrl = robloxHeadshotUrl(ev.userId, 150);

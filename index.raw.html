@@ -1663,17 +1663,6 @@
             </div>
             <!-- ===== KENO VIEW ===== -->
             <div id="view-keno" class="view">
-                <!-- Slots Coming Soon Toast -->
-                <div id="slots-soon-toast" class="slots-soon-toast" style="display:none; border-color: var(--red); box-shadow: 0 8px 32px rgba(239, 68, 68, 0.25);">
-                    <div class="slots-soon-toast-inner" style="border: none; box-shadow: none; background: rgba(239, 68, 68, 0.1); border-left: 4px solid var(--red);">
-                        <i class="fa-solid fa-circle-exclamation" style="color: var(--red);"></i>
-                        <div>
-                            <div class="sst-title" style="color: var(--red)">Coming soon!</div>
-                            <div class="sst-sub">Slots are tightly under construction.</div>
-                        </div>
-                        <button onclick="document.getElementById('slots-soon-toast').style.display='none'" class="sst-close"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                </div>
 
                 <div class="keno-layout">
                     <!-- LEFT: Bet Panel -->
@@ -2057,6 +2046,18 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
     <script src="voice.js"></script>
+
+    <!-- Slots Coming Soon Toast -->
+    <div id="slots-soon-toast" class="slots-soon-toast" style="display:none; border-color: var(--red); box-shadow: 0 8px 32px rgba(239, 68, 68, 0.25); z-index:9999;">
+        <div class="slots-soon-toast-inner" style="border: none; box-shadow: none; background: rgba(239, 68, 68, 0.1); border-left: 4px solid var(--red);">
+            <i class="fa-solid fa-circle-exclamation" style="color: var(--red);"></i>
+            <div>
+                <div class="sst-title" style="color: var(--red)">Coming soon!</div>
+                <div class="sst-sub">Slots are tightly under construction.</div>
+            </div>
+            <button onclick="document.getElementById('slots-soon-toast').style.display='none'" class="sst-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    </div>
 
     <!-- Shared Provably Fair & History Modal -->
     <div class="modal-backdrop" id="shared-pf-modal" onclick="if(event.target===this)this.style.display='none'" style="display:none; align-items:center; justify-content:center; z-index: 9999;">
@@ -2462,15 +2463,8 @@
             if (e) e.preventDefault();
             const toast = document.getElementById('slots-soon-toast');
             if (!toast) return;
-            // Navigate to keno view to show the toast there
-            const kenoView = document.getElementById('view-keno');
-            if (kenoView) {
-                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-                kenoView.classList.add('active');
-                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-            }
             toast.style.display = 'flex';
-            setTimeout(() => { toast.style.display = 'none'; }, 5000);
+            setTimeout(() => { toast.style.display = 'none'; }, 4000);
         };
 
         // ---- Init on DOM ready ----
