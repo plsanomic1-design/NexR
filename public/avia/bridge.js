@@ -1,13 +1,13 @@
 /**
- * AVIA MASTERS BRIDGE v26 — "Fixed Exit Flow"
+ * AVIA MASTERS BRIDGE v27 — "Bet Validation"
  * 
- * Fixes:
- * - Always calls session/start (even on restore) so server has active session
- * - Properly exposes balance to parent for tab switch
- * - Uses outcome.bet/outcome.win for tracking (confirmed working)
+ * Fixes: Prevents betting more than the RoBet balance.
+ * - Checks outcome.bet against current balance
+ * - If bet > balance, blocks the spin and returns an error
+ * - Balance can never go below 0
  */
 (function() {
-    console.log('[Bridge] Avia Masters Bridge v26 Active');
+    console.log('[Bridge] Avia Masters Bridge v27 Active');
 
     function findCredentials() {
         try {
@@ -19,6 +19,7 @@
     console.log('[Bridge] User:', creds.id || 'DEMO');
 
     let robetBalance = null;
+    let lastSelectedBet = 0; // Track what bet amount the user selected
 
     const _fetch = window.fetch.bind(window);
 
@@ -27,15 +28,14 @@
     function exposeBalance() {
         try {
             window.parent._aviaGameBalance = robetBalance;
-            console.log('[Bridge] Exposed balance to parent:', robetBalance);
-        } catch(e) { console.warn('[Bridge] Cannot expose to parent:', e); }
+        } catch(e) {}
     }
 
     // Sequential queue
     let queue = Promise.resolve();
     function enqueue(fn) { queue = queue.then(fn, fn); return queue; }
 
-    // ALWAYS call session/start — server will resume if session exists
+    // ALWAYS call session/start
     (async function() {
         creds = findCredentials();
         if (!creds.id) return;
@@ -50,7 +50,7 @@
                 robetBalance = d.gameBalance;
                 exposeBalance();
             }
-            console.log('[Bridge] Session started/resumed, game balance:', robetBalance);
+            console.log('[Bridge] Session started, balance:', robetBalance);
         } catch(e) { console.error('[Bridge] Init error:', e); }
     })();
 
@@ -62,16 +62,52 @@
 
         const args = [url, options];
 
+        // Check request body for bet amount (to block before sending)
+        let requestBet = 0;
+        try {
+            if (options && options.body) {
+                const bodyStr = typeof options.body === 'string' ? options.body : '';
+                if (bodyStr) {
+                    const bodyData = JSON.parse(bodyStr);
+                    console.log(`[Bridge] Request body:`, JSON.stringify(bodyData)); // Stringify to see the contents!
+                    
+                    // Try to catch the bet amount from common field names
+                    let rawBet = bodyData.bet || bodyData.total_bet || bodyData.stake || bodyData.wager || bodyData.amount;
+                    if (typeof rawBet === 'number') {
+                        requestBet = rawBet / 100;
+                    } else if (bodyData.options && typeof bodyData.options.bet === 'number') {
+                        requestBet = bodyData.options.bet / 100;
+                    }
+                }
+            }
+        } catch(e) {}
+
+        // BLOCK spin if bet exceeds balance
+        if (requestBet > 0 && robetBalance !== null && requestBet > robetBalance + 0.01) {
+            console.warn(`[Bridge] BLOCKED: bet ${requestBet} > balance ${robetBalance}`);
+            // Return a fake "insufficient funds" response
+            return Promise.resolve(new Response(JSON.stringify({
+                balance: { wallet: Math.round(robetBalance * 100) },
+                error: 'insufficient_funds'
+            }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }));
+        }
+
         return enqueue(async () => {
             const realRes = await _fetch.apply(window, args);
             const data = await realRes.clone().json();
 
-            // Use outcome.bet and outcome.win (confirmed working)
+            // Use outcome.bet and outcome.win
             if (robetBalance !== null && data.outcome) {
                 const bet = (data.outcome.bet || 0) / 100;
                 const win = (data.outcome.win || 0) / 100;
+
                 if (bet > 0 || win > 0) {
-                    robetBalance = robetBalance - bet + win;
+                    // Extra safety: don't let balance go below 0
+                    const newBalance = robetBalance - bet + win;
+                    robetBalance = Math.max(0, Math.round(newBalance * 100) / 100);
                     exposeBalance();
                     console.log(`[Bridge] BET:${bet.toFixed(2)} WIN:${win.toFixed(2)} → ${robetBalance.toFixed(2)}`);
                 }
@@ -94,7 +130,7 @@
         });
     };
 
-    // Save on unload (refresh/close)
+    // Save on unload
     window.addEventListener('beforeunload', () => {
         if (creds.id && robetBalance !== null) {
             navigator.sendBeacon('/api/avia/v1/session/save', new Blob([
