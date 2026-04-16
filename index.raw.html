@@ -56,7 +56,7 @@
         </div>
 
         <div class="nav-links">
-            <a href="#" class="nav-item" id="nav-slots-btn" title="Slots" onclick="kenoShowSlotsSoon(event)">
+            <a href="#" class="nav-item" data-view="avia" title="Avia Masters">
                 <i class="fa-solid fa-circle-dollar-to-slot"></i><span>Slots</span>
             </a>
             <a href="#" class="nav-item" data-view="home" title="Home">
@@ -1170,6 +1170,84 @@
         </div>
     </div>
 
+
+            <!-- Avia Masters View -->
+            <div id="view-avia" class="view">
+
+                <!-- GAME LOBBY (shown by default) -->
+                <div id="avia-lobby" style="width:100%;">
+                    <div style="margin-bottom:20px;">
+                        <h2 style="font-size:22px;font-weight:700;color:#fff;margin:0 0 4px;">Slots</h2>
+                        <p style="color:rgba(255,255,255,0.45);font-size:13px;margin:0;">Choose a game to play</p>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;">
+
+                        <!-- Avia Masters Tile -->
+                        <div id="avia-tile-btn" onclick="window._openAviaGame()" style="
+                            position:relative;
+                            border-radius:14px;
+                            overflow:hidden;
+                            cursor:pointer;
+                            aspect-ratio:3/4;
+                            background:#0d1117;
+                            border:1px solid rgba(255,255,255,0.08);
+                            transition:transform 0.2s ease,box-shadow 0.2s ease;
+                            box-shadow:0 4px 20px rgba(0,0,0,0.4);
+                        "
+                        onmouseenter="this.style.transform='scale(1.04)';this.style.boxShadow='0 8px 32px rgba(0,200,100,0.3)'"
+                        onmouseleave="this.style.transform='scale(1)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.4)'">
+                            <!-- Game thumbnail -->
+                            <img src="/public/avia/avia-tile.png" alt="Avia Masters" style="width:100%;height:100%;object-fit:cover;display:block;" />
+                            <!-- Overlay on hover -->
+                            <div style="
+                                position:absolute;inset:0;
+                                background:linear-gradient(to top,rgba(0,0,0,0.85) 0%,transparent 60%);
+                                display:flex;flex-direction:column;justify-content:flex-end;
+                                padding:14px;
+                            ">
+                                <span style="color:#fff;font-weight:700;font-size:14px;text-shadow:0 1px 4px rgba(0,0,0,0.8);">Avia Masters</span>
+                                <span style="color:rgba(255,255,255,0.55);font-size:11px;margin-top:2px;">BGaming</span>
+                            </div>
+                            <!-- Play button badge -->
+                            <div style="
+                                position:absolute;top:10px;right:10px;
+                                background:rgba(0,200,100,0.9);
+                                color:#000;font-size:11px;font-weight:700;
+                                padding:3px 10px;border-radius:20px;
+                                backdrop-filter:blur(4px);
+                            ">PLAY</div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- GAME CONTAINER (hidden until tile clicked) -->
+                <div id="avia-game-container" style="display:none;width:100%;flex-direction:column;gap:12px;">
+                    <!-- Back button -->
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <button onclick="window._closeAviaGame()" style="
+                            display:flex;align-items:center;gap:8px;
+                            background:rgba(255,255,255,0.07);
+                            border:1px solid rgba(255,255,255,0.12);
+                            color:#fff;font-size:13px;font-weight:600;
+                            padding:8px 16px;border-radius:8px;cursor:pointer;
+                            transition:background 0.15s;
+                        "
+                        onmouseenter="this.style.background='rgba(255,255,255,0.12)'"
+                        onmouseleave="this.style.background='rgba(255,255,255,0.07)'"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                            Back to Games
+                        </button>
+                        <span style="color:rgba(255,255,255,0.45);font-size:13px;">Avia Masters</span>
+                    </div>
+                    <!-- Game iframe -->
+                    <div class="slots-container" style="width:100%;height:calc(100vh - 160px);min-height:600px;background:rgba(0,0,0,0.3);border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
+                        <iframe id="avia-iframe" style="width:100%;height:100%;border:none;"></iframe>
+                    </div>
+                </div>
+
+            </div>
 
             <div id="view-home" class="view active">
                 <header class="home-hero">

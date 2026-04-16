@@ -31,12 +31,26 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use((req, res, next) => {
-    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.socket.io https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://*.rbxcdn.com https://thumbnails.roblox.com https://tr.rbxcdn.com https://api.dicebear.com blob:; connect-src 'self' wss: ws: https://api.nowpayments.io https://users.roblox.com https://thumbnails.roblox.com https://inventory.roblox.com https://unpkg.com; frame-ancestors 'none';");
+    
+    // Updated CSP to allow BGaming assets, analytics, fonts, workers, and frames
+    const csp = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.socket.io https://unpkg.com https://*.bgaming-network.com https://*.bgaming-system.com https://www.googletagmanager.com",
+        "worker-src 'self' blob:",
+        "frame-src 'self' https://*.bgaming-network.com https://*.bgaming-system.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://*.bgaming-network.com https://*.bgaming-system.com",
+        "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com https://*.bgaming-network.com https://*.bgaming-system.com",
+        "img-src 'self' data: https://*.rbxcdn.com https://thumbnails.roblox.com https://tr.rbxcdn.com https://api.dicebear.com https://*.bgaming-network.com https://*.bgaming-system.com blob:",
+        "connect-src 'self' data: wss: ws: https://api.nowpayments.io https://users.roblox.com https://thumbnails.roblox.com https://inventory.roblox.com https://unpkg.com https://*.bgaming-network.com https://*.bgaming-system.com https://analytics.google.com https://*.google-analytics.com https://*.analytics.google.com https://*.doubleclick.net https://www.google.com https://stats.g.doubleclick.net",
+        "frame-ancestors 'self'"
+    ].join('; ');
+
+    res.setHeader('Content-Security-Policy', csp);
     next();
 });
 
@@ -1773,6 +1787,217 @@ app.post('/api/game/aviamasters/play', express.json(), async (req, res) => {
             speed: speedIdx
         });
     });
+});
+
+/**
+ * AVIA MASTERS INIT ENDPOINT
+ * Returns game config + balance in BGaming's expected format.
+ * Does NOT require auth — falls back to demo balance if session is missing.
+ */
+app.post('/api/avia/v1/init', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, sessionToken } = req.body || {};
+    
+    let balance = 1000.00;
+    if (userId && validateSessionToken(userId, sessionToken)) {
+        const user = await loadAccountFromSupabase(userId);
+        if (user) balance = user.balance;
+    }
+
+    // BGaming's game JS expects a 'wallet' object at the top level
+    res.json({
+        wallet: {
+            balance: balance,
+            currency: 'RBX'
+        },
+        options: {
+            available_bets: [0.1, 0.5, 1, 2, 5, 10, 25, 50, 100],
+            default_bet: 1,
+            max_bet: 10000,
+            min_bet: 0.1,
+            denominations: [0.1, 0.5, 1, 2, 5, 10, 25, 50, 100]
+        },
+        player: {
+            currency: 'RBX',
+            id: userId || 'demo'
+        }
+    });
+});
+
+/**
+ * AVIA MASTERS PLAY — Balance Sync
+ * Bridge reports the actual bet and win amounts from BGaming's real game.
+ * We deduct the bet and credit the win, applying CUS rigging to modify payouts.
+ */
+app.post('/api/avia/v1/play', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, sessionToken, bet, winAmount, isWin } = req.body || {};
+
+    // Guest mode — no balance changes
+    if (!userId || !validateSessionToken(userId, sessionToken)) {
+        const guestBal = userId ? 1000 : 0;
+        return res.json({ wallet: { balance: guestBal, currency: 'RBX' } });
+    }
+
+    await withUserLock(userId, async () => {
+        const betVal = num(bet, 0);
+        let creditVal = num(winAmount, 0);
+
+        // === CUS RIGGING ===
+        const forceLoss = getCusState(userId).check();
+        const forceWin = getCusState(userId).checkWin();
+        
+        if (forceLoss) {
+            // Force loss: take the bet but never credit any winnings
+            creditVal = 0;
+        } else if (forceWin && creditVal === 0) {
+            // Force win: if BGaming says loss, give them their bet back + bonus
+            creditVal = betVal * 2;
+        }
+
+        // 1. Deduct the bet
+        if (betVal > 0 && supabaseEnabled()) {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
+        }
+
+        // 2. Credit the win (if any)
+        if (creditVal > 0 && supabaseEnabled()) {
+            const result = await creditUserWin(userId, creditVal);
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: result.newBalance, stats: {} });
+        }
+
+        // 3. Track CUS stats
+        if (creditVal > betVal) getCusState(userId).recordWin(creditVal >= betVal * 3);
+        else getCusState(userId).recordLoss();
+
+        // 4. Return updated balance
+        const account = await loadAccountFromSupabase(userId);
+        const newBal = account ? account.balance : 0;
+        
+        console.log(`[Avia] User ${userId} — bet: ${betVal}, win: ${creditVal}, balance: ${newBal}`);
+        
+        res.json({ wallet: { balance: newBal, currency: 'RBX' } });
+    });
+});
+
+/**
+ * AVIA MASTERS SESSION SYSTEM
+ * - /session/start: Deducts full balance, stores session
+ * - /session/end: Credits game balance back to user  
+ * - /session/save: Beacon-safe save for page refresh
+ */
+const aviaSessions = {};
+
+app.post('/api/avia/v1/session/start', express.json(), async (req, res) => {
+    const { userId, sessionToken } = req.body || {};
+    if (!userId) {
+        return res.status(401).json({ error: 'no userId' });
+    }
+
+    // Resume existing session
+    if (aviaSessions[userId] && aviaSessions[userId].active) {
+        console.log(`[Avia] Resuming session for ${userId}, gameBalance: ${aviaSessions[userId].gameBalance}`);
+        return res.json({ gameBalance: aviaSessions[userId].gameBalance });
+    }
+
+    const account = await loadAccountFromSupabase(userId);
+    const currentBalance = account ? account.balance : 0;
+
+    if (currentBalance <= 0) {
+        return res.json({ gameBalance: 0, error: 'no_balance' });
+    }
+
+    // Deduct full balance using existing helper
+    await deductUserBet(userId, currentBalance);
+
+    // Store session
+    aviaSessions[userId] = {
+        startBalance: currentBalance,
+        gameBalance: currentBalance,
+        active: true,
+        startedAt: Date.now()
+    };
+
+    console.log(`[Avia] Session started for ${userId}, balance: ${currentBalance} → DB set to 0`);
+    res.json({ gameBalance: currentBalance });
+});
+
+app.post('/api/avia/v1/session/end', express.json(), async (req, res) => {
+    const { userId, sessionToken } = req.body || {};
+    if (!userId) {
+        return res.status(401).json({ error: 'no userId' });
+    }
+
+    const session = aviaSessions[userId];
+    let finalBalance = 0;
+
+    if (session && session.active) {
+        finalBalance = Math.max(0, Math.round(session.gameBalance * 100) / 100);
+        session.active = false;
+
+        // Credit game balance back using existing helper
+        if (finalBalance > 0) {
+            await creditUserWin(userId, finalBalance);
+        }
+
+        console.log(`[Avia] Session ended for ${userId}: started=${session.startBalance}, final=${finalBalance}, profit=${(finalBalance - session.startBalance).toFixed(2)}`);
+        delete aviaSessions[userId];
+    } else {
+        const account = await loadAccountFromSupabase(userId);
+        finalBalance = account ? account.balance : 0;
+    }
+
+    res.json({ balance: finalBalance });
+});
+
+app.post('/api/avia/v1/session/save', express.json(), async (req, res) => {
+    const { userId, gameBalance } = req.body || {};
+    if (!userId) return res.json({ ok: false });
+
+    if (aviaSessions[userId] && aviaSessions[userId].active && typeof gameBalance === 'number') {
+        aviaSessions[userId].gameBalance = Math.max(0, gameBalance);
+        console.log(`[Avia] Session saved for ${userId}, gameBalance: ${gameBalance.toFixed(2)}`);
+    }
+
+    res.json({ ok: true });
+});
+
+
+
+/**
+ * AVIA MASTERS PROXY BRIDGE
+ * This route proxies the official game and injects our bridge script.
+ */
+app.get('/proxy/avia', async (req, res) => {
+    // Official demo URL (User can change this in Admin)
+    const officialUrl = process.env.AVIA_DEMO_URL || 'https://demo.bgaming-network.com/play/Aviamasters/FUN?server=demo';
+    
+    try {
+        const response = await fetch(officialUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://bgaming.com/',
+                'Origin': 'https://bgaming.com'
+            }
+        });
+        let html = await response.text();
+        
+        // 1. Inject the bridge script
+        const bridgeScript = `<script src="/public/avia/bridge.js"></script>`;
+        html = html.replace('</head>', `${bridgeScript}</head>`);
+        
+        // 2. Fix relative paths to point to BGaming's CDN (except for our local public scripts)
+        const baseUrl = new URL(officialUrl).origin;
+        html = html.replace(/src="\/(?!public\/)(?!\/)/g, `src="${baseUrl}/`);
+        html = html.replace(/href="\/(?!public\/)(?!\/)/g, `href="${baseUrl}/`);
+        
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    } catch (e) {
+        res.status(500).send('Proxy Error: Could not reach official game servers.');
+    }
 });
 
 // REMOVED: /api/game/record-result was a public endpoint that allowed console manipulation of game outcomes.

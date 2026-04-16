@@ -8,45 +8,193 @@ document.addEventListener('DOMContentLoaded', () => {
     if(![...views].some(v => v.id === 'view-' + defaultView)) defaultView = 'home';
     switchView(defaultView);
 
-    function switchView(viewName) {
-        // Update hash
+    // === AVIA LOADING MODAL ===
+    const _aviaModal = document.createElement('div');
+    _aviaModal.id = 'avia-sync-modal';
+    _aviaModal.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+            <div style="width:48px;height:48px;border:3px solid rgba(255,255,255,0.15);border-top:3px solid #00ff88;border-radius:50%;animation:aviaSpin 0.8s linear infinite;"></div>
+            <div style="font-size:16px;font-weight:700;color:#fff;font-family:var(--font-main),sans-serif;letter-spacing:0.5px;">Syncing balance...</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5);">Please wait while we confirm your game results</div>
+        </div>
+    `;
+    Object.assign(_aviaModal.style, {
+        position:'fixed', top:'0', left:'0', width:'100vw', height:'100vh',
+        background:'rgba(0,0,0,0.75)', backdropFilter:'blur(6px)',
+        display:'none', justifyContent:'center', alignItems:'center',
+        zIndex:'999999'
+    });
+    document.body.appendChild(_aviaModal);
+    const _aviaSpin = document.createElement('style');
+    _aviaSpin.textContent = '@keyframes aviaSpin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(_aviaSpin);
+
+    function showAviaModal() { _aviaModal.style.display = 'flex'; }
+    function hideAviaModal() { _aviaModal.style.display = 'none'; }
+
+    // Open the game from tile click
+    window._openAviaGame = function() {
+        // Prevent double-click
+        if (window._aviaInPlay) return;
+
+        const lobby = document.getElementById('avia-lobby');
+        const gameCont = document.getElementById('avia-game-container');
+        const iframe = document.getElementById('avia-iframe');
+        if (lobby) lobby.style.display = 'none';
+        if (gameCont) gameCont.style.display = 'flex';
+        // Start session and load iframe
+        window._aviaInPlay = true;
+        window._aviaGameBalance = null;
+        if (iframe) iframe.src = '/proxy/avia';
+        // Show "(in play)" in sidebar
+        if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+    };
+
+    // Close the game via Back button (same exit flow as switching tabs)
+    window._closeAviaGame = async function() {
+        const lobby = document.getElementById('avia-lobby');
+        const gameCont = document.getElementById('avia-game-container');
+
+        if (window._aviaInPlay) {
+            showAviaModal();
+            window._aviaInPlay = false;
+
+            const gameBalance = window._aviaGameBalance;
+            console.log('[Avia] Back button. _aviaGameBalance:', gameBalance);
+
+            try {
+                if (typeof robloxUserId === 'number' && robloxUserId > 0) {
+                    if (typeof gameBalance === 'number' && gameBalance >= 0) {
+                        await fetch('/api/avia/v1/session/save', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: robloxUserId, gameBalance })
+                        });
+                    }
+                    const res = await fetch('/api/avia/v1/session/end', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
+                    });
+                    const d = await res.json();
+                    if (typeof d.balance === 'number' && d.balance >= 0) {
+                        _roBalance = d.balance;
+                        console.log('[Avia] ✅ Balance restored:', _roBalance);
+                        if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+                    }
+                }
+            } catch(e) {
+                console.error('[Avia] Close error:', e);
+                if (typeof gameBalance === 'number' && gameBalance >= 0) {
+                    _roBalance = gameBalance;
+                    if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+                }
+            }
+
+            // Kill iframe
+            const iframe = document.getElementById('avia-iframe');
+            if (iframe) iframe.src = 'about:blank';
+            window._aviaGameBalance = null;
+            hideAviaModal();
+        }
+
+        // Show lobby again
+        if (lobby) lobby.style.display = 'block';
+        if (gameCont) gameCont.style.display = 'none';
+    };
+
+    // Core view switching (no avia logic — called after avia exit if needed)
+    function _doSwitchView(viewName) {
         window.location.hash = viewName;
 
-        // Update sidebar
         navItems.forEach(item => {
-            if(item.dataset.view === viewName) {
-                item.classList.add('active');
-            } else {
-                item.classList.remove('active');
-            }
+            if(item.dataset.view === viewName) item.classList.add('active');
+            else item.classList.remove('active');
         });
 
-        // Update top nav
         topNavLinks.forEach(item => {
-            if(item.dataset.view === viewName) {
-                item.classList.add('active');
-            } else {
-                item.classList.remove('active');
-            }
+            if(item.dataset.view === viewName) item.classList.add('active');
+            else item.classList.remove('active');
         });
 
-        // Switch container
         views.forEach(view => {
-            if(view.id === 'view-' + viewName) {
-                view.classList.add('active');
-            } else {
-                view.classList.remove('active');
-            }
+            if(view.id === 'view-' + viewName) view.classList.add('active');
+            else view.classList.remove('active');
         });
 
-        // Trigger active scanner when switching tabs if logged in
+        if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+
         if (typeof performActiveGamepassScan === 'function') {
             performActiveGamepassScan();
         }
-        // Init case battles when navigating to it
         if (viewName === 'casebattles' && typeof cbInit === 'function') {
             setTimeout(cbInit, 100);
         }
+    }
+
+    async function switchView(viewName) {
+        // === ENTERING AVIA — show lobby grid ===
+        if (viewName === 'avia') {
+            // Show lobby, hide game container
+            const lobby = document.getElementById('avia-lobby');
+            const gameCont = document.getElementById('avia-game-container');
+            if (lobby) lobby.style.display = 'block';
+            if (gameCont) gameCont.style.display = 'none';
+            _doSwitchView(viewName);
+            return;
+        }
+
+        // === LEAVING AVIA — save game balance, end session, show result ===
+        if (window._aviaInPlay) {
+            showAviaModal();
+            window._aviaInPlay = false;
+
+            const gameBalance = window._aviaGameBalance;
+            console.log('[Avia] Leaving slots. _aviaGameBalance:', gameBalance);
+
+            try {
+                if (typeof robloxUserId === 'number' && robloxUserId > 0) {
+                    // Step 1: Save game balance to server
+                    if (typeof gameBalance === 'number' && gameBalance >= 0) {
+                        console.log('[Avia] Saving game balance:', gameBalance);
+                        await fetch('/api/avia/v1/session/save', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: robloxUserId, gameBalance })
+                        });
+                    }
+
+                    // Step 2: End session — credits balance back to DB
+                    console.log('[Avia] Ending session...');
+                    const res = await fetch('/api/avia/v1/session/end', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
+                    });
+                    const d = await res.json();
+                    console.log('[Avia] Server response:', d);
+                    if (typeof d.balance === 'number' && d.balance >= 0) {
+                        _roBalance = d.balance;
+                        console.log('[Avia] ✅ Balance restored:', _roBalance);
+                    }
+                }
+            } catch(e) {
+                console.error('[Avia] Exit error:', e);
+                if (typeof gameBalance === 'number' && gameBalance >= 0) {
+                    _roBalance = gameBalance;
+                }
+            }
+
+            // Clear iframe (close the game)
+            const iframe = document.getElementById('avia-iframe');
+            if (iframe) iframe.src = 'about:blank';
+
+            window._aviaGameBalance = null;
+            hideAviaModal();
+        }
+
+        // Now switch view
+        _doSwitchView(viewName);
     }
 
     // Attach click events to nav links
@@ -2806,16 +2954,27 @@ function getNexrsChatUser() {
 function updateBalanceDisplay() {
     const tbEl = document.getElementById('tb-balance');
     const homeEl = document.getElementById('home-balance');
+    const zhEl = document.getElementById('tb-balance-zh');
+    const chip = document.querySelector('.balance-chip');
+
+    // If user is playing Avia Masters, show "(in play)" instead of balance
+    if (window._aviaInPlay) {
+        const inPlayText = '(in play)';
+        if(tbEl) tbEl.textContent = inPlayText;
+        if(homeEl) homeEl.textContent = inPlayText;
+        if(zhEl) zhEl.textContent = inPlayText;
+        if(chip) {
+            chip.style.borderColor = '#f59e0b';
+        }
+        return;
+    }
+
     const formatted = roBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if(tbEl) tbEl.textContent = formatted;
     if(homeEl) homeEl.textContent = formatted;
-
-    // Update ZH$ display if element exists
-    const zhEl = document.getElementById('tb-balance-zh');
     if(zhEl) zhEl.textContent = formatted;
 
     // Animate the topbar value briefly
-    const chip = document.querySelector('.balance-chip');
     if(chip) {
         chip.style.borderColor = 'var(--accent)';
         setTimeout(() => chip.style.borderColor = '', 600);
@@ -4034,6 +4193,8 @@ let currentUsername = 'artirzu';
 let robloxUserId = null;
 /** CDN headshot URL from server (thumbnails.roblox.com) — survives reloads; www.roblox.com image URLs often break in <img>. */
 let robloxAvatarUrl = null;
+// Expose robloxUserId on window so the Avia Masters bridge iframe can access it
+Object.defineProperty(window, 'robloxUserId', { get() { return robloxUserId; }, configurable: true });
 
 function accountsMatchServerLocal(a, b) {
     if (a == null || b == null) return false;
@@ -5182,6 +5343,8 @@ if (socket) {
 
     socket.on('balance:remote_sync', ({ userId, balance, balanceZh, stats }) => {
         if (!robloxUserId || !accountsMatchServerLocal(userId, robloxUserId)) return;
+        // IGNORE remote_sync while playing Avia Masters — sidebar shows "(in play)"
+        if (window._aviaInPlay) return;
         if (typeof balance === 'number' && balance >= 0) _roBalance = balance;
         // legacy balanceZh socket sync removed
         if (stats && typeof stats === 'object') {

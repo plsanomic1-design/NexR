@@ -3421,3 +3421,43 @@ input:checked + .slider { background: var(--accent); border-color: var(--accent)
     padding: 4px;
 }
 .sst-close:hover { color: var(--text-primary); }
+/* === AVIA MASTERS VIEW === */
+#view-avia {
+    padding: 0;
+    height: 100%;
+}
+#view-avia.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.slots-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    position: relative;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    overflow: hidden;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 1200px;
+    border: 1px solid var(--border-color);
+}
+
+.slots-container iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #000;
+}
+
+/* Premium Glow for the Game Area */
+.slots-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 100px rgba(0,200,150,0.05);
+}
