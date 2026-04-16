@@ -5388,9 +5388,10 @@ if (socket) {
 
     socket.on('tip:received', (data) => {
         if (robloxUserId && data.recipientId === robloxUserId) {
-            _roBalance += data.amount;
-            updateBalanceDisplay();
+            // Note: _roBalance gets accurately updated via balance:remote_sync
+            // Do not manually add it here to avoid visual doubling.
             
+
             // Pop up a toast or alert so they know immediately
             const toast = document.createElement('div');
             const tipDisp =
@@ -5678,7 +5679,7 @@ function renderCFLobby(flips) {
 
 function createCoinflip() {
     const amt = parseFloat(document.getElementById('cf-create-amount')?.value) || 0;
-    if (amt < 1) return alert('Minimum flip is 1 ZH$');
+    if (amt < 1) return alert('Minimum flip is 1 RoBet');
     if (amt > roBalance) return alert('Not enough balance!');
 
     // Start loading
@@ -5845,7 +5846,7 @@ function confirmStartRain() {
     const duration = parseInt(document.getElementById('rain-duration').value) || 60;
     const minWager = parseFloat(document.getElementById('rain-min-wager').value) || 0;
 
-    if (amount < 10) return alert('Minimum rain amount is 10 ZH$');
+    if (amount < 10) return alert('Minimum rain amount is 10 RoBet');
     if (amount > roBalance) return alert('Not enough balance!');
 
     socket?.emit('rain:create', {
@@ -5949,7 +5950,7 @@ function confirmSendTip() {
     const amount = parseFloat(document.getElementById('tip-amount')?.value) || 0;
 
     if (!target) return alert('Enter a recipient!');
-    if (amount < 1) return alert('Minimum tip is 1 ZH$');
+    if (amount < 1) return alert('Minimum tip is 1 RoBet');
     if (amount > roBalance) return alert('Not enough balance!');
 
     socket?.emit('tip:send', {

@@ -4574,8 +4574,8 @@ io.on('connection', (socket) => {
                     }
                     await creditUserWin(recipientId, amount);
 
-                    socket.emit('notification', { type: 'success', text: `Tipped ${formatAmountDisplay(amount)} ZH$ to ${freshRecSave.username || recipientId}!` });
-                    io.emit('chat:message', { username: 'System', text: `${senderSave ? senderSave.username : 'A player'} tipped ${formatAmountDisplay(amount)} ZH$ to ${freshRecSave.username || recipientId}!`, createdAt: Date.now() });
+                    socket.emit('notification', { type: 'success', text: `Tipped ${formatAmountDisplay(amount)} RoBet to ${freshRecSave.username || recipientId}!` });
+                    io.emit('chat:message', { username: 'System', text: `${senderSave ? senderSave.username : 'A player'} tipped ${formatAmountDisplay(amount)} RoBet to ${freshRecSave.username || recipientId}!`, createdAt: Date.now() });
                     io.emit('tip:received', { recipientId, amount, sender: senderSave ? senderSave.username : 'A player' });
                 });
             } catch (e) {
@@ -4626,7 +4626,7 @@ io.on('connection', (socket) => {
                     userId: creatorId,
                     username: rain.creator,
                     avatarUrl: rain.creatorAvatarUrl,
-                    text: `${rain.creator} started a Rain for ${formatAmountDisplay(amount)} ZH$!`,
+                    text: `${rain.creator} started a Rain for ${formatAmountDisplay(amount)} RoBet!`,
                     createdAt: Date.now()
                 });
 
@@ -4681,13 +4681,13 @@ io.on('connection', (socket) => {
                             }
                             const shareLabel =
                                 shares.length > 0
-                                    ? `${formatAmountDisplay(shares[0])} ZH$ each`
-                                    : `${formatAmountDisplay(r.amount / payees.length)} ZH$ each`;
+                                    ? `${formatAmountDisplay(shares[0])} RoBet each`
+                                    : `${formatAmountDisplay(r.amount / payees.length)} RoBet each`;
                             io.emit('chat:message', {
                                 userId: r.creatorUserId,
                                 username: r.creator,
                                 avatarUrl: r.creatorAvatarUrl,
-                                text: `🌧️ Rain ended! ${payees.length} player(s) split ${formatAmountDisplay(r.amount)} ZH$ (${shareLabel}).`,
+                                text: `🌧️ Rain ended! ${payees.length} player(s) split ${formatAmountDisplay(r.amount)} RoBet (${shareLabel}).`,
                                 createdAt: Date.now()
                             });
                         }
