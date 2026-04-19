@@ -3461,3 +3461,194 @@ input:checked + .slider { background: var(--accent); border-color: var(--accent)
     pointer-events: none;
     box-shadow: inset 0 0 100px rgba(0,200,150,0.05);
 }
+
+/* ==========================================================================
+   CHICKEN CROSS STYLES — matches original single-file game
+   ========================================================================== */
+.chicken-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.chicken-cg {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #221b3a;
+    position: relative;
+}
+
+.chicken-ga {
+    position: relative;
+    width: 100%;
+    height: 490px;
+    overflow: hidden;
+    background: #221b3a;
+}
+
+.chicken-sw {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 130px;
+    z-index: 2;
+    overflow: hidden;
+}
+#sw-bg {
+    position: absolute; inset: 0;
+    background: url('/public/chicken/sidewalk.png') left top / cover;
+}
+#sw-border {
+    position: absolute; right: 0; top: 0; bottom: 0;
+    width: 6px; background: #8472bf;
+}
+#sw-yellow { display: none; }
+
+.chicken-road {
+    position: absolute;
+    left: 130px; top: 0; right: 0; bottom: 0;
+    background: url('/public/chicken/road texture.png');
+    background-size: calc(100% / 5) auto;
+}
+
+.ldiv {
+    position: absolute; top: 0; bottom: 0; width: 6px; z-index: 3;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 0; gap: 20px;
+}
+.ldash { display: none; }
+
+/* TILES — exact original sizing */
+.tile {
+    position: absolute;
+    top: 50%; transform: translateY(-50%);
+    width: 78px; height: 78px;
+    border-radius: 12px;
+    z-index: 5; overflow: hidden;
+    transition: transform 0.2s, filter 0.2s;
+    cursor: default;
+}
+.tile.clickable { cursor: pointer; }
+.tile.clickable:hover { transform: translateY(-50%) scale(1.08); filter: brightness(1.15); }
+.tile.clickable:active { transform: translateY(-50%) scale(0.95); }
+.tile.next .tile-bg { box-shadow: 0 0 15px rgba(60,50,90,.6); filter: brightness(1.2); }
+.tile.passed .tile-bg { filter: brightness(0.6); }
+.tile.danger .tile-bg { filter: hue-rotate(-50deg) brightness(0.8); }
+
+.tile-bg {
+    position: absolute; inset: 0;
+    background: url('/public/chicken/buttons on the road.png') center/100% 100% no-repeat;
+    border-radius: 12px;
+}
+.tile-label {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 400; color: #fff;
+    font-family: 'Fredoka One', 'Outfit', sans-serif;
+    text-shadow: -2.5px -2.5px 0 #2a243a, 2.5px -2.5px 0 #2a243a,
+                 -2.5px  2.5px 0 #2a243a, 2.5px  2.5px 0 #2a243a, 0 4px 0 #2a243a;
+    letter-spacing: 0.5px; z-index: 1;
+}
+
+/* BARRIER */
+.barrier {
+    position: absolute; z-index: 7; display: none;
+    flex-direction: column; align-items: center; gap: 3px;
+}
+.barrier.show { display: flex; }
+.barrier-body { width: 86px; height: 44px; position: relative; overflow: hidden; }
+.barrier-stripe {
+    position: absolute; inset: 0;
+    background: url('/public/chicken/background removed barrier.png') center/100% 100% no-repeat;
+}
+
+.xlbl {
+    position: absolute; font-size: 22px; font-family: 'Fredoka One', 'Outfit', sans-serif;
+    color: #fff;
+    text-shadow: -2.5px -2.5px 0 #2a243a, 2.5px -2.5px 0 #2a243a,
+                 -2.5px  2.5px 0 #2a243a, 2.5px  2.5px 0 #2a243a, 0 4px 0 #2a243a;
+    z-index: 8; display: none;
+}
+
+/* CHICKEN SPRITE */
+.chicken-chk {
+    position: absolute; z-index: 10;
+    top: calc(50% - 15px); left: 32px;
+    transform: translateY(-50%);
+    width: 70px; height: 84px;
+    transition: left 0.28s cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+.chicken-chk.sq { animation: sq 0.32s; }
+@keyframes sq {
+    0%   { transform: translateY(-50%) scale(1); }
+    35%  { transform: translateY(-50%) scaleX(1.2) scaleY(0.8); }
+    65%  { transform: translateY(-50%) scaleX(0.9) scaleY(1.1); }
+    100% { transform: translateY(-50%) scale(1); }
+}
+
+/* SPLAT (DEAD) */
+.chicken-chk-dead {
+    position: absolute; z-index: 10; display: none;
+    width: 180px; height: 180px;
+    top: calc(50% - 15px); transform: translateY(-50%);
+}
+.chicken-chk-dead.show {
+    display: block;
+    animation: splat-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+@keyframes splat-in {
+    from { transform: translateY(-50%) scale(0) rotate(-30deg); opacity: 0; }
+    to   { transform: translateY(-50%) scale(1) rotate(0deg);   opacity: 1; }
+}
+
+/* WIN BOARD — image + white text below */
+.chicken-win-board {
+    position: absolute; inset: 0; z-index: 30; display: none;
+    align-items: center; justify-content: center; flex-direction: column;
+    pointer-events: none;
+}
+.chicken-win-board.show {
+    display: flex;
+    animation: wb-in 0.4s cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+@keyframes wb-in {
+    from { transform: scale(0.5) translateY(-30px); opacity: 0; }
+    to   { transform: scale(1) translateY(0);       opacity: 1; }
+}
+.chicken-win-amt {
+    position: relative; z-index: 2;
+    margin-top: -80px;
+    font-size: 20px;
+    font-family: 'Luckiest Guy', 'Fredoka One', 'Outfit', cursive;
+    letter-spacing: 1px;
+    color: #fff;
+    text-shadow: -2px -2px 0 #332111, 2px -2px 0 #332111,
+                 -2px  2px 0 #332111, 2px  2px 0 #332111;
+}
+
+/* MULTIPLIER HUD — hidden, xlbl below chicken is sufficient */
+.chicken-mhud {
+    display: none !important;
+}
+
+/* OVERLAY */
+.chicken-ov {
+    position: absolute; inset: 0;
+    background: rgba(20, 15, 35, 0.8);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 8px; z-index: 25;
+    border-radius: 0 14px 14px 0;
+}
+.chicken-ov.hide { display: none; }
+.ovt { font-size: 26px; font-weight: 400; color: #fff; font-family: 'Fredoka One', 'Outfit', sans-serif; }
+.ovs { font-size: 14px; color: #ccc; font-family: 'Nunito', 'Inter', sans-serif; font-weight: 800; }
+.ova { font-size: 28px; font-weight: 900; font-family: 'Nunito', 'Inter', sans-serif; }
+
+/* CARS */
+.car { position: absolute; z-index: 10; pointer-events: none; }
+

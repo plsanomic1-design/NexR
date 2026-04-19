@@ -1104,7 +1104,8 @@ const LIVE_FEED_GAME_KEYS = new Set([
     'plinko',
     'rooms',
     'aviamasters',
-    'keno'
+    'keno',
+    'chicken'
 ]);
 
 function sanitizeLiveFeedUsername(u) {
@@ -1222,6 +1223,7 @@ async function liveFeedListSupabase(limit) {
 const activeMinesGames = new Map();
 const activeTowersGames = new Map();
 const activeBlackjackGames = new Map();
+const activeChickenGames = new Map();
 /** Case battles — entry fees, rolls, and payouts are server-side only */
 const caseBattles = new Map();
 const caseBattleStarting = new Set();
@@ -1694,100 +1696,7 @@ app.post('/api/game/keno/play', express.json(), async (req, res) => {
     });
 });
 
-/**
- * Avia Masters — server-side RNG round (no manual cash-out). Outcome + event log for client animation.
- * CUS: forceLoss / forceWin bias terminal rolls like dice/plinko.
- */
-function simulateAviaMastersRound(forceLoss, forceWin) {
-    let mult = 1;
-    const events = [];
-    const maxSteps = 48;
-    for (let step = 0; step < maxSteps; step++) {
-        let crashP = forceLoss ? 0.26 : 0.085;
-        let landP = forceWin ? 0.22 : 0.065;
-        if (mult >= 75) landP += 0.12;
-        if (step < 2) crashP *= 0.45;
-        const r = Math.random();
-        if (r < crashP) {
-            events.push({ type: 'crash' });
-            return { won: false, mult: 0, events, tier: 'loss' };
-        }
-        if (r < crashP + landP) {
-            const fm = Math.min(Math.max(0.5, mult), 80);
-            events.push({ type: 'land', mult: fm });
-            const tier =
-                fm >= 50 ? 'superMega' : fm >= 20 ? 'mega' : fm >= 8 ? 'big' : 'win';
-            return { won: true, mult: fm, events, tier };
-        }
-        const r2 = Math.random();
-        if (r2 < 0.34) {
-            const adds = [1, 1, 2, 2, 2, 5, 5, 10];
-            const add = adds[Math.floor(Math.random() * adds.length)];
-            mult += add;
-            events.push({ type: 'prize', add });
-        } else if (r2 < 0.52) {
-            const boosts = [2, 2, 3, 4, 5];
-            const b = boosts[Math.floor(Math.random() * boosts.length)];
-            mult *= b;
-            events.push({ type: 'boost', mult: b });
-        } else if (r2 < 0.68) {
-            const before = mult;
-            mult = Math.max(0.35, mult * 0.5);
-            events.push({ type: 'rocket', before, after: mult });
-        } else {
-            events.push({ type: 'cruise' });
-        }
-        mult = Math.min(Math.max(0.35, mult), 130);
-    }
-    if (forceLoss) {
-        events.push({ type: 'crash' });
-        return { won: false, mult: 0, events, tier: 'loss' };
-    }
-    const fm = Math.min(Math.max(0.5, mult), 80);
-    events.push({ type: 'land', mult: fm });
-    const tier = fm >= 50 ? 'superMega' : fm >= 20 ? 'mega' : fm >= 8 ? 'big' : 'win';
-    return { won: true, mult: fm, events, tier };
-}
-
-app.post('/api/game/aviamasters/play', express.json(), async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, bet, speed, sessionToken } = req.body || {};
-    if (!validateSessionToken(userId, sessionToken)) {
-        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
-    }
-    const speedIdx = Math.max(0, Math.min(3, parseInt(speed, 10) || 1));
-
-    await withUserLock(userId, async () => {
-        const betVal = num(bet, 0);
-        if (betVal > 0 && supabaseEnabled()) {
-            const deduct = await deductUserBet(userId, betVal);
-            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
-        }
-
-        const forceLoss = getCusState(userId).check();
-        const forceWin = getCusState(userId).checkWin();
-        const round = simulateAviaMastersRound(forceLoss, forceWin);
-
-        let winAmount = 0;
-        if (betVal > 0 && supabaseEnabled()) {
-            winAmount = round.won ? Math.round(betVal * round.mult * 100) / 100 : 0;
-            await creditUserWin(userId, winAmount);
-        }
-
-        if (round.won) getCusState(userId).recordWin(round.mult >= 3);
-        else getCusState(userId).recordLoss();
-
-        res.json({
-            ok: true,
-            won: round.won,
-            finalMultiplier: round.mult,
-            tier: round.tier,
-            events: round.events,
-            speed: speedIdx
-        });
-    });
-});
+// REMOVED: simulateAviaMastersRound + /api/game/aviamasters/play — legacy standalone RNG game, replaced by BGaming proxy.
 
 /**
  * AVIA MASTERS INIT ENDPOINT
@@ -1808,14 +1717,14 @@ app.post('/api/avia/v1/init', express.json(), async (req, res) => {
     res.json({
         wallet: {
             balance: balance,
-            currency: 'RBX'
+            currency: 'RBT'
         },
         options: {
-            available_bets: [0.1, 0.5, 1, 2, 5, 10, 25, 50, 100],
+            available_bets: [0.1, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000],
             default_bet: 1,
-            max_bet: 10000,
+            max_bet: 500000,
             min_bet: 0.1,
-            denominations: [0.1, 0.5, 1, 2, 5, 10, 25, 50, 100]
+            denominations: [0.1, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000]
         },
         player: {
             currency: 'RBX',
@@ -1824,104 +1733,184 @@ app.post('/api/avia/v1/init', express.json(), async (req, res) => {
     });
 });
 
-/**
- * AVIA MASTERS PLAY — Balance Sync
- * Bridge reports the actual bet and win amounts from BGaming's real game.
- * We deduct the bet and credit the win, applying CUS rigging to modify payouts.
- */
-app.post('/api/avia/v1/play', express.json(), async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, sessionToken, bet, winAmount, isWin } = req.body || {};
-
-    // Guest mode — no balance changes
-    if (!userId || !validateSessionToken(userId, sessionToken)) {
-        const guestBal = userId ? 1000 : 0;
-        return res.json({ wallet: { balance: guestBal, currency: 'RBX' } });
-    }
-
-    await withUserLock(userId, async () => {
-        const betVal = num(bet, 0);
-        let creditVal = num(winAmount, 0);
-
-        // === CUS RIGGING ===
-        const forceLoss = getCusState(userId).check();
-        const forceWin = getCusState(userId).checkWin();
-        
-        if (forceLoss) {
-            // Force loss: take the bet but never credit any winnings
-            creditVal = 0;
-        } else if (forceWin && creditVal === 0) {
-            // Force win: if BGaming says loss, give them their bet back + bonus
-            creditVal = betVal * 2;
-        }
-
-        // 1. Deduct the bet
-        if (betVal > 0 && supabaseEnabled()) {
-            const deduct = await deductUserBet(userId, betVal);
-            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
-        }
-
-        // 2. Credit the win (if any)
-        if (creditVal > 0 && supabaseEnabled()) {
-            const result = await creditUserWin(userId, creditVal);
-            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: result.newBalance, stats: {} });
-        }
-
-        // 3. Track CUS stats
-        if (creditVal > betVal) getCusState(userId).recordWin(creditVal >= betVal * 3);
-        else getCusState(userId).recordLoss();
-
-        // 4. Return updated balance
-        const account = await loadAccountFromSupabase(userId);
-        const newBal = account ? account.balance : 0;
-        
-        console.log(`[Avia] User ${userId} — bet: ${betVal}, win: ${creditVal}, balance: ${newBal}`);
-        
-        res.json({ wallet: { balance: newBal, currency: 'RBX' } });
-    });
-});
+// REMOVED: /api/avia/v1/play — orphaned endpoint (bridge uses spin-sync instead).
 
 /**
- * AVIA MASTERS SESSION SYSTEM
- * - /session/start: Deducts full balance, stores session
- * - /session/end: Credits game balance back to user  
- * - /session/save: Beacon-safe save for page refresh
+ * AVIA MASTERS SESSION SYSTEM — Supabase-backed
+ * - In-memory cache for fast reads (aviaSessions)
+ * - Supabase `avia_sessions` transaction rows for crash persistence
+ * - /session/start:  Deducts full balance, stores session in memory + DB
+ * - /session/end:    Credits game balance back to user, removes session
+ * - /session/save:   Beacon-safe save for page refresh (with auth)
+ * - /spin-sync:      Server-authoritative per-spin balance tracking
  */
 const aviaSessions = {};
 
+/** Persist avia session to Supabase as a special transaction row so it survives restarts. */
+async function aviaSessionPersist(userId, sessionData) {
+    if (!supabaseEnabled()) return;
+    const uid = encodeURIComponent(String(userId));
+    const payload = JSON.stringify(sessionData);
+    try {
+        // Try to update existing row first
+        const selRes = await supabaseFetch(
+            `transactions?user_id=eq.${uid}&type=eq.avia_session&select=id&limit=1`
+        );
+        const existing = selRes.ok ? await selRes.json() : [];
+        if (Array.isArray(existing) && existing.length > 0 && existing[0].id != null) {
+            const rowId = encodeURIComponent(String(existing[0].id));
+            await supabaseFetch(`transactions?id=eq.${rowId}`, {
+                method: 'PATCH',
+                headers: { Prefer: 'return=minimal' },
+                body: JSON.stringify({ game_name: payload, amount: sessionData.gameBalance || 0 })
+            });
+        } else {
+            // Insert new row
+            await supabaseFetch('transactions', {
+                method: 'POST',
+                headers: { Prefer: 'return=minimal' },
+                body: JSON.stringify({
+                    user_id: String(userId),
+                    amount: sessionData.gameBalance || 0,
+                    currency: 'robet',
+                    type: 'avia_session',
+                    status: 'active',
+                    game_name: payload,
+                    reference_id: crypto.randomUUID()
+                })
+            });
+        }
+    } catch (e) {
+        console.error('[Avia] Session persist error:', e && e.message);
+    }
+}
+
+/** Remove persisted avia session from Supabase. */
+async function aviaSessionRemove(userId) {
+    if (!supabaseEnabled()) return;
+    const uid = encodeURIComponent(String(userId));
+    try {
+        await supabaseFetch(`transactions?user_id=eq.${uid}&type=eq.avia_session`, { method: 'DELETE' });
+    } catch (e) {
+        console.error('[Avia] Session remove error:', e && e.message);
+    }
+}
+
+/** On boot: recover orphaned avia sessions from Supabase and credit balances back. */
+async function aviaRecoverOrphanedSessions() {
+    if (!supabaseEnabled()) return;
+    try {
+        const res = await supabaseFetch(
+            `transactions?type=eq.avia_session&status=eq.active&select=user_id,game_name,amount`
+        );
+        if (!res.ok) return;
+        const rows = await res.json();
+        if (!Array.isArray(rows) || rows.length === 0) return;
+        console.log(`[Avia] Found ${rows.length} orphaned session(s), recovering...`);
+        for (const row of rows) {
+            try {
+                const data = JSON.parse(row.game_name || '{}');
+                const gameBalance = Math.max(0, Math.round(num(data.gameBalance || row.amount, 0) * 100) / 100);
+                const userId = row.user_id;
+                if (gameBalance > 0 && userId) {
+                    await creditUserWin(userId, gameBalance);
+                    console.log(`[Avia] Recovered ${gameBalance.toFixed(2)} for user ${userId}`);
+                }
+                // Clean up the row
+                await aviaSessionRemove(userId);
+            } catch (e) {
+                console.error('[Avia] Recovery error for row:', e && e.message);
+            }
+        }
+    } catch (e) {
+        console.error('[Avia] Orphan recovery error:', e && e.message);
+    }
+}
+// Run recovery after server has fully started (delayed so Supabase is ready)
+setTimeout(aviaRecoverOrphanedSessions, 5000);
+
 app.post('/api/avia/v1/session/start', express.json(), async (req, res) => {
     const { userId, sessionToken } = req.body || {};
-    if (!userId) {
-        return res.status(401).json({ error: 'no userId' });
+    if (!userId || !validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
     }
 
-    // Resume existing session
+    // Resume existing in-memory session
     if (aviaSessions[userId] && aviaSessions[userId].active) {
         console.log(`[Avia] Resuming session for ${userId}, gameBalance: ${aviaSessions[userId].gameBalance}`);
         return res.json({ gameBalance: aviaSessions[userId].gameBalance });
     }
 
-    const account = await loadAccountFromSupabase(userId);
-    const currentBalance = account ? account.balance : 0;
+    await withUserLock(userId, async () => {
+        const account = await loadAccountFromSupabase(userId);
+        const currentBalance = account ? account.balance : 0;
 
-    if (currentBalance <= 0) {
-        return res.json({ gameBalance: 0, error: 'no_balance' });
+        if (currentBalance <= 0) {
+            return res.json({ gameBalance: 0, error: 'no_balance' });
+        }
+
+        // Deduct full balance
+        await deductUserBet(userId, currentBalance);
+
+        // Store session in memory + Supabase
+        const sessionData = {
+            startBalance: currentBalance,
+            gameBalance: currentBalance,
+            active: true,
+            startedAt: Date.now()
+        };
+        aviaSessions[userId] = sessionData;
+        await aviaSessionPersist(userId, sessionData);
+
+        console.log(`[Avia] Session started for ${userId}, balance: ${currentBalance} → DB set to 0`);
+        res.json({ gameBalance: currentBalance });
+    });
+});
+
+/**
+ * SPIN SYNC — Server-authoritative per-spin balance tracking
+ * Bridge calls this after every BGaming API response that contains an outcome.
+ * Server applies the delta to its tracked gameBalance and returns the new value.
+ */
+app.post('/api/avia/v1/spin-sync', express.json(), async (req, res) => {
+    const { userId, sessionToken, bet, win } = req.body || {};
+    if (!userId || !validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Deduct full balance using existing helper
-    await deductUserBet(userId, currentBalance);
+    const session = aviaSessions[userId];
+    if (!session || !session.active) {
+        return res.status(400).json({ error: 'No active session' });
+    }
 
-    // Store session
-    aviaSessions[userId] = {
-        startBalance: currentBalance,
-        gameBalance: currentBalance,
-        active: true,
-        startedAt: Date.now()
-    };
+    const betVal = num(bet, 0);
+    let winVal = num(win, 0);
 
-    console.log(`[Avia] Session started for ${userId}, balance: ${currentBalance} → DB set to 0`);
-    res.json({ gameBalance: currentBalance });
+    // === CUS RIGGING (applied to the game balance delta) ===
+    const forceLoss = getCusState(userId).check();
+    const forceWin = getCusState(userId).checkWin();
+
+    if (forceLoss && winVal > 0) {
+        // Force loss: nullify the win — user still lost the bet amount
+        winVal = 0;
+    } else if (forceWin && winVal === 0 && betVal > 0) {
+        // Force win: give them their bet back + bonus
+        winVal = betVal * 2;
+    }
+
+    // Track CUS stats
+    if (winVal > betVal) getCusState(userId).recordWin(winVal >= betVal * 3);
+    else getCusState(userId).recordLoss();
+
+    // Apply delta to server-tracked balance
+    const newBalance = Math.max(0, Math.round((session.gameBalance - betVal + winVal) * 100) / 100);
+    session.gameBalance = newBalance;
+
+    // Persist to Supabase (async, don't block response)
+    aviaSessionPersist(userId, session).catch(() => {});
+
+    console.log(`[Avia] Spin sync ${userId}: bet=${betVal}, win=${winVal}, gameBalance=${newBalance.toFixed(2)}`);
+    res.json({ gameBalance: newBalance });
 });
 
 app.post('/api/avia/v1/session/end', express.json(), async (req, res) => {
@@ -1930,35 +1919,45 @@ app.post('/api/avia/v1/session/end', express.json(), async (req, res) => {
         return res.status(401).json({ error: 'no userId' });
     }
 
-    const session = aviaSessions[userId];
-    let finalBalance = 0;
+    await withUserLock(userId, async () => {
+        const session = aviaSessions[userId];
+        let finalBalance = 0;
 
-    if (session && session.active) {
-        finalBalance = Math.max(0, Math.round(session.gameBalance * 100) / 100);
-        session.active = false;
+        if (session && session.active) {
+            finalBalance = Math.max(0, Math.round(session.gameBalance * 100) / 100);
+            session.active = false;
 
-        // Credit game balance back using existing helper
-        if (finalBalance > 0) {
-            await creditUserWin(userId, finalBalance);
+            // Credit game balance back
+            if (finalBalance > 0) {
+                await creditUserWin(userId, finalBalance);
+            }
+
+            console.log(`[Avia] Session ended for ${userId}: started=${session.startBalance}, final=${finalBalance}, profit=${(finalBalance - session.startBalance).toFixed(2)}`);
+            delete aviaSessions[userId];
+            await aviaSessionRemove(userId);
+        } else {
+            const account = await loadAccountFromSupabase(userId);
+            finalBalance = account ? account.balance : 0;
         }
 
-        console.log(`[Avia] Session ended for ${userId}: started=${session.startBalance}, final=${finalBalance}, profit=${(finalBalance - session.startBalance).toFixed(2)}`);
-        delete aviaSessions[userId];
-    } else {
-        const account = await loadAccountFromSupabase(userId);
-        finalBalance = account ? account.balance : 0;
-    }
-
-    res.json({ balance: finalBalance });
+        res.json({ balance: finalBalance });
+    });
 });
 
 app.post('/api/avia/v1/session/save', express.json(), async (req, res) => {
-    const { userId, gameBalance } = req.body || {};
+    const { userId, gameBalance, sessionToken } = req.body || {};
     if (!userId) return res.json({ ok: false });
+
+    // Validate token (beacon may not always include it, so only reject if token is present but invalid)
+    if (sessionToken && !validateSessionToken(userId, sessionToken)) {
+        return res.json({ ok: false, error: 'Unauthorized' });
+    }
 
     if (aviaSessions[userId] && aviaSessions[userId].active && typeof gameBalance === 'number') {
         aviaSessions[userId].gameBalance = Math.max(0, gameBalance);
         console.log(`[Avia] Session saved for ${userId}, gameBalance: ${gameBalance.toFixed(2)}`);
+        // Persist to Supabase
+        aviaSessionPersist(userId, aviaSessions[userId]).catch(() => {});
     }
 
     res.json({ ok: true });
@@ -1992,6 +1991,48 @@ app.get('/proxy/avia', async (req, res) => {
         const baseUrl = new URL(officialUrl).origin;
         html = html.replace(/src="\/(?!public\/)(?!\/)/g, `src="${baseUrl}/`);
         html = html.replace(/href="\/(?!public\/)(?!\/)/g, `href="${baseUrl}/`);
+        
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    } catch (e) {
+        res.status(500).send('Proxy Error: Could not reach official game servers.');
+    }
+});
+
+/**
+ * RETRO TRADER PROXY BRIDGE
+ * Same pattern as Avia Masters — proxies official BGaming demo and injects bridge script.
+ * Also performs HTML-level currency replacement to stamp out "FUN" before the game JS runs.
+ */
+app.get('/proxy/retrotrader', async (req, res) => {
+    const officialUrl = process.env.RETRO_DEMO_URL || 'https://demo.bgaming-network.com/games/BInvestLive/FUN?play_token=251b701c-50c4-4abc-8931-b1498210a800';
+    
+    try {
+        const response = await fetch(officialUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://bgaming.com/',
+                'Origin': 'https://bgaming.com'
+            }
+        });
+        let html = await response.text();
+        
+        // 1. Inject the bridge script BEFORE any other scripts so it hooks fetch first
+        const bridgeScript = `<script src="/public/retrotrader/bridge.js"></script>`;
+        html = html.replace('<head>', `<head>${bridgeScript}`);
+        
+        // 2. Fix relative paths to point to BGaming's CDN (except for our local public scripts)
+        const baseUrl = new URL(officialUrl).origin;
+        html = html.replace(/src="\/(?!public\/)(?!\/)/g, `src="${baseUrl}/`);
+        html = html.replace(/href="\/(?!public\/)(?!\/)/g, `href="${baseUrl}/`);
+        
+        // 3. Replace FUN currency in embedded JSON config / inline scripts
+        //    BGaming embeds initial config like: "currency":"FUN", "code":"FUN", etc.
+        html = html.replace(/"currency"\s*:\s*"FUN"/gi, '"currency":"RBT"');
+        html = html.replace(/"currency_code"\s*:\s*"FUN"/gi, '"currency_code":"RBT"');
+        html = html.replace(/"code"\s*:\s*"FUN"/gi, '"code":"RBT"');
+        html = html.replace(/"symbol"\s*:\s*"FUN"/gi, '"symbol":"R$"');
+        html = html.replace(/"currency_symbol"\s*:\s*"FUN"/gi, '"currency_symbol":"R$"');
         
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
@@ -2227,6 +2268,133 @@ app.get('/api/game/towers/status', (req, res) => {
 
 /** Session-restore: functionally disabled for security */
 app.post('/api/game/towers/restore', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json({ ok: false, restored: false, error: 'Session restoration disabled' });
+});
+
+const CHICKEN_MULTS = {
+    low: [1.10, 1.25, 1.43, 1.65, 1.90],
+    medium: [1.13, 1.30, 1.50, 1.73, 1.99],
+    high: [1.35, 1.90, 2.65, 3.70, 5.18]
+};
+
+function computeChickenMultiplier(risk, lane) {
+    const riskArr = CHICKEN_MULTS[risk] || CHICKEN_MULTS['medium'];
+    if (lane < 0) return 1.0;
+    if (lane >= riskArr.length) return riskArr[riskArr.length - 1];
+    return riskArr[lane];
+}
+
+app.post('/api/game/chicken/start', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, bet, risk, clientSeed, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
+    }
+    await withUserLock(userId, async () => {
+        const betVal = num(bet, 0);
+        if (betVal > 0 && supabaseEnabled()) {
+            const deduct = await deductUserBet(userId, betVal);
+            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
+            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
+        }
+        
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        const cSeed = clientSeed || crypto.randomBytes(16).toString('hex');
+        const nonce = Math.floor(Math.random() * 10000);
+        
+        let hashBuf = Array.from(crypto.createHmac('sha256', serverSeed).update(`${cSeed}:${nonce}`).digest());
+        let logic = [];
+        for(let i=0; i<5; i++) {
+            logic.push((hashBuf[i] % 100) < 50);
+        }
+        
+        activeChickenGames.set(String(userId), { logic, bet: betVal, risk: String(risk || 'medium'), curLane: -1, serverSeed, cSeed, nonce });
+        res.json({ ok: true });
+    });
+});
+
+app.post('/api/game/chicken/advance', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const g = activeChickenGames.get(String(userId));
+    if (!g) return res.status(400).json({ error: 'No active game' });
+    
+    setTimeout(async () => {
+        let nextLane = g.curLane + 1;
+        if (nextLane >= 5) return res.json({ error: 'Max lanes reached' });
+        
+        let forceLoss = getCusState(userId).check();
+        let forceWin = getCusState(userId).checkWin();
+        
+        let crash = g.logic[nextLane];
+        if (forceWin) crash = false;
+        else if (!crash && forceLoss) crash = true;
+        
+        if (crash) {
+            getCusState(userId).recordLoss();
+            const pf = { serverSeed: g.serverSeed, clientSeed: g.cSeed, nonce: g.nonce, fairLogic: g.logic };
+            activeChickenGames.delete(String(userId));
+            if (supabaseEnabled()) await creditUserWin(userId, 0);
+            // Live feed for loss
+            const uname = getOnlineUsernameByUserId(userId) || 'Guest';
+            if (g.bet >= 1) {
+                const feedEv = { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, userId: String(userId), username: sanitizeLiveFeedUsername(uname), gameKey: 'chicken', bet: g.bet, multiplier: 0, payout: 0, createdAt: Date.now() };
+                liveFeedMemoryPush(feedEv); io.emit('live_feed:event', feedEv); liveFeedInsertSupabase(feedEv).catch(() => {});
+            }
+            return res.json({ crash: true, provablyFair: pf });
+        } else {
+            g.curLane++;
+            res.json({ crash: false, currentLane: g.curLane });
+        }
+    }, Math.floor(Math.random() * 800));
+});
+
+app.post('/api/game/chicken/cashout', express.json(), async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { userId, sessionToken } = req.body;
+    if (!validateSessionToken(userId, sessionToken)) {
+        return res.status(401).json({ error: 'Unauthorized.' });
+    }
+    await withUserLock(userId, async () => {
+        const g = activeChickenGames.get(String(userId));
+        if (!g) return res.json({ error: 'No active game' });
+        
+        const targetLane = g.curLane;
+        const pf = { serverSeed: g.serverSeed, clientSeed: g.cSeed, nonce: g.nonce, fairLogic: g.logic };
+        activeChickenGames.delete(String(userId));
+        
+        if (g.bet > 0 && targetLane >= 0 && supabaseEnabled()) {
+            const multi = computeChickenMultiplier(g.risk || 'medium', targetLane);
+            const winAmount = g.bet * multi;
+            const result = await creditUserWin(userId, winAmount);
+            getCusState(userId).recordWin(multi >= 3.0);
+            // Live feed for win
+            const uname = getOnlineUsernameByUserId(userId) || 'Guest';
+            if (g.bet >= 1) {
+                const feedEv = { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, userId: String(userId), username: sanitizeLiveFeedUsername(uname), gameKey: 'chicken', bet: g.bet, multiplier: multi, payout: winAmount, createdAt: Date.now() };
+                liveFeedMemoryPush(feedEv); io.emit('live_feed:event', feedEv); liveFeedInsertSupabase(feedEv).catch(() => {});
+            }
+            return res.json({ ok: true, winAmount, multiplier: multi, newBalance: result.newBalance, provablyFair: pf });
+        }
+        
+        if (supabaseEnabled()) await creditUserWin(userId, 0);
+        res.json({ ok: true, provablyFair: pf });
+    });
+});
+
+app.get('/api/game/chicken/status', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const userId = String(req.query.userId || '').trim();
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    const g = activeChickenGames.get(userId);
+    res.json({ active: !!g, lane: g ? g.curLane : -1 });
+});
+
+app.post('/api/game/chicken/restore', express.json(), (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json({ ok: false, restored: false, error: 'Session restoration disabled' });
 });

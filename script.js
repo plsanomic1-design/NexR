@@ -32,26 +32,44 @@ document.addEventListener('DOMContentLoaded', () => {
     function showAviaModal() { _aviaModal.style.display = 'flex'; }
     function hideAviaModal() { _aviaModal.style.display = 'none'; }
 
-    // Open the game from tile click
-    window._openAviaGame = function() {
+    // === SLOT GAME REGISTRY ===
+    // Maps game keys to proxy URLs and display names
+    const SLOT_GAMES = {
+        avia: { url: '/proxy/avia', name: 'Avia Masters' },
+        retrotrader: { url: '/proxy/retrotrader', name: 'Retro Trader' }
+    };
+    let _activeSlotKey = null;
+
+    // Open any slot game from tile click
+    window._openSlotGame = function(gameKey) {
         // Prevent double-click
         if (window._aviaInPlay) return;
+
+        const game = SLOT_GAMES[gameKey];
+        if (!game) { console.error('[Slots] Unknown game key:', gameKey); return; }
+
+        _activeSlotKey = gameKey;
 
         const lobby = document.getElementById('avia-lobby');
         const gameCont = document.getElementById('avia-game-container');
         const iframe = document.getElementById('avia-iframe');
+        const label = document.getElementById('avia-game-label');
         if (lobby) lobby.style.display = 'none';
         if (gameCont) gameCont.style.display = 'flex';
+        if (label) label.textContent = game.name;
         // Start session and load iframe
         window._aviaInPlay = true;
         window._aviaGameBalance = null;
-        if (iframe) iframe.src = '/proxy/avia';
+        if (iframe) iframe.src = game.url;
         // Show "(in play)" in sidebar
         if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
     };
 
-    // Close the game via Back button (same exit flow as switching tabs)
-    window._closeAviaGame = async function() {
+    // Backward compat
+    window._openAviaGame = function() { window._openSlotGame('avia'); };
+
+    // Close the current slot game via Back button (same exit flow as switching tabs)
+    window._closeSlotGame = async function() {
         const lobby = document.getElementById('avia-lobby');
         const gameCont = document.getElementById('avia-game-container');
 
@@ -60,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
             window._aviaInPlay = false;
 
             const gameBalance = window._aviaGameBalance;
-            console.log('[Avia] Back button. _aviaGameBalance:', gameBalance);
+            console.log('[Slots] Back button. _aviaGameBalance:', gameBalance);
 
             try {
                 if (typeof robloxUserId === 'number' && robloxUserId > 0) {
@@ -79,12 +97,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     const d = await res.json();
                     if (typeof d.balance === 'number' && d.balance >= 0) {
                         _roBalance = d.balance;
-                        console.log('[Avia] ✅ Balance restored:', _roBalance);
+                        console.log('[Slots] ✅ Balance restored:', _roBalance);
                         if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
                     }
                 }
             } catch(e) {
-                console.error('[Avia] Close error:', e);
+                console.error('[Slots] Close error:', e);
                 if (typeof gameBalance === 'number' && gameBalance >= 0) {
                     _roBalance = gameBalance;
                     if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
@@ -95,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const iframe = document.getElementById('avia-iframe');
             if (iframe) iframe.src = 'about:blank';
             window._aviaGameBalance = null;
+            _activeSlotKey = null;
             hideAviaModal();
         }
 
@@ -102,6 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (lobby) lobby.style.display = 'block';
         if (gameCont) gameCont.style.display = 'none';
     };
+
+    // Backward compat
+    window._closeAviaGame = window._closeSlotGame;
 
     // Core view switching (no avia logic — called after avia exit if needed)
     function _doSwitchView(viewName) {
@@ -190,6 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (iframe) iframe.src = 'about:blank';
 
             window._aviaGameBalance = null;
+            _activeSlotKey = null;
             hideAviaModal();
         }
 
@@ -449,6 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let mMultiplier = 1.0;
         let currentBet = 0;
         let mGameId = 0;
+        let mMinesQueue = Promise.resolve();
 
         // Init grid ui
         function initGridUI() {
@@ -575,75 +599,94 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        async function handleTileClick(i, tileEl) {
-            if(!mIsPlaying || tileEl.classList.contains('revealed') || tileEl.classList.contains('loading')) return;
-            
+        function handleTileClick(i, tileEl) {
+            if(!mIsPlaying || tileEl.classList.contains('revealed') || tileEl.classList.contains('loading') || tileEl.classList.contains('queued')) return;
+            const clickGameId = mGameId;
+            tileEl.classList.add('queued');
             tileEl.classList.add('loading');
             tileEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
             if (typeof soundClick === 'function') soundClick();
-            syncMinesCashoutButton();
             
-            const currentGameId = mGameId;
-            
-            try {
-                const res = await fetch('/api/game/mines/click', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, tileIdx: i, sessionToken: window._sessionToken })
-                });
-                const data = await res.json();
-                
-                if (mGameId !== currentGameId) return; // ignore if user already restared game
-                
-                tileEl.classList.remove('loading');
-                tileEl.classList.add('revealed');
-                
-                if(data.isBomb) {
-                    mGrid = data.mGridFull || mGrid;
-                    tileEl.classList.add('bomb');
-                    tileEl.innerHTML = '<span class="tile-mark"><i class="fa-solid fa-bomb"></i></span>';
-                    soundBomb();
-                    endMines(false);
-                } else {
-                    tileEl.classList.add('gem');
-                    tileEl.innerHTML = '<span class="tile-mark">RoBet</span>';
-                    soundGem();
-                    mRevealed++;
-                    mRevealedTiles.push(i);
-                    let bombs = parseInt(countInp.value) || 3;
-                    mMultiplier = getMulti(bombs, mRevealed);
-                    earningsInp.value = (currentBet * parseFloat(mMultiplier)).toFixed(2);
-                    syncMinesCashoutButton();
-                    // Save progress so game can be resumed after a refresh
-                    GSM.update('mines', { revealed: mRevealed, revealedTiles: mRevealedTiles, multiplier: mMultiplier });
-                    
-                    if(mRevealed + bombs === 25) {
-                        // Full clear: server only pays on /cashout — same as manual cashout button
-                        minesPlayBtn.disabled = true;
-                        minesPlayBtn.textContent = 'Cashing out...';
-                        try {
-                            const resCo = await fetch('/api/game/mines/cashout', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userId: robloxUserId, revealed: mRevealed, sessionToken: window._sessionToken })
-                            });
-                            const dataCo = await resCo.json();
-                            if (dataCo.logic) mGrid = dataCo.logic;
-                        } catch (e) {
-                            console.error('[Mines auto cashout]', e);
-                        }
-                        endMines(true);
+            mMinesQueue = mMinesQueue.then(async () => {
+                tileEl.classList.remove('queued');
+                if(!mIsPlaying || mGameId !== clickGameId || tileEl.classList.contains('revealed')) {
+                    if (mGameId === clickGameId && !tileEl.classList.contains('revealed')) {
+                        tileEl.classList.remove('loading');
+                        tileEl.innerHTML = '<span class="tile-mark">RoBet</span>';
                     }
+                    return;
                 }
-            } catch(e) {
-                if (mGameId !== currentGameId) return;
-                minesMsg.textContent = 'Network Error';
-                minesMsg.style.color = 'var(--red)';
-                minesMsg.style.display = 'block';
-                tileEl.classList.remove('loading');
-                tileEl.innerHTML = '<span class="tile-mark">RoBet</span>';
+                
                 syncMinesCashoutButton();
-            }
+                
+                try {
+                    const res = await fetch('/api/game/mines/click', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ userId: robloxUserId, tileIdx: i, sessionToken: window._sessionToken })
+                    });
+                    const data = await res.json();
+                    
+                    if (mGameId !== clickGameId) return; // ignore if user already restared game
+                    
+                    tileEl.classList.remove('loading');
+                    tileEl.classList.add('revealed');
+                    
+                    if(data.isBomb) {
+                        mGrid = data.mGridFull || mGrid;
+                        tileEl.classList.add('bomb');
+                        tileEl.innerHTML = '<span class="tile-mark"><i class="fa-solid fa-bomb"></i></span>';
+                        soundBomb();
+                        endMines(false);
+                    } else {
+                        tileEl.classList.add('gem');
+                        tileEl.innerHTML = '<span class="tile-mark">RoBet</span>';
+                        
+                        mRevealed++;
+                        mRevealedTiles.push(i);
+                        let bombs = parseInt(countInp.value) || 3;
+                        mMultiplier = getMulti(bombs, mRevealed);
+                        earningsInp.value = (currentBet * parseFloat(mMultiplier)).toFixed(2);
+                        syncMinesCashoutButton();
+                        // Save progress so game can be resumed after a refresh
+                        GSM.update('mines', { revealed: mRevealed, revealedTiles: mRevealedTiles, multiplier: mMultiplier });
+                        
+                        // Play new correct sound and wait for 0.5s instead of full audio length
+                        await new Promise(resolve => {
+                            const audio = new Audio('minesCORRECT.mp3');
+                            // Play the sound, but resolve queue after 500ms
+                            audio.play().catch(e => console.error('Mines sound err:', e));
+                            setTimeout(resolve, 500);
+                        });
+                        
+                        if(mRevealed + bombs === 25) {
+                            // Full clear: server only pays on /cashout — same as manual cashout button
+                            minesPlayBtn.disabled = true;
+                            minesPlayBtn.textContent = 'Cashing out...';
+                            try {
+                                const resCo = await fetch('/api/game/mines/cashout', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userId: robloxUserId, revealed: mRevealed, sessionToken: window._sessionToken })
+                                });
+                                const dataCo = await resCo.json();
+                                if (dataCo.logic) mGrid = dataCo.logic;
+                            } catch (e) {
+                                console.error('[Mines auto cashout]', e);
+                            }
+                            endMines(true);
+                        }
+                    }
+                } catch(e) {
+                    if (mGameId !== clickGameId) return;
+                    minesMsg.textContent = 'Network Error';
+                    minesMsg.style.color = 'var(--red)';
+                    minesMsg.style.display = 'block';
+                    tileEl.classList.remove('loading');
+                    tileEl.innerHTML = '<span class="tile-mark">RoBet</span>';
+                    syncMinesCashoutButton();
+                }
+            });
         }
 
         function endMines(win) {
@@ -729,7 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const tile = document.createElement('div');
                     tile.className = 'tower-tile';
                     tile.dataset.c = c;
-                    tile.innerHTML = `${multi}x <span class="tower-zr-suffix">ZH$</span>`;
+                    tile.innerHTML = `${multi}x`;
                     tile.addEventListener('click', () => handleTowerClick(r, c, tile));
                     rowDiv.appendChild(tile);
                 }
@@ -758,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 Array.from(rElements[r].children).forEach(t => {
                     const origVal = Math.pow(cfg.base, r + 1).toFixed(2);
                     t.className = 'tower-tile gem';
-                    t.innerHTML = `${origVal}x <span class="tower-zr-suffix">ZH$</span>`;
+                    t.innerHTML = `${origVal}x`;
                     t.style.pointerEvents = 'none';
                 });
             }
@@ -825,7 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         Array.from(row.children).forEach(t => {
                             let origVal = Math.pow(cfg.base, i+1).toFixed(2);
                             t.className = 'tower-tile';
-                            t.innerHTML = `${origVal}x <span class="tower-zr-suffix">ZH$</span>`;
+                            t.innerHTML = `${origVal}x`;
                             t.style.pointerEvents = (i===0) ? 'auto' : 'none';
                         });
                     });
@@ -7582,3 +7625,314 @@ function cbBindSockets() {
         });
     }
 }
+// === CHICKEN CROSS LOGIC ===
+document.addEventListener('DOMContentLoaded', () => {
+    const playBtn = document.getElementById('chicken-play-btn');
+    if (!playBtn) return;
+
+    let bal = 0, bet = 10, active = false, lane = -1, placed = 0, waiting = false;
+    let cars = [], animId, carTick, barriers = [], xlbls = [], tileEls = [];
+    const LC = 5;
+    
+    // UI elements
+    const betInp = document.getElementById('chicken-bet-input');
+    const riskTabs = document.querySelectorAll('#chicken-risk-tabs .diff-btn');
+    const cg = document.getElementById('cg');
+    const chkEl = document.getElementById('chk');
+    const chkDead = document.getElementById('chk-dead');
+    const winBoard = document.getElementById('win-board');
+    const winAmt = document.getElementById('win-amt');
+    const roadEl = document.getElementById('road');
+    const mhud = document.getElementById('mhud');
+    const ov = document.getElementById('ov');
+    const ova = document.getElementById('ova');
+    const ga = document.getElementById('ga');
+
+    let currentRisk = 'medium';
+
+    const MULTS = {
+        low: [1.10, 1.25, 1.43, 1.65, 1.90],
+        medium: [1.13, 1.30, 1.50, 1.73, 1.99],
+        high: [1.35, 1.90, 2.65, 3.70, 5.18]
+    };
+
+    riskTabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (active) return;
+            riskTabs.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentRisk = btn.dataset.risk;
+        });
+    });
+
+    function rl() { return 130; }
+    function lw() { return (ga.offsetWidth - rl()) / LC; }
+    function lcx(i) { return rl() + i * lw() + lw() / 2; }
+    function cpx(i) { return i < 0 ? 30 : lcx(i) - 35; }
+    function fmt(n) { return n.toFixed(2) + ' RoBet'; }
+
+    function buildRoad(){
+        roadEl.querySelectorAll('.tile,.ldiv,.barrier,.xlbl').forEach(e=>e.remove());
+        barriers=[]; xlbls=[]; tileEls=[];
+        const lwd=lw(), ms=MULTS[currentRisk];
+        for(let i=1; i<LC; i++){
+            const d=document.createElement('div'); d.className='ldiv'; d.style.left=(i*lwd-2)+'px';
+            const dh=ga.offsetHeight; let y=8;
+            while(y<dh){const dash=document.createElement('div'); dash.className='ldash'; d.appendChild(dash); y+=38;}
+            roadEl.appendChild(d);
+        }
+        for(let i=0; i<LC; i++){
+            const t=document.createElement('div'); t.className='tile'; t.id='tl'+i;
+            t.style.left=(i*lwd+lwd/2-39)+'px';
+            t.innerHTML='<div class="tile-bg"></div><div class="tile-label">'+ms[i].toFixed(2)+'×</div>';
+            t.dataset.lane=i;
+            t.addEventListener('click', ()=>onTileClick(i));
+            roadEl.appendChild(t); tileEls.push(t);
+
+            const b=document.createElement('div'); b.className='barrier'; b.id='bar'+i;
+            b.style.left=(i*lwd+lwd/2-43)+'px'; b.style.top='calc(50% - 85px)';
+            b.innerHTML='<div style="display:flex;gap:46px;position:relative;top:8px;z-index:2"><div class="barrier-light"></div><div class="barrier-light" style="animation-delay:.5s"></div></div><div class="barrier-body"><div class="barrier-stripe"></div></div><div class="barrier-legs"><div class="barrier-leg"></div><div class="barrier-leg"></div></div>';
+            roadEl.appendChild(b); barriers.push(b);
+
+            const xl=document.createElement('div'); xl.className='xlbl'; xl.id='xl'+i;
+            xl.style.left=(i*lwd+lwd/2-22)+'px'; xl.style.top='calc(50% + 42px)';
+            roadEl.appendChild(xl); xlbls.push(xl);
+        }
+    }
+
+    function markNextTile(){
+        for(let i=0; i<LC; i++){
+            if(tileEls[i]) tileEls[i].classList.remove('clickable','next');
+        }
+        const next=lane+1;
+        if(next<LC && active && !waiting){
+            if(tileEls[next]) tileEls[next].classList.add('clickable','next');
+        }
+    }
+
+    function updateTiles() {
+        const ms = MULTS[currentRisk];
+        for (let i = 0; i < LC; i++) {
+            if(!tileEls[i]) continue;
+            tileEls[i].className = 'tile';
+            if (i <= lane) barriers[i].className = 'barrier show';
+            else barriers[i].className = 'barrier';
+            xlbls[i].style.display = 'none';
+            if (i < lane) tileEls[i].classList.add('passed');
+        }
+        if (lane >= 0 && lane < LC) {
+            const xl = xlbls[lane];
+            if(xl){
+                xl.textContent = ms[lane].toFixed(2) + '×';
+                xl.style.display = 'block';
+                xl.style.left = (lane * lw() + lw() / 2 - 22) + 'px';
+            }
+        }
+        markNextTile();
+    }
+
+    function setChicken(i){ chkEl.style.left=cpx(i)+'px'; }
+
+    function onTileClick(i){
+        if(!active||waiting) return;
+        if(i!==lane+1) return; 
+        advance();
+    }
+
+    playBtn.addEventListener('click', async () => {
+        if (waiting) return;
+        if (active) { cashout(); return; }
+        
+        let bVal = parseFloat(betInp.value) || 10;
+        if (bVal <= 0) return;
+
+        waiting = true;
+        playBtn.disabled = true;
+        
+        try {
+            const res = await fetch('/api/game/chicken/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken, bet: bVal, risk: currentRisk })
+            });
+            const d = await res.json();
+            if (d.error) {
+                if (typeof toast === 'function') toast(d.error);
+                playBtn.disabled = false;
+                waiting = false;
+                return;
+            }
+            
+            bet = bVal;
+            active = true; lane = -1; waiting = false;
+            
+            chkDead.classList.remove('show'); chkDead.style.display='none';
+            winBoard.classList.remove('show'); winBoard.style.display='none';
+            buildRoad();
+            setChicken(-1);
+            chkEl.style.display='block'; chkEl.style.opacity='1';
+            chkEl.classList.remove('sq');
+            
+            playBtn.classList.add('custom-cashout-btn');
+            playBtn.innerHTML = `Cashout (${(bet * 1.00).toFixed(2)} RoBet)`;
+            playBtn.disabled = false;
+            betInp.disabled = true;
+            riskTabs.forEach(b => b.disabled = true);
+            
+            mhud.style.display='block'; mhud.textContent='1.00×';
+            ov.classList.add('hide');
+            
+            cars.forEach(c=>c.remove()); cars=[];
+            if(animId) cancelAnimationFrame(animId);
+            clearInterval(carTick);
+            gameLoop();
+            carTick=setInterval(spawnCar,950);
+            markNextTile();
+        } catch(e) {
+            playBtn.disabled = false;
+            waiting = false;
+        }
+    });
+
+    async function advance() {
+        if(!active||waiting) return;
+        waiting = true;
+        
+        try {
+            const res = await fetch('/api/game/chicken/advance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
+            });
+            const d = await res.json();
+            
+            if (d.error) {
+                if (typeof toast === 'function') toast(d.error);
+                waiting = false;
+                return;
+            }
+            
+            if (d.crash) {
+                doSquash();
+                endGame(true, d.provablyFair);
+            } else {
+                lane = d.currentLane;
+                setChicken(lane);
+                updateTiles();
+                const ms = MULTS[currentRisk];
+                mhud.textContent = ms[lane].toFixed(2) + '×';
+                playBtn.innerHTML = `Cashout (${(bet * ms[lane]).toFixed(2)} RoBet)`;
+                chkEl.classList.remove('sq');
+                void chkEl.offsetWidth;
+                chkEl.classList.add('sq');
+                
+                if (lane >= LC - 1) {
+                    setTimeout(() => { cashout(); }, 500);
+                } else {
+                    waiting = false;
+                    markNextTile();
+                }
+            }
+        } catch (e) {
+            waiting = false;
+        }
+    }
+
+    async function cashout() {
+        if (!active || waiting || lane < 0) return;
+        waiting = true;
+        playBtn.disabled = true;
+        playBtn.textContent = 'Cashing out...';
+        
+        try {
+            const res = await fetch('/api/game/chicken/cashout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
+            });
+            const d = await res.json();
+            
+            if (d.ok) {
+                winAmt.textContent = fmt(d.winAmount || Number(d.payout || 0));
+                winBoard.style.display='flex';
+                winBoard.classList.add('show');
+                if (typeof cbSoundEngine !== 'undefined') cbSoundEngine.result('legendary');
+                endGame(false, d.provablyFair);
+            } else {
+                if (typeof toast === 'function') toast(d.error || 'Cashout failed');
+                waiting = false;
+                playBtn.disabled = false;
+            }
+        } catch(e) {
+            waiting = false;
+            playBtn.disabled = false;
+        }
+    }
+
+    function doSquash() {
+        chkEl.style.opacity = '0';
+        chkEl.style.display = 'none';
+        chkDead.style.left = (lcx(lane+1) - 90) + 'px';
+        chkDead.style.display = 'block';
+        chkDead.classList.add('show');
+    }
+
+    function endGame(isCrash, pfData) {
+        active = false;
+        waiting = false;
+        playBtn.classList.remove('custom-cashout-btn');
+        playBtn.textContent = 'Start game';
+        playBtn.disabled = false;
+        betInp.disabled = false;
+        riskTabs.forEach(b => b.disabled = false);
+        clearInterval(carTick);
+        setTimeout(() => cancelAnimationFrame(animId), 1500);
+        updateTiles();
+        if (pfData && typeof setFairnessData === 'function') {
+            const fBtn = document.querySelector('.chicken-area .keno-fairness-btn');
+            if (fBtn) fBtn.style.display = 'inline-flex';
+            setFairnessData('chicken', pfData.clientSeed, pfData.serverSeed, pfData.nonce);
+        }
+    }
+
+    const CC=['#e03030','#3060e0','#f0c030','#30c060','#e07030','#8030e0','#30c0e0','#e03090'];
+    function makeCar(color,type){
+        const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+        if(type===0){
+            svg.setAttribute('viewBox','0 0 40 70');svg.style.cssText='width:40px;height:70px;display:block';
+            svg.innerHTML=`<rect x="4" y="8" width="32" height="54" rx="8" fill="${color}"/><rect x="8" y="12" width="24" height="16" rx="4" fill="#aad8ff" opacity=".85"/><rect x="8" y="44" width="24" height="12" rx="3" fill="#aad8ff" opacity=".7"/><rect x="4" y="10" width="6" height="10" rx="3" fill="#ffe060"/><rect x="30" y="10" width="6" height="10" rx="3" fill="#ffe060"/><rect x="4" y="52" width="6" height="8" rx="2" fill="#ff4040" opacity=".8"/><rect x="30" y="52" width="6" height="8" rx="2" fill="#ff4040" opacity=".8"/>`;
+        }else if(type===1){
+            svg.setAttribute('viewBox','0 0 44 80');svg.style.cssText='width:44px;height:80px;display:block';
+            svg.innerHTML=`<rect x="2" y="4" width="40" height="72" rx="6" fill="${color}"/><rect x="6" y="8" width="32" height="18" rx="4" fill="#c8e8ff" opacity=".8"/><rect x="6" y="54" width="32" height="16" rx="3" fill="#c8e8ff" opacity=".6"/><rect x="2" y="6" width="7" height="12" rx="3" fill="#ffe060"/><rect x="35" y="6" width="7" height="12" rx="3" fill="#ffe060"/><rect x="2" y="64" width="7" height="10" rx="2" fill="#ff4040" opacity=".8"/><rect x="35" y="64" width="7" height="10" rx="2" fill="#ff4040" opacity=".8"/>`;
+        }else{
+            svg.setAttribute('viewBox','0 0 30 55');svg.style.cssText='width:30px;height:55px;display:block';
+            svg.innerHTML=`<ellipse cx="15" cy="28" rx="10" ry="20" fill="${color}"/><ellipse cx="15" cy="10" rx="8" ry="7" fill="#88bbff" opacity=".8"/><ellipse cx="15" cy="48" rx="8" ry="6" fill="#88bbff" opacity=".6"/><ellipse cx="15" cy="8" rx="4" ry="3" fill="#ffe060"/><ellipse cx="15" cy="50" rx="4" ry="3" fill="#ff4040" opacity=".8"/>`;
+        }
+        return svg;
+    }
+    
+    function spawnCar(){
+        if(!active)return;
+        const lIdx=Math.floor(Math.random()*LC);
+        const lwd=lw(),cx=rl()+lIdx*lwd+lwd/2;
+        const gh=ga.offsetHeight,goDown=Math.random()>.5;
+        const type=Math.floor(Math.random()*3),color=CC[Math.floor(Math.random()*CC.length)];
+        const wrap=document.createElement('div');wrap.className='car';
+        wrap.style.position = 'absolute'; wrap.style.zIndex = '10';
+        wrap.style.left=(cx-22)+'px';wrap.style.top=goDown?'-80px':(gh+10)+'px';
+        if(!goDown)wrap.style.transform='rotate(180deg)';
+        wrap.dataset.dir=goDown?'1':'-1';
+        wrap.appendChild(makeCar(color,type));ga.appendChild(wrap);cars.push(wrap);
+    }
+    
+    function gameLoop(){
+        const gh=ga.offsetHeight;
+        cars=cars.filter(car=>{
+            const y=parseFloat(car.style.top),dir=parseInt(car.dataset.dir),ny=y+dir*4.5;
+            car.style.top=ny+'px';
+            if(ny>gh+90||ny<-90){car.remove();return false;}
+            return true;
+        });
+        if(active) animId=requestAnimationFrame(gameLoop);
+    }
+});
