@@ -166,6 +166,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // === ENTERING BLACKJACK — auto-start BGaming iframe ===
+        if (viewName === 'blackjack') {
+            // If leaving avia slots, close that session first
+            if (window._aviaInPlay) {
+                await window._closeSlotGame();
+            }
+            _doSwitchView(viewName);
+            window._startBjGame();
+            return;
+        }
+
+        // === LEAVING BLACKJACK — close BGaming session ===
+        if (window._bjInPlay && viewName !== 'blackjack') {
+            await window._closeBjGame();
+        }
+
         // === LEAVING AVIA — save game balance, end session, show result ===
         if (window._aviaInPlay) {
             showAviaModal();
@@ -243,218 +259,63 @@ document.addEventListener('DOMContentLoaded', () => {
         footerYear.textContent = new Date().getFullYear();
     }
 
-    // Blackjack Logic
-    const bjPlayBtn = document.getElementById('bj-play-btn');
-    if (bjPlayBtn) {
-        const bjHitBtn = document.getElementById('bj-hit-btn');
-        const bjStandBtn = document.getElementById('bj-stand-btn');
-        const dCardsEl = document.getElementById('bj-dealer-cards');
-        const pCardsEl = document.getElementById('bj-player-cards');
-        const dScoreEl = document.getElementById('bj-dealer-score');
-        const pScoreEl = document.getElementById('bj-player-score');
-        const bjMsg = document.getElementById('bj-message');
+    // Blackjack — BGaming Classic Multihand Blackjack (iframe-based, same session system as slots)
+    window._bjInPlay = false;
 
-        let dHand = [];
-        let pHand = [];
-        let isPlaying = false;
-        let cDeck = [];
+    // Called when user navigates to the blackjack view
+    window._startBjGame = function() {
+        if (window._bjInPlay) return;
+        window._bjInPlay = true;
+        window._aviaGameBalance = null;
+        const iframe = document.getElementById('bj-iframe');
+        if (iframe) iframe.src = '/proxy/blackjack';
+        if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+    };
 
-        function getScore(hand) {
-            let score = 0;
-            let aces = 0;
-            for(let card of hand) {
-                score += card.score;
-                if(card.value === 'A') aces++;
-            }
-            while(score > 21 && aces > 0) { score -= 10; aces--; }
-            return score;
-        }
+    // Called by Back button or when navigating away
+    window._closeBjGame = async function() {
+        if (!window._bjInPlay) return;
+        showAviaModal();
+        window._bjInPlay = false;
 
-        function renderCard(card, hidden = false) {
-            if(hidden) return `<div class="bj-card hidden"></div>`;
-            const color = card.isRed ? 'red' : 'black';
-            const suitMid = `<span class="bj-suit-letter">${card.suitLetter}</span>`;
-            return `<div class="bj-card ${color}">
-                <div style="align-self:flex-start;">${card.value}</div>
-                <div style="align-self:center; font-size:26px; font-weight:900; line-height:1;">${suitMid}</div>
-                <div style="align-self:flex-end; transform:rotate(180deg);">${card.value}</div>
-            </div>`;
-        }
+        const gameBalance = window._aviaGameBalance;
+        console.log('[Blackjack] Closing. _aviaGameBalance:', gameBalance);
 
-        function renderHands(hideDealer = true) {
-            pCardsEl.innerHTML = pHand.map(c => renderCard(c)).join('');
-            pScoreEl.style.display = 'block';
-            pScoreEl.textContent = getScore(pHand);
-
-            if(hideDealer) {
-                dCardsEl.innerHTML = renderCard(dHand[0]) + renderCard(dHand[1], true);
-                dScoreEl.style.display = 'block';
-                dScoreEl.textContent = getScore([dHand[0]]);
-            } else {
-                dCardsEl.innerHTML = dHand.map(c => renderCard(c)).join('');
-                dScoreEl.style.display = 'block';
-                dScoreEl.textContent = getScore(dHand);
-            }
-        }
-
-        function endGame(msg, color) {
-            GSM.clear('blackjack');
-            isPlaying = false;
-            renderHands(false);
-            bjHitBtn.disabled = true;
-            bjStandBtn.disabled = true;
-            bjPlayBtn.disabled = false;
-            bjPlayBtn.textContent = 'Place bet';
-            bjPlayBtn.classList.remove('custom-cashout-btn');
-            bjPlayBtn.style.background = 'var(--accent)';
-            
-            bjMsg.textContent = msg;
-            bjMsg.style.color = color;
-            bjMsg.style.display = 'block';
-        }
-
-        // Expose Blackjack restore hook (called by resumeGameSessions on page load)
-        window._bjRestore = function(session) {
-            if (!session || !session.pHand || !session.dHand) {
-                if (session && session.bet > 0) { awardWin(session.bet); }
-                GSM.clear('blackjack');
-                showGameToast('\uD83C\uDCCF Your Blackjack bet was refunded', 'var(--accent)');
-                return;
-            }
-            document.getElementById('bj-bet-input').value = session.bet;
-            pHand = session.pHand;
-            dHand = session.dHand;
-            cDeck = session.deck || [];
-            isPlaying = true;
-            bjHitBtn.disabled = false;
-            bjStandBtn.disabled = false;
-            bjPlayBtn.disabled = false;
-            bjPlayBtn.textContent = 'Playing...';
-            bjPlayBtn.classList.add('custom-cashout-btn');
-            bjPlayBtn.style.background = '';
-            bjMsg.style.display = 'none';
-            renderHands(true);
-        };
-
-        bjPlayBtn.addEventListener('click', async () => {
-            if(isPlaying) return;
-            isPlaying = true;
-            bjMsg.style.display = 'none';
-            
-            bjHitBtn.disabled = true;
-            bjStandBtn.disabled = true;
-            bjPlayBtn.disabled = true;
-            bjPlayBtn.textContent = 'Connecting...';
-            
-            // Build temporary deck for server
-            const suits = [{ letter: 'S', isRed: false }, { letter: 'H', isRed: true }, { letter: 'D', isRed: true }, { letter: 'C', isRed: false }];
-            const values = [{v:'2',s:2},{v:'3',s:3},{v:'4',s:4},{v:'5',s:5},{v:'6',s:6},{v:'7',s:7},{v:'8',s:8},{v:'9',s:9},{v:'10',s:10},{v:'J',s:10},{v:'Q',s:10},{v:'K',s:10},{v:'A',s:11}];
-            let newDeck = [];
-            for(const suit of suits) {
-                for(let val of values) newDeck.push({suitLetter: suit.letter, value: val.v, score: val.s, isRed: suit.isRed});
-            }
-            newDeck.sort(() => Math.random() - 0.5);
-
-            try {
-                const bjBetAmt = parseFloat(document.getElementById('bj-bet-input').value) || 0;
-                const res = await fetch('/api/game/blackjack/start', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, deck: newDeck, bet: bjBetAmt, sessionToken: window._sessionToken })
-                });
-                const data = await res.json();
-                if (!res.ok) { endGame(data.error || 'Error starting', 'var(--red)'); return; }
-                cDeck = data.deck;
-                pHand = data.pHand;
-                dHand = data.dHand;
-
-                // Server resolved natural blackjack atomically — no separate /result call needed
-                if (data.naturalBlackjack) {
-                    if (data.outcome === 'push') {
-                        endGame('Push \u2014 Dealer also has Blackjack', 'var(--text-secondary)');
-                    } else {
-                        endGame('Blackjack! You Win', 'var(--gold)');
-                    }
-                    return;
+        try {
+            if (typeof robloxUserId === 'number' && robloxUserId > 0) {
+                if (typeof gameBalance === 'number' && gameBalance >= 0) {
+                    await fetch('/api/avia/v1/session/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: robloxUserId, gameBalance })
+                    });
                 }
-                
-                bjHitBtn.disabled = false;
-                bjStandBtn.disabled = false;
-                bjPlayBtn.textContent = 'Playing...';
-                bjPlayBtn.classList.add('custom-cashout-btn');
-                
-                renderHands();
-                GSM.update('blackjack', { pHand: pHand, dHand: dHand, deck: cDeck });
-            } catch(e) {
-                endGame('Error starting', 'var(--red)');
-            }
-        });
-
-
-        bjHitBtn.addEventListener('click', async () => {
-            if(!isPlaying) return;
-            bjHitBtn.disabled = true; // prevent double click
-            try {
-                const res = await fetch('/api/game/blackjack/hit', {
+                const res = await fetch('/api/avia/v1/session/end', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
                 });
-                const data = await res.json();
-                if(data.error) throw new Error(data.error);
-                
-                pHand.push(data.card);
-                renderHands();
-                GSM.update('blackjack', { pHand: pHand, dHand: dHand, deck: cDeck });
-                
-                if(data.bust) {
-                    endGame('Bust! You Lose', 'var(--red)');
-                } else {
-                    bjHitBtn.disabled = false;
+                const d = await res.json();
+                if (typeof d.balance === 'number' && d.balance >= 0) {
+                    _roBalance = d.balance;
+                    console.log('[Blackjack] ✅ Balance restored:', _roBalance);
+                    if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
                 }
-            } catch(e) {
-                console.error(e);
-                bjHitBtn.disabled = false;
             }
-        });
+        } catch(e) {
+            console.error('[Blackjack] Close error:', e);
+            if (typeof gameBalance === 'number' && gameBalance >= 0) {
+                _roBalance = gameBalance;
+                if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+            }
+        }
 
-        bjStandBtn.addEventListener('click', async () => {
-            if(!isPlaying) return;
-            bjHitBtn.disabled = true;
-            bjStandBtn.disabled = true;
-            
-            try {
-                const res = await fetch('/api/game/blackjack/stand', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: robloxUserId, sessionToken: window._sessionToken })
-                });
-                const data = await res.json();
-                if(data.error) throw new Error(data.error);
-                
-                // Server reveals dealer hand and final outcome
-                dHand = data.dHand || dHand;
-                
-                let msg = 'Push'; let color = 'var(--text-secondary)';
-                if(data.outcome === 'blackjack') { msg = 'Blackjack! You Win'; color = 'var(--gold)'; }
-                else if(data.outcome === 'win') { msg = 'You Win!'; color = 'var(--green)'; }
-                else if(data.outcome === 'lose') { msg = 'Dealer Wins'; color = 'var(--red)'; }
-                
-                // Render true final hands before ending
-                pCardsEl.innerHTML = pHand.map(c => renderCard(c)).join('');
-                pScoreEl.style.display = 'block';
-                pScoreEl.textContent = data.pScore;
-                dCardsEl.innerHTML = dHand.map(c => renderCard(c)).join('');
-                dScoreEl.style.display = 'block';
-                dScoreEl.textContent = data.dScore;
-                
-                endGame(msg, color);
-            } catch(e) {
-                console.error(e);
-                endGame('Error connecting to server', 'var(--red)');
-            }
-        });
-    }
+        // Kill iframe
+        const iframe = document.getElementById('bj-iframe');
+        if (iframe) iframe.src = 'about:blank';
+        window._aviaGameBalance = null;
+        hideAviaModal();
+    };
 
     // Mines Logic
     const minesPlayBtn = document.getElementById('mines-play-btn');
@@ -3000,8 +2861,8 @@ function updateBalanceDisplay() {
     const zhEl = document.getElementById('tb-balance-zh');
     const chip = document.querySelector('.balance-chip');
 
-    // If user is playing Avia Masters, show "(in play)" instead of balance
-    if (window._aviaInPlay) {
+    // If user is playing Avia Masters or Blackjack, show "(in play)" instead of balance
+    if (window._aviaInPlay || window._bjInPlay) {
         const inPlayText = '(in play)';
         if(tbEl) tbEl.textContent = inPlayText;
         if(homeEl) homeEl.textContent = inPlayText;
@@ -3109,8 +2970,7 @@ function awardWin(amount)  { /* server-authoritative — no client-side balance 
 const GSM = (() => {
     const KEYS = {
         mines:     'Nexrs_sess_mines',
-        towers:    'Nexrs_sess_towers',
-        blackjack: 'Nexrs_sess_blackjack'
+        towers:    'Nexrs_sess_towers'
     };
     return {
         save(game, data)   { try { localStorage.setItem(KEYS[game], JSON.stringify(data)); } catch(e) {} },
@@ -3217,14 +3077,7 @@ async function resumeGameSessions() {
         }
     }
 
-    // ---- BLACKJACK ----
-    const bjs = GSM.load('blackjack');
-    if (bjs && bjs.active && String(bjs.userId) === String(robloxUserId)) {
-        if (typeof window._bjRestore === 'function') {
-            window._bjRestore(bjs);
-            if (bjs.pHand && bjs.dHand) showGameToast('\uD83C\uDCCF Blackjack hand restored – keep playing!', 'var(--accent)');
-        }
-    }
+    // REMOVED: Blackjack GSM restore — replaced by BGaming version (session managed by avia system)
 }
 
 function getLiveFeedDisplayName() {

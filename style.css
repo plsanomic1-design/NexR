@@ -472,6 +472,7 @@ button,
 
 .view { display: none; animation: fadeInUp 0.3s cubic-bezier(0.4,0,0.2,1); }
 .view.active { display: block; }
+#view-blackjack.active { display: flex; }
 
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(12px); }

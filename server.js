@@ -1222,7 +1222,7 @@ async function liveFeedListSupabase(limit) {
 // ==== CUSTOM GAME MECHANICS (CUS) AND SERVER OUTCOMES ====
 const activeMinesGames = new Map();
 const activeTowersGames = new Map();
-const activeBlackjackGames = new Map();
+// REMOVED: activeBlackjackGames — replaced by BGaming Classic Multihand Blackjack (proxy bridge)
 const activeChickenGames = new Map();
 /** Case battles — entry fees, rolls, and payouts are server-side only */
 const caseBattles = new Map();
@@ -2041,6 +2041,46 @@ app.get('/proxy/retrotrader', async (req, res) => {
     }
 });
 
+/**
+ * CLASSIC MULTIHAND BLACKJACK PROXY BRIDGE
+ * Same pattern as Avia Masters — proxies official BGaming demo and injects bridge script.
+ */
+app.get('/proxy/blackjack', async (req, res) => {
+    const officialUrl = process.env.BLACKJACK_DEMO_URL || 'https://demo.bgaming-network.com/play/ClassicMultihandBlackjack/FUN?server=demo';
+    
+    try {
+        const response = await fetch(officialUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://bgaming.com/',
+                'Origin': 'https://bgaming.com'
+            }
+        });
+        let html = await response.text();
+        
+        // 1. Inject the bridge script
+        const bridgeScript = `<script src="/public/blackjack/bridge.js"></script>`;
+        html = html.replace('</head>', `${bridgeScript}</head>`);
+        
+        // 2. Fix relative paths to point to BGaming's CDN (except for our local public scripts)
+        const baseUrl = new URL(officialUrl).origin;
+        html = html.replace(/src="\/(?!public\/)(?!\/)/g, `src="${baseUrl}/`);
+        html = html.replace(/href="\/(?!public\/)(?!\/)/g, `href="${baseUrl}/`);
+        
+        // 3. Replace FUN currency in embedded JSON config / inline scripts
+        html = html.replace(/"currency"\s*:\s*"FUN"/gi, '"currency":"RBT"');
+        html = html.replace(/"currency_code"\s*:\s*"FUN"/gi, '"currency_code":"RBT"');
+        html = html.replace(/"code"\s*:\s*"FUN"/gi, '"code":"RBT"');
+        html = html.replace(/"symbol"\s*:\s*"FUN"/gi, '"symbol":"R$"');
+        html = html.replace(/"currency_symbol"\s*:\s*"FUN"/gi, '"currency_symbol":"R$"');
+        
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    } catch (e) {
+        res.status(500).send('Proxy Error: Could not reach official game servers.');
+    }
+});
+
 // REMOVED: /api/game/record-result was a public endpoint that allowed console manipulation of game outcomes.
 
 app.post('/api/game/towers/start', express.json(), async (req, res) => {
@@ -2399,274 +2439,8 @@ app.post('/api/game/chicken/restore', express.json(), (req, res) => {
     res.json({ ok: false, restored: false, error: 'Session restoration disabled' });
 });
 
-/** Blackjack hand total (aces count 11 then downgrade while busting). Mirrors client getScore. */
-function bjHandScore(hand) {
-    if (!Array.isArray(hand)) return 0;
-    let score = 0;
-    let aces = 0;
-    for (const card of hand) {
-        if (!card || typeof card.score !== 'number') continue;
-        score += card.score;
-        if (card.value === 'A') aces++;
-    }
-    while (score > 21 && aces > 0) {
-        score -= 10;
-        aces--;
-    }
-    return score;
-}
-
-/** Build a standard 52-card deck and shuffle it server-side (Fisher-Yates). */
-function buildServerDeck() {
-    const suits = [
-        { letter: 'S', isRed: false }, { letter: 'C', isRed: false },
-        { letter: 'H', isRed: true  }, { letter: 'D', isRed: true  }
-    ];
-    const faces = [
-        { value: 'A', score: 11 }, { value: '2', score: 2  }, { value: '3', score: 3  },
-        { value: '4', score: 4  }, { value: '5', score: 5  }, { value: '6', score: 6  },
-        { value: '7', score: 7  }, { value: '8', score: 8  }, { value: '9', score: 9  },
-        { value: '10', score: 10 }, { value: 'J', score: 10 }, { value: 'Q', score: 10 },
-        { value: 'K', score: 10 }
-    ];
-    const deck = [];
-    for (const s of suits) {
-        for (const f of faces) {
-            deck.push({ suitLetter: s.letter, isRed: s.isRed, value: f.value, score: f.score });
-        }
-    }
-    // Fisher-Yates shuffle
-    for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
-    return deck;
-}
-
-app.post('/api/game/blackjack/start', express.json(), async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    // SECURITY: Deck is generated SERVER-SIDE â€” client deck is ignored entirely.
-    const { userId, bet, sessionToken } = req.body;
-    if (!validateSessionToken(userId, sessionToken)) {
-        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
-    }
-    await withUserLock(userId, async () => {
-        const betVal = num(bet, 0);
-        if (betVal > 0 && supabaseEnabled()) {
-            const deduct = await deductUserBet(userId, betVal);
-            if (!deduct.ok) return res.status(400).json({ error: deduct.error });
-            emitBalanceRemoteSync(io, parseRobloxNumericId(userId), { balance: deduct.newBalance, stats: {} });
-        }
-        let forceLoss = getCusState(userId).check();
-        let forceWin = getCusState(userId).checkWin();
-
-        // Build and shuffle deck on the server
-        const deck = buildServerDeck();
-
-        let pHand = [deck.pop(), deck.pop()];
-        let dHand = [deck.pop(), deck.pop()];
-        
-        if (forceWin) {
-            pHand = [
-                {suitLetter: 'S', value: 'A', score: 11, isRed: false},
-                {suitLetter: 'H', value: 'K', score: 10, isRed: true}
-            ];
-        } else if (forceLoss) {
-            dHand = [
-                {suitLetter: 'S', value: 'A', score: 11, isRed: false},
-                {suitLetter: 'H', value: 'K', score: 10, isRed: true}
-            ];
-            let pScore = 0, aces = 0;
-            for(let c of pHand) { pScore += c.score; if(c.value==='A') aces++; }
-            while(pScore>21 && aces>0) { pScore-=10; aces--; }
-            if (pScore === 21) pHand[0] = {suitLetter: 'C', value: '5', score: 5, isRed: false};
-        }
-        // Check for natural blackjack immediately on deal
-        const pScoreInit = bjHandScore(pHand);
-        const dScoreInit = bjHandScore(dHand);
-        const pNaturalInit = pHand.length === 2 && pScoreInit === 21;
-        const dNaturalInit = dHand.length === 2 && dScoreInit === 21;
-
-        if (pNaturalInit) {
-            // Natural blackjack — resolve immediately, no further action needed from client
-            if (betVal > 0 && supabaseEnabled()) {
-                if (dNaturalInit) {
-                    // Both have blackjack — push, return bet
-                    const r = await creditUserWin(userId, betVal);
-                    return res.json({ deck, pHand, dHand, naturalBlackjack: true, dNatural: true, outcome: 'push', newBalance: r.newBalance });
-                } else {
-                    const r = await creditUserWin(userId, 2.5 * betVal);
-                    getCusState(userId).recordWin(true);
-                    return res.json({ deck, pHand, dHand, naturalBlackjack: true, dNatural: false, outcome: 'blackjack', newBalance: r.newBalance });
-                }
-            }
-            // Supabase disabled — just signal the client
-            return res.json({ deck, pHand, dHand, naturalBlackjack: true, dNatural: dNaturalInit, outcome: dNaturalInit ? 'push' : 'blackjack' });
-        }
-
-        // Store FULL hand + deck state so server can authoritatively compute outcomes
-        activeBlackjackGames.set(String(userId), {
-            bet: betVal,
-            pHand: [...pHand],
-            dHand: [...dHand],
-            deck: [...deck],
-            forceLoss,
-            forceWin
-        });
-        res.json({ deck, pHand, dHand });
-    });
-});
-
-app.post('/api/game/blackjack/hit', express.json(), async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, sessionToken } = req.body || {};
-    if (!validateSessionToken(userId, sessionToken)) {
-        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
-    }
-    await withUserLock(userId, async () => {
-        const g = activeBlackjackGames.get(String(userId));
-        if (!g) return res.status(400).json({ error: 'No active game' });
-        if (!Array.isArray(g.deck) || g.deck.length === 0) {
-            return res.status(400).json({ error: 'Deck empty' });
-        }
-        const card = g.deck.pop();
-        g.pHand.push(card);
-        const pScore = bjHandScore(g.pHand);
-        if (pScore > 21) {
-            activeBlackjackGames.delete(String(userId));
-            if (g.bet > 0 && supabaseEnabled()) {
-                await creditUserWin(userId, 0);
-            }
-            getCusState(userId).recordLoss();
-            return res.json({ card, bust: true, pScore });
-        }
-        return res.json({ card, bust: false, pScore });
-    });
-});
-
-app.post('/api/game/blackjack/stand', express.json(), async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, sessionToken } = req.body || {};
-    if (!validateSessionToken(userId, sessionToken)) {
-        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
-    }
-    await withUserLock(userId, async () => {
-        const g = activeBlackjackGames.get(String(userId));
-        if (!g) return res.status(400).json({ error: 'No active game' });
-        const bet = num(g.bet, 0);
-
-        while (bjHandScore(g.dHand) < 17 && g.deck.length > 0) {
-            g.dHand.push(g.deck.pop());
-        }
-
-        const pScore = bjHandScore(g.pHand);
-        const dScore = bjHandScore(g.dHand);
-        const pNatural = g.pHand.length === 2 && pScore === 21;
-        const dNatural = g.dHand.length === 2 && dScore === 21;
-
-        let outcome = 'push';
-        if (dScore > 21) {
-            outcome = 'win';
-        } else if (pNatural && dNatural) {
-            outcome = 'push';
-        } else if (pNatural) {
-            outcome = 'blackjack';
-        } else if (dNatural) {
-            outcome = 'lose';
-        } else if (pScore > dScore) {
-            outcome = 'win';
-        } else if (pScore < dScore) {
-            outcome = 'lose';
-        } else {
-            outcome = 'push';
-        }
-
-        activeBlackjackGames.delete(String(userId));
-
-        if (bet > 0 && supabaseEnabled()) {
-            if (outcome === 'blackjack') {
-                const r = await creditUserWin(userId, 2.5 * bet);
-                getCusState(userId).recordWin(true);
-                return res.json({
-                    outcome,
-                    dHand: g.dHand,
-                    pScore,
-                    dScore,
-                    newBalance: r.newBalance
-                });
-            }
-            if (outcome === 'win') {
-                const r = await creditUserWin(userId, 2 * bet);
-                getCusState(userId).recordWin(false);
-                return res.json({
-                    outcome,
-                    dHand: g.dHand,
-                    pScore,
-                    dScore,
-                    newBalance: r.newBalance
-                });
-            }
-            if (outcome === 'push') {
-                const r = await creditUserWin(userId, bet);
-                return res.json({
-                    outcome,
-                    dHand: g.dHand,
-                    pScore,
-                    dScore,
-                    newBalance: r.newBalance
-                });
-            }
-            const r = await creditUserWin(userId, 0);
-            getCusState(userId).recordLoss();
-            return res.json({
-                outcome,
-                dHand: g.dHand,
-                pScore,
-                dScore,
-                newBalance: r.newBalance
-            });
-        }
-
-        if (outcome === 'lose') getCusState(userId).recordLoss();
-        else if (outcome === 'blackjack') getCusState(userId).recordWin(true);
-        else if (outcome === 'win') getCusState(userId).recordWin(false);
-        res.json({ outcome, dHand: g.dHand, pScore, dScore });
-    });
-});
-
-app.post('/api/game/blackjack/result', express.json(), async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    const { userId, outcome, sessionToken } = req.body || {};
-    if (!validateSessionToken(userId, sessionToken)) {
-        return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
-    }
-    if (String(outcome) !== 'blackjack') {
-        return res.status(400).json({ error: 'invalid outcome' });
-    }
-    await withUserLock(userId, async () => {
-        const g = activeBlackjackGames.get(String(userId));
-        if (!g) return res.status(400).json({ error: 'No active game' });
-        const pScore = bjHandScore(g.pHand);
-        if (g.pHand.length !== 2 || pScore !== 21) {
-            return res.status(400).json({ error: 'Not a natural blackjack' });
-        }
-        const dScore = bjHandScore(g.dHand);
-        const dNatural = g.dHand.length === 2 && dScore === 21;
-        const bet = num(g.bet, 0);
-        activeBlackjackGames.delete(String(userId));
-
-        if (bet > 0 && supabaseEnabled()) {
-            if (dNatural) {
-                await creditUserWin(userId, bet);
-                return res.json({ ok: true, outcome: 'push' });
-            }
-            await creditUserWin(userId, 2.5 * bet);
-            getCusState(userId).recordWin(true);
-            return res.json({ ok: true, outcome: 'blackjack' });
-        }
-        res.json({ ok: true, outcome: dNatural ? 'push' : 'blackjack' });
-    });
-});
+// REMOVED: Old custom blackjack server routes (/api/game/blackjack/start, /hit, /stand, /result)
+// Replaced by BGaming Classic Multihand Blackjack via /proxy/blackjack + bridge.js
 
 app.options('/api/live-feed', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');

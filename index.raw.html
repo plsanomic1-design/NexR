@@ -1342,68 +1342,29 @@
                 </section>
             </div>
             <div id="view-blackjack" class="view">
-                <div class="game-layout">
-                    <!-- Betting Panel -->
-                    <div class="bet-panel">
-                        <div class="bet-tabs">
-                            <button class="bet-tab active">Manual</button>
-                        </div>
-                        
-                        <div class="input-group">
-                            <label>Bet amount</label>
-                            <div class="input-wrapper">
-                                <span class="input-icon currency-input-mark" aria-hidden="true">RoBet</span>
-                                <input type="number" id="bj-bet-input" value="25" min="1">
-                                <div class="input-actions">
-                                    <button onclick="halfBetInput('bj-bet-input')">1/2</button>
-                                    <button onclick="doubleBetInput('bj-bet-input')">2x</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="bj-actions">
-                            <button class="bj-action-btn" id="bj-hit-btn" disabled>Hit <i class="fa-solid fa-hand-pointer"></i></button>
-                            <button class="bj-action-btn" id="bj-stand-btn" disabled>Stand <i class="fa-solid fa-hand"></i></button>
-                            <button class="bj-action-btn" id="bj-double-btn" disabled>Double <i class="fa-solid fa-check-double"></i></button>
-                            <button class="bj-action-btn" id="bj-split-btn" disabled>Split <i class="fa-solid fa-arrows-split-up-and-left"></i></button>
-                        </div>
-                        
-                        <div style="margin-top:20px; display:flex; align-items:center; gap:10px;">
-                            <label class="switch">
-                                <input type="checkbox">
-                                <span class="slider round"></span>
-                            </label>
-                            <span style="font-size:12px; color:var(--text-secondary);">Basic Strategy Hints <i class="fa-solid fa-info-circle"></i></span>
-                        </div>
-
-                        <button class="btn-primary" id="bj-play-btn" style="width:100%; margin-top: auto; padding: 15px;">Place bet</button>
+                <!-- BGaming Classic Multihand Blackjack — iframe container -->
+                <div id="bj-game-wrapper" style="width:100%;height:calc(100vh - 100px);display:flex;flex-direction:column;gap:10px;">
+                    <!-- Back button -->
+                    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+                        <button onclick="window._closeBjGame()" style="
+                            display:flex;align-items:center;gap:8px;
+                            background:rgba(255,255,255,0.07);
+                            border:1px solid rgba(255,255,255,0.12);
+                            color:#fff;font-size:13px;font-weight:600;
+                            padding:8px 16px;border-radius:8px;cursor:pointer;
+                            transition:background 0.15s;
+                        "
+                        onmouseenter="this.style.background='rgba(255,255,255,0.12)'"
+                        onmouseleave="this.style.background='rgba(255,255,255,0.07)'"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                            Back
+                        </button>
+                        <span style="color:rgba(255,255,255,0.45);font-size:13px;">Classic Multihand Blackjack</span>
                     </div>
-                    
-                    <!-- Game Area -->
-                    <div class="game-area bj-area">
-                        <button class="keno-fairness-btn" onclick="openFairnessModal('blackjack')" style="position: absolute; top: 16px; right: 20px; margin: 0; z-index: 10;"><i class="fa-solid fa-shield-check"></i> Provably Fair</button>
-                        <div class="bj-table">
-                            <div class="bj-center-text">
-                                <div class="bj-pays">BLACKJACK PAYS 3 TO 2</div>
-                                <div class="bj-ins">INSURANCE PAYS 2 TO 1</div>
-                            </div>
-                            
-                            <div class="dealer-area">
-                                <div class="hand-score" id="bj-dealer-score" style="display:none;">0</div>
-                                <div class="cards-container" id="bj-dealer-cards">
-                                    <!-- Cards go here -->
-                                </div>
-                            </div>
-                            
-                            <div class="player-area">
-                                <div class="cards-container" id="bj-player-cards">
-                                    <!-- Cards go here -->
-                                </div>
-                                <div class="hand-score" id="bj-player-score" style="display:none;">0</div>
-                            </div>
-
-                            <div class="bj-message" id="bj-message" style="display:none;"></div>
-                        </div>
+                    <!-- Game iframe — flex:1 fills remaining height -->
+                    <div style="flex:1;min-height:0;background:rgba(0,0,0,0.3);border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
+                        <iframe id="bj-iframe" allow="autoplay" style="width:100%;height:100%;border:none;display:block;"></iframe>
                     </div>
                 </div>
             </div>
