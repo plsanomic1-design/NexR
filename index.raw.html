@@ -23,7 +23,7 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&family=DM+Sans:wght@700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css?v=12">
+    <link rel="stylesheet" href="/assets/ui-7f3a.css">
     <script src="sounds.js"></script>
 </head>
 <body class="chat-hidden">
@@ -37,61 +37,74 @@
     <div class="app-shell">
     <div class="sidebar">
         <div class="sidebar-logo" onclick="document.querySelector('[data-view=home]').click()" title="Home">
-            <div class="logo-icon">
-                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <text
-                        x="18" y="18"
-                        font-family="Georgia, serif"
-                        font-size="28"
-                        font-weight="700"
-                        text-anchor="middle"
-                        dominant-baseline="central"
-                        fill="none"
-                        stroke="#1D9E75"
-                        stroke-width="1.4"
-                    >R</text>
-                </svg>
+            <div class="logo-lockup">
+                <div class="logo-icon logo-icon--below">
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <text
+                            x="18" y="18"
+                            font-family="Georgia, serif"
+                            font-size="28"
+                            font-weight="700"
+                            text-anchor="middle"
+                            dominant-baseline="central"
+                            fill="none"
+                            stroke="#1D9E75"
+                            stroke-width="1.4"
+                        >R</text>
+                    </svg>
+                </div>
+                <div class="logo-text">Ro <span>Bet</span></div>
             </div>
-            <div class="logo-text">Ro <span>Bet</span></div>
         </div>
 
         <div class="nav-links">
-            <a href="#" class="nav-item" data-view="avia" title="Avia Masters">
-                <i class="fa-solid fa-circle-dollar-to-slot"></i><span>Slots</span>
-            </a>
             <a href="#" class="nav-item" data-view="home" title="Home">
                 <i class="fa-solid fa-house"></i><span>Home</span>
             </a>
-            <a href="#" class="nav-item" data-view="crash" title="Crash">
-                <i class="fa-solid fa-rocket"></i><span>Crash</span>
-            </a>
-            <a href="#" class="nav-item" data-view="blackjack" title="Blackjack">
-                <i class="fa-solid fa-layer-group"></i><span>Blackjack</span>
-            </a>
-            <a href="#" class="nav-item" data-view="dice" title="Dice">
-                <i class="fa-solid fa-dice"></i><span>Dice</span>
-            </a>
-            <a href="#" class="nav-item" data-view="keno" title="Keno">
-                <i class="fa-solid fa-hashtag"></i><span>Keno</span>
-            </a>
-            <a href="#" class="nav-item" data-view="mines" title="Mines">
-                <i class="fa-solid fa-gem"></i><span>Mines</span>
-            </a>
-            <a href="#" class="nav-item" data-view="towers" title="Towers">
-                <i class="fa-brands fa-fort-awesome"></i><span>Towers</span>
-            </a>
-            <a href="#" class="nav-item" data-view="chicken" title="Chicken Cross">
-                <i class="fa-solid fa-road"></i><span>Chicken</span>
-            </a>
-            <a href="#" class="nav-item" data-view="plinko" title="Plinko">
-                <i class="fa-solid fa-sitemap"></i><span>Plinko</span>
-            </a>
-
-            <a href="#" class="nav-item" data-view="coinflip" title="Coinflip">
-                <i class="fa-solid fa-coins"></i><span>Coinflip</span>
-            </a>
-            <a href="#" class="nav-item" data-view="casebattles" title="Cases" id="nav-casebattles">
-                <i class="fa-solid fa-box"></i><span>Cases</span>
+            <div class="nav-group" data-nav-group="originals">
+                <button type="button" class="nav-item nav-group-toggle" data-group-toggle="originals" aria-expanded="false" title="Originals">
+                    <span class="nav-item__main">
+                        <i class="fa-solid fa-dice-five"></i><span>Originals</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-down nav-item__chevron" aria-hidden="true"></i>
+                </button>
+                <div class="nav-submenu" id="nav-submenu-originals">
+                    <div class="nav-submenu-inner">
+                        <a href="#" class="nav-item nav-subitem" data-view="crash" title="Crash">
+                            <i class="fa-solid fa-rocket"></i><span>Crash</span>
+                        </a>
+                        <a href="#" class="nav-item nav-subitem" data-view="dice" title="Dice">
+                            <i class="fa-solid fa-dice"></i><span>Dice</span>
+                        </a>
+                        <a href="#" class="nav-item nav-subitem" data-view="keno" title="Keno">
+                            <i class="fa-solid fa-hashtag"></i><span>Keno</span>
+                        </a>
+                        <a href="#" class="nav-item nav-subitem" data-view="mines" title="Mines">
+                            <i class="fa-solid fa-gem"></i><span>Mines</span>
+                        </a>
+                        <a href="#" class="nav-item nav-subitem" data-view="towers" title="Towers">
+                            <i class="fa-brands fa-fort-awesome"></i><span>Towers</span>
+                        </a>
+                        <a href="#" class="nav-item nav-subitem" data-view="chicken" title="Chicken Cross">
+                            <i class="fa-solid fa-road"></i><span>Chicken</span>
+                        </a>
+                        <a href="#" class="nav-item nav-subitem" data-view="plinko" title="Plinko">
+                            <i class="fa-solid fa-sitemap"></i><span>Plinko</span>
+                        </a>
+                        <a href="#" class="nav-item nav-subitem" data-view="coinflip" title="Coinflip">
+                            <i class="fa-solid fa-coins"></i><span>Coinflip</span>
+                        </a>
+                        <a href="#" class="nav-item nav-subitem" data-view="blackjack" title="Blackjack">
+                            <i class="fa-solid fa-layer-group"></i><span>Blackjack</span>
+                        </a>
+                        <a href="#" class="nav-item nav-subitem" data-view="casebattles" title="Cases" id="nav-casebattles">
+                            <i class="fa-solid fa-box"></i><span>Cases</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <a href="#" class="nav-item" data-view="avia" title="Avia Masters">
+                <i class="fa-solid fa-circle-dollar-to-slot"></i><span>Slots</span>
             </a>
             <a href="#" class="nav-item" data-view="rooms" title="Voice Chat">
                 <i class="fa-solid fa-microphone-lines"></i><span>Voice Chat</span>
@@ -2178,7 +2191,7 @@
     </div> <!-- /.main-wrapper -->
     </div> <!-- /.app-shell -->
 
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="/vendor/socket.io.min.js"></script>
     <script src="script.js"></script>
     <script src="voice.js"></script>
 
@@ -2632,8 +2645,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-

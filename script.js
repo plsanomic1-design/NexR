@@ -1,7 +1,24 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const navItems = document.querySelectorAll('.nav-item');
+    const navItems = document.querySelectorAll('.nav-item[data-view]');
     const views = document.querySelectorAll('.view');
     const topNavLinks = document.querySelectorAll('.top-nav-links a[data-view]');
+    const originalsGroup = document.querySelector('[data-nav-group="originals"]');
+    const originalsToggle = document.querySelector('[data-group-toggle="originals"]');
+    const ORIGINALS_VIEWS = new Set(['crash', 'dice', 'keno', 'mines', 'towers', 'chicken', 'plinko', 'coinflip', 'blackjack', 'casebattles']);
+
+    function setNavGroupOpen(groupEl, open) {
+        if (!groupEl) return;
+        groupEl.classList.toggle('open', open);
+        const toggle = groupEl.querySelector('[data-group-toggle]');
+        if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    function syncSidebarGroups(activeView) {
+        if (!originalsGroup) return;
+        const isOriginalsView = ORIGINALS_VIEWS.has(activeView);
+        originalsGroup.classList.toggle('active', isOriginalsView);
+        if (isOriginalsView) setNavGroupOpen(originalsGroup, true);
+    }
 
     // Extract default view from hash or use home
     let defaultView = window.location.hash.replace('#', '') || 'home';
@@ -144,6 +161,8 @@ document.addEventListener('DOMContentLoaded', () => {
             else view.classList.remove('active');
         });
 
+        syncSidebarGroups(viewName);
+
         if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
 
         if (typeof performActiveGamepassScan === 'function') {
@@ -243,6 +262,13 @@ document.addEventListener('DOMContentLoaded', () => {
             switchView(item.dataset.view);
         });
     });
+
+    if (originalsToggle && originalsGroup) {
+        originalsToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            setNavGroupOpen(originalsGroup, !originalsGroup.classList.contains('open'));
+        });
+    }
 
     topNavLinks.forEach(item => {
         item.addEventListener('click', (e) => {

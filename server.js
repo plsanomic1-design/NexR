@@ -6075,6 +6075,7 @@ app.post('/api/battles/:battleId/callbot', express.json(), async (req, res) => {
 });
 
 const obfCache = {};
+const vendorCache = {};
 function getObfuscated(filename) {
     if (!obfCache[filename]) {
         try {
@@ -6100,11 +6101,47 @@ function getObfuscated(filename) {
     return obfCache[filename];
 }
 
+function getMinifiedCss() {
+    if (!obfCache['style.css']) {
+        try {
+            let raw = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+            obfCache['style.css'] = raw.replace(/\/\*[\s\S]*?\*\//g, '');
+        } catch (e) {
+            console.error('Error minifying CSS', e);
+            return '';
+        }
+    }
+    return obfCache['style.css'];
+}
+
+function getVendorClientAsset(filename) {
+    if (!vendorCache[filename]) {
+        try {
+            const assetPath = path.join(ROOT, 'node_modules', 'socket.io', 'client-dist', filename);
+            let raw = fs.readFileSync(assetPath, 'utf8');
+            // Strip sourcemap hints so DevTools does not reconstruct package internals.
+            raw = raw.replace(/\/\/# sourceMappingURL=.*$/gm, '').trim();
+            vendorCache[filename] = raw;
+        } catch (e) {
+            console.error('Error loading vendor asset ' + filename, e);
+            return '';
+        }
+    }
+    return vendorCache[filename];
+}
+
 app.get(['/', '/index.html'], (req, res) => {
     try {
         if (!obfCache['index.html']) {
             let htmlCtx = fs.readFileSync(path.join(ROOT, 'index.raw.html'), 'utf8');
             htmlCtx = htmlCtx.replace(/<!--[\s\S]*?-->/g, '');
+            const inlineCss = getMinifiedCss();
+            if (inlineCss) {
+                htmlCtx = htmlCtx.replace(
+                    /<link rel="stylesheet" href="\/assets\/ui-7f3a\.css">\s*/i,
+                    `<style>${inlineCss}</style>`
+                );
+            }
             
             const b64 = Buffer.from(htmlCtx, 'utf8').toString('base64');
             const chunkSz = 200;
@@ -6164,18 +6201,16 @@ app.get('/voice.js', (req, res) => {
     res.send(getObfuscated('voice.js'));
 });
 
-app.get('/style.css', (req, res) => {
+app.get(['/style.css', '/assets/ui-7f3a.css'], (req, res) => {
     res.setHeader('Content-Type', 'text/css');
-    if (!obfCache['style.css']) {
-        try {
-            let raw = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
-            obfCache['style.css'] = raw.replace(/\/\*[\s\S]*?\*\//g, '');
-        } catch (e) {
-            console.error('Error minifying CSS', e);
-            return res.send('');
-        }
-    }
-    res.send(obfCache['style.css']);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(getMinifiedCss());
+});
+
+app.get('/vendor/socket.io.min.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(getVendorClientAsset('socket.io.min.js'));
 });
 
 // SECURITY FIX: Block access to sensitive files before serving static assets.
@@ -6202,6 +6237,7 @@ const BLOCKED_STATIC_PATTERNS = [
     /^\/noblox_index\.txt$/i,
     /^\/nx_api\.txt$/i,
     /^\/test_gp\./i,
+    /^\/.*\.map$/i,
     /^\/index\.raw\.html$/i,
     /^\/chat\.js$/i
 ];
@@ -6256,5 +6292,3 @@ hydrateCaseItemThumbnails()
             }
         });
     });
-
-
