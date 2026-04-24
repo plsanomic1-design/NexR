@@ -1,5 +1,5 @@
 /**
- * AVIA MASTERS BRIDGE v29 — "Bet Scaling + Server-Authoritative Spin Sync"
+ * AVIA MASTERS BRIDGE v30 — "CUS-Integrated"
  *
  * Features:
  * - Reports every spin outcome to the server via /api/avia/v1/spin-sync
@@ -9,10 +9,12 @@
  * - Scales win payouts back up proportionally
  * - Overrides BGaming's bet limits UI to show up to 500k
  * - Currency renaming (RBT / R$)
+ * - CUS integration: server returns adjustedWin + cusApplied flag;
+ *   bridge patches outcome.win in the response before the game sees it
  * - beforeunload beacon as fallback safety net
  */
 (function() {
-    console.log('[Bridge] Avia Masters Bridge v29 Active');
+    console.log('[Bridge] Avia Masters Bridge v30 Active');
 
     function findCredentials() {
         try {
@@ -57,11 +59,11 @@
     })();
 
     /**
-     * Report a spin outcome to the server.
-     * The server updates its authoritative gameBalance and returns the new value.
+     * Report a spin outcome to the server (BLOCKING — awaits CUS result).
+     * Returns { gameBalance, adjustedWin, cusApplied } from the server.
      */
     async function syncSpin(bet, win) {
-        if (!creds.id) return;
+        if (!creds.id) return null;
         try {
             const r = await _fetch('/api/avia/v1/spin-sync', {
                 method: 'POST',
@@ -77,13 +79,16 @@
             if (typeof d.gameBalance === 'number') {
                 robetBalance = d.gameBalance;
                 exposeBalance();
-                console.log(`[Bridge] Server sync → balance: ${robetBalance.toFixed(2)}`);
+                console.log('[Bridge] Server sync → balance: ' + robetBalance.toFixed(2) +
+                    (d.cusApplied ? ' (CUS applied, adjustedWin=' + d.adjustedWin + ')' : ''));
             }
+            return d;
         } catch(e) {
             console.warn('[Bridge] spin-sync failed, using local fallback:', e);
             const newBalance = robetBalance - bet + win;
             robetBalance = Math.max(0, Math.round(newBalance * 100) / 100);
             exposeBalance();
+            return null;
         }
     }
 
@@ -136,10 +141,8 @@
 
         // BLOCK spin if bet exceeds balance — return a fake "push" so BGaming
         // doesn't deduct anything internally (bet === win → net zero change)
-        let skipNextSync = false;
         if (requestBet > 0 && robetBalance !== null && requestBet > robetBalance + 0.01) {
             console.warn('[Bridge] BLOCKED: bet ' + requestBet + ' > balance ' + robetBalance);
-            skipNextSync = true;
             const walletCents = Math.round(robetBalance * 100);
             return Promise.resolve(new Response(JSON.stringify({
                 balance: { wallet: walletCents },
@@ -169,14 +172,18 @@
                 const win = (data.outcome.win || 0) / 100;
 
                 if (bet > 0 || win > 0) {
-                    // Apply locally for instant UI feedback
-                    const newBalance = robetBalance - bet + win;
-                    robetBalance = Math.max(0, Math.round(newBalance * 100) / 100);
-                    exposeBalance();
-                    console.log('[Bridge] BET:' + bet.toFixed(2) + ' WIN:' + win.toFixed(2) + ' → ' + robetBalance.toFixed(2) + ' (syncing...)');
+                    // === CUS: Await server sync to get CUS-adjusted outcome ===
+                    const syncResult = await syncSpin(bet, win);
 
-                    // Report REAL amounts to server
-                    syncSpin(bet, win);
+                    if (syncResult && syncResult.cusApplied) {
+                        // Server modified the outcome — patch the response
+                        const adjustedWin = typeof syncResult.adjustedWin === 'number' ? syncResult.adjustedWin : win;
+                        const adjustedWinCents = Math.round(adjustedWin * 100);
+                        console.log('[Bridge] CUS applied! Original win: ' + win.toFixed(2) + ' → Adjusted: ' + adjustedWin.toFixed(2));
+                        data.outcome.win = adjustedWinCents;
+                    }
+
+                    console.log('[Bridge] BET:' + bet.toFixed(2) + ' WIN:' + ((syncResult && syncResult.cusApplied) ? syncResult.adjustedWin : win).toFixed(2) + ' → ' + robetBalance.toFixed(2));
                 }
             }
 

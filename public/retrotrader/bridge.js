@@ -1,20 +1,13 @@
 /**
- * RETRO TRADER BRIDGE v6 — "Production-Ready"
+ * RETRO TRADER BRIDGE v8 — "CUS-Integrated (Sync-Safe)"
  *
- * ActionCable message structure (discovered via debug):
- *   data[0] = Round status {alive, status, waiting_started_at, ...}
- *   data[1] = Player bets []
- *   data[2] = Other players []
- *   data[3] = History [{crashpoint, finished_at, round}, ...]
- *   data[4] = Config {currencies, currency, default_bet, line_bets, max_bet, min_bet}
- *   data[5] = BALANCE {value: <cents>}  ← THIS IS THE BALANCE
- *   data[6] = Chart {current_step, points}
- *
- * Bet confirmation: data[0].changes.bet_cents
- * Win result: data[0].changes[0].win_cents (or data[0].changes.win_cents)
+ * CUS: Single spin-sync per round with both bet+win. Server applies CUS
+ * and returns adjustedWin. Balance is always injected from server's
+ * authoritative value — self-corrects on every message.
+ * Messages are delivered SYNCHRONOUSLY to avoid breaking game state.
  */
 (function() {
-    console.log('[Bridge] Retro Trader Bridge v6 Active');
+    console.log('[Bridge] Retro Trader Bridge v8 Active');
 
     function findCredentials() {
         try {
@@ -49,31 +42,34 @@
         } catch(e) { console.error('[Bridge] Init error:', e); }
     })();
 
-    async function syncSpin(bet, win) {
+    // CUS: track pending bet for combined sync
+    let _pendingBetRBT = 0;
+
+    /**
+     * Sync a complete round (bet + win) to the server (fire-and-forget).
+     * Server applies CUS and returns adjustedWin + gameBalance.
+     * Balance self-corrects via injection on next message.
+     */
+    function syncRound(bet, win) {
         if (!creds.id) return;
-        try {
-            const r = await _fetch('/api/avia/v1/spin-sync', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: creds.id, sessionToken: creds.token, bet, win })
-            });
-            const d = await r.json();
+        _fetch('/api/avia/v1/spin-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: creds.id, sessionToken: creds.token, bet, win })
+        }).then(function(r) { return r.json(); }).then(function(d) {
             if (typeof d.gameBalance === 'number') {
                 robetBalance = d.gameBalance;
                 exposeBalance();
+                console.log('[Bridge] Server sync → balance: ' + robetBalance.toFixed(2) +
+                    (d.cusApplied ? ' (CUS: adjustedWin=' + d.adjustedWin + ')' : ''));
             }
-        } catch(e) {
-            const nb = robetBalance - bet + win;
-            robetBalance = Math.max(0, Math.round(nb * 100) / 100);
-            exposeBalance();
-        }
+        }).catch(function(e) {
+            console.warn('[Bridge] spin-sync failed:', e);
+        });
     }
 
     function replaceFunInString(str) {
-        return str
-            .replace(/"FUN"/g, '"RBT"')
-            .replace(/"fun"/g, '"RBT"')
-            .replace(/\bFUN\b/g, 'RBT');
+        return str.replace(/"FUN"/g, '"RBT"').replace(/"fun"/g, '"RBT"').replace(/\bFUN\b/g, 'RBT');
     }
 
     function deepReplaceFun(obj) {
@@ -91,25 +87,15 @@
         }
     }
 
-    // BGaming's demo max bet in cents (10,000 RBT = 1,000,000 cents)
-    const BGAMING_MAX_BET_CENTS = 1000000;
-    // Custom bet limits (in cents) — up to 500k RBT
+    // BGaming's ACTUAL demo max bet for Retro Trader (1,000 RBT = 100,000 cents)
+    const BGAMING_MAX_BET_CENTS = 100000;
     const CUSTOM_LINE_BETS = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 250000, 500000, 1000000, 2500000, 5000000, 10000000, 25000000, 50000000];
-    let _activeScaleFactor = 1; // tracks current bet's scale factor for win scaling
+    let _activeScaleFactor = 1;
 
-    /**
-     * Process an incoming ActionCable message:
-     * - Replace FUN → RBT
-     * - Inject our balance into data[n].changes.value
-     * - Track bet/win for spin-sync
-     * Uses content-based dedup: first handler to process a message tracks
-     * financials, second handler seeing the same content skips.
-     */
     let _lastTrackedMsg = '';
     let _lastTrackedTime = 0;
 
     function processMessage(dataStr) {
-        // Dedup: if this exact message was already tracked within 50ms, skip financials
         const now = Date.now();
         const shouldTrack = (dataStr !== _lastTrackedMsg || now - _lastTrackedTime > 50);
         if (shouldTrack) {
@@ -123,65 +109,63 @@
             const parsed = JSON.parse(modified);
             deepReplaceFun(parsed);
 
-            // Process ActionCable game channel messages
             if (parsed.message && parsed.message.data && Array.isArray(parsed.message.data)) {
                 const msgData = parsed.message.data;
 
                 for (let i = 0; i < msgData.length; i++) {
                     const item = msgData[i];
                     if (!item || !item.changes) continue;
-
                     const changes = item.changes;
 
-                    // === HANDLE OBJECT changes (balance, bet_cents, config, etc.) ===
                     if (typeof changes === 'object' && !Array.isArray(changes)) {
-                        // Balance slot: {value: <cents>}
+                        // Balance injection
                         const keys = Object.keys(changes);
                         if (keys.includes('value') && typeof changes.value === 'number' && robetBalance !== null) {
                             const balCents = Math.round(robetBalance * 100);
-                            console.log(`[Bridge] 💰 Balance: ${changes.value} → ${balCents} (${robetBalance.toFixed(2)} RBT)`);
+                            console.log('[Bridge] \u{1F4B0} Balance: ' + changes.value + ' \u2192 ' + balCents + ' (' + robetBalance.toFixed(2) + ' RBT)');
                             changes.value = balCents;
                         }
 
-                        // Override bet limits (config slot — has line_bets, max_bet, etc.)
+                        // Bet limit overrides
                         if (changes.line_bets || changes.max_bet) {
                             changes.line_bets = CUSTOM_LINE_BETS;
-                            changes.max_bet = 50000000; // 500k RBT in cents
-                            changes.min_bet = 1000;     // 10 RBT in cents
-                            changes.default_bet = 10000; // 100 RBT in cents
+                            changes.max_bet = 50000000;
+                            changes.min_bet = 1000;
+                            changes.default_bet = 10000;
                             if (changes.casino_freespin_total_bets) {
                                 changes.casino_freespin_total_bets = CUSTOM_LINE_BETS;
                             }
-                            console.log('[Bridge] 🎰 Bet limits overridden: 10 - 500,000 RBT');
+                            console.log('[Bridge] \u{1F3B0} Bet limits overridden');
                         }
 
-                        // Track bet confirmations — scale up if bet was scaled down
+                        // Bet confirmation — track locally, DON'T sync yet
                         if (shouldTrack && typeof changes.bet_cents === 'number' && changes.bet_cents > 0) {
-                            // Scale the confirmation back up to the real bet
                             const realBetCents = Math.round(changes.bet_cents * _activeScaleFactor);
-                            changes.bet_cents = realBetCents; // show real amount in game
+                            changes.bet_cents = realBetCents;
                             const betRBT = realBetCents / 100;
+                            _pendingBetRBT = betRBT;
                             robetBalance = Math.max(0, robetBalance - betRBT);
                             robetBalance = Math.round(robetBalance * 100) / 100;
                             exposeBalance();
-                            console.log(`[Bridge] 📉 Bet: -${betRBT} → balance: ${robetBalance.toFixed(2)}`);
-                            syncSpin(betRBT, 0);
+                            console.log('[Bridge] \u{1F4C9} Bet: -' + betRBT + ' \u2192 balance: ' + robetBalance.toFixed(2));
                         }
 
-                        // Track win results — scale up if bet was scaled
+                        // Win — sync BOTH bet+win together (fire-and-forget)
                         if (shouldTrack && typeof changes.win_cents === 'number' && changes.win_cents > 0) {
                             const realWinCents = Math.round(changes.win_cents * _activeScaleFactor);
                             changes.win_cents = realWinCents;
                             const winRBT = realWinCents / 100;
+                            // Optimistic local update (server will correct via balance injection)
                             robetBalance += winRBT;
                             robetBalance = Math.round(robetBalance * 100) / 100;
                             exposeBalance();
-                            console.log(`[Bridge] 📈 Win: +${winRBT} → balance: ${robetBalance.toFixed(2)}`);
-                            syncSpin(0, winRBT);
+                            console.log('[Bridge] \u{1F4C8} Win: +' + winRBT + ' \u2192 balance: ' + robetBalance.toFixed(2));
+                            // Combined sync: bet + win in one call
+                            syncRound(_pendingBetRBT, winRBT);
+                            _pendingBetRBT = 0;
                         }
                     }
 
-                    // === HANDLE ARRAY changes (win results: [{win_cents: ...}]) ===
                     if (Array.isArray(changes)) {
                         for (const sub of changes) {
                             if (sub && typeof sub === 'object') {
@@ -192,17 +176,16 @@
                                     robetBalance += winRBT;
                                     robetBalance = Math.round(robetBalance * 100) / 100;
                                     exposeBalance();
-                                    console.log(`[Bridge] 📈 Win: +${winRBT} → balance: ${robetBalance.toFixed(2)}`);
-                                    syncSpin(0, winRBT);
+                                    console.log('[Bridge] \u{1F4C8} Win: +' + winRBT + ' \u2192 balance: ' + robetBalance.toFixed(2));
+                                    syncRound(_pendingBetRBT, winRBT);
+                                    _pendingBetRBT = 0;
                                 }
-                                // Also check for bet_cents in array items
                                 if (shouldTrack && typeof sub.bet_cents === 'number' && sub.bet_cents > 0) {
                                     const betRBT = sub.bet_cents / 100;
+                                    _pendingBetRBT = betRBT;
                                     robetBalance = Math.max(0, robetBalance - betRBT);
                                     robetBalance = Math.round(robetBalance * 100) / 100;
                                     exposeBalance();
-                                    console.log(`[Bridge] 📉 Bet: -${betRBT} → balance: ${robetBalance.toFixed(2)}`);
-                                    syncSpin(betRBT, 0);
                                 }
                             }
                         }
@@ -224,9 +207,7 @@
         console.log('[Bridge WS] Connecting:', url);
         const ws = protocols ? new _WS(url, protocols) : new _WS(url);
 
-        // Track if onmessage has been set to avoid double-firing
         let _userOnMessage = null;
-        let _listenerWrapped = false;
 
         const _addListener = ws.addEventListener.bind(ws);
         ws.addEventListener = function(type, fn, opts) {
@@ -236,11 +217,9 @@
                     if (typeof data === 'string') {
                         const modified = processMessage(data);
                         const newEvent = new MessageEvent('message', {
-                            data: modified,
-                            origin: event.origin,
+                            data: modified, origin: event.origin,
                             lastEventId: event.lastEventId,
-                            source: event.source,
-                            ports: event.ports
+                            source: event.source, ports: event.ports
                         });
                         return fn.call(this, newEvent);
                     }
@@ -251,25 +230,18 @@
             return _addListener(type, fn, opts);
         };
 
-        // Intercept onmessage — DON'T re-route through addEventListener to avoid double-fire
         Object.defineProperty(ws, 'onmessage', {
             get: function() { return _userOnMessage; },
             set: function(fn) {
-                if (_userOnMessage) {
-                    // Remove previous raw listener if any
-                }
                 _userOnMessage = fn;
-                // Set the real onmessage with our wrapper
                 Object.getOwnPropertyDescriptor(_WS.prototype, 'onmessage').set.call(ws, function(event) {
                     let data = event.data;
                     if (typeof data === 'string') {
                         const modified = processMessage(data);
                         const newEvent = new MessageEvent('message', {
-                            data: modified,
-                            origin: event.origin,
+                            data: modified, origin: event.origin,
                             lastEventId: event.lastEventId,
-                            source: event.source,
-                            ports: event.ports
+                            source: event.source, ports: event.ports
                         });
                         return fn.call(this, newEvent);
                     }
@@ -278,7 +250,7 @@
             }
         });
 
-        // Outgoing — block overbets + scale down if exceeding BGaming demo max
+        // Outgoing — block overbets + scale down
         const _wsSend = ws.send.bind(ws);
         ws.send = function(data) {
             if (typeof data === 'string') {
@@ -289,22 +261,19 @@
                         if (inner.action === 'make_bet' && inner.bet_cents && robetBalance !== null) {
                             const betRBT = inner.bet_cents / 100;
                             if (betRBT > robetBalance + 0.01) {
-                                console.warn(`[Bridge] ❌ BLOCKED bet: ${betRBT} > balance ${robetBalance}`);
+                                console.warn('[Bridge] \u274C BLOCKED bet: ' + betRBT + ' > balance ' + robetBalance);
                                 return;
                             }
-
-                            // Scale down if bet exceeds BGaming's demo max
                             if (inner.bet_cents > BGAMING_MAX_BET_CENTS) {
                                 _activeScaleFactor = inner.bet_cents / BGAMING_MAX_BET_CENTS;
                                 inner.bet_cents = BGAMING_MAX_BET_CENTS;
                                 parsed.data = JSON.stringify(inner);
                                 data = JSON.stringify(parsed);
-                                console.log(`[Bridge] 🔄 Scaled bet: ${betRBT} RBT → ${BGAMING_MAX_BET_CENTS/100} to server (x${_activeScaleFactor.toFixed(2)})`);
+                                console.log('[Bridge] \u{1F504} Scaled bet: ' + betRBT + ' RBT \u2192 ' + (BGAMING_MAX_BET_CENTS/100) + ' to server (x' + _activeScaleFactor.toFixed(2) + ')');
                             } else {
                                 _activeScaleFactor = 1;
                             }
-
-                            console.log(`[Bridge] ✅ Bet ${betRBT} RBT (balance: ${robetBalance.toFixed(2)})`);
+                            console.log('[Bridge] \u2705 Bet ' + betRBT + ' RBT (balance: ' + robetBalance.toFixed(2) + ')');
                         }
                     }
                 } catch(e) {}

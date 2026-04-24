@@ -1,5 +1,5 @@
 /**
- * CLASSIC MULTIHAND BLACKJACK BRIDGE v2 — "Command-Based Fetch Intercept"
+ * CLASSIC MULTIHAND BLACKJACK BRIDGE v3 — "CUS-Integrated"
  *
  * BGaming table games use a command-based API:
  *   command:"init"   → game config, balance, bet limits
@@ -9,9 +9,15 @@
  *   command:"finish" → round result, final balance
  *
  * Bets are in: options.areas[].main.bet (cents)
+ *
+ * CUS Integration: On "finish", the bridge awaits the server's spin-sync
+ * response. The server applies the CUS state (forceLoss / forceWin) and
+ * returns { gameBalance, adjustedWin, cusApplied }. If CUS modified the
+ * outcome, win amounts in the BGaming response are patched before the
+ * game client sees them.
  */
 (function() {
-    console.log('[Bridge] Classic Multihand Blackjack Bridge v2 Active');
+    console.log('[Bridge] Classic Multihand Blackjack Bridge v3 Active');
 
     function findCredentials() {
         try {
@@ -68,29 +74,37 @@
     })();
 
     /**
-     * Report a hand outcome to the server (fire-and-forget, non-blocking).
-     * Local balance is already updated before this is called.
+     * Report a hand outcome to the server (BLOCKING — awaits CUS result).
+     * Returns { gameBalance, adjustedWin, cusApplied } from the server.
      */
-    function syncSpin(bet, win) {
-        if (!creds.id) return;
-        _fetch('/api/avia/v1/spin-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: creds.id,
-                sessionToken: creds.token,
-                bet: bet,
-                win: win
-            })
-        }).then(r => r.json()).then(d => {
+    async function syncSpin(bet, win) {
+        if (!creds.id) return null;
+        try {
+            const r = await _fetch('/api/avia/v1/spin-sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: creds.id,
+                    sessionToken: creds.token,
+                    bet: bet,
+                    win: win
+                })
+            });
+            const d = await r.json();
             if (typeof d.gameBalance === 'number') {
                 robetBalance = d.gameBalance;
                 exposeBalance();
-                console.log('[Bridge] Server sync → balance: ' + robetBalance.toFixed(2));
+                console.log('[Bridge] Server sync → balance: ' + robetBalance.toFixed(2) +
+                    (d.cusApplied ? ' (CUS applied, adjustedWin=' + d.adjustedWin + ')' : ''));
             }
-        }).catch(e => {
-            console.warn('[Bridge] spin-sync failed (non-blocking):', e);
-        });
+            return d;
+        } catch(e) {
+            console.warn('[Bridge] spin-sync failed:', e);
+            // Fallback: apply locally without CUS
+            robetBalance = Math.max(0, Math.round((robetBalance - bet + win) * 100) / 100);
+            exposeBalance();
+            return null;
+        }
     }
 
     /**
@@ -217,6 +231,43 @@
                     if (typeof area.main.bet === 'number') area.main.bet = Math.round(area.main.bet * factor);
                     if (typeof area.main.win_amount === 'number') area.main.win_amount = Math.round(area.main.win_amount * factor);
                 }
+            }
+        }
+    }
+
+    /**
+     * CUS: Overwrite all win fields in the BGaming response to match
+     * the server's adjusted win (in RBT, not cents).
+     * Called when cusApplied === true.
+     */
+    function patchWinFields(data, adjustedWinRBT) {
+        const adjustedCents = Math.round(adjustedWinRBT * 100);
+
+        // Patch result fields
+        if (data.result) {
+            if (typeof data.result.win === 'number') data.result.win = adjustedCents;
+            if (typeof data.result.win_amount === 'number') data.result.win_amount = adjustedCents;
+            if (typeof data.result.total_win === 'number') data.result.total_win = adjustedCents;
+            if (Array.isArray(data.result.areas)) {
+                for (const area of data.result.areas) {
+                    if (typeof area.win === 'number') area.win = adjustedCents;
+                    if (typeof area.win_amount === 'number') area.win_amount = adjustedCents;
+                    if (area.main && typeof area.main.win_amount === 'number') area.main.win_amount = adjustedCents;
+                }
+            }
+        }
+
+        // Patch top-level fields
+        if (typeof data.win === 'number') data.win = adjustedCents;
+        if (typeof data.win_amount === 'number') data.win_amount = adjustedCents;
+        if (typeof data.total_win === 'number') data.total_win = adjustedCents;
+
+        // Patch areas
+        if (Array.isArray(data.areas)) {
+            for (const area of data.areas) {
+                if (typeof area.win === 'number') area.win = adjustedCents;
+                if (typeof area.win_amount === 'number') area.win_amount = adjustedCents;
+                if (area.main && typeof area.main.win_amount === 'number') area.main.win_amount = adjustedCents;
             }
         }
     }
@@ -385,18 +436,20 @@
                 const betRBT = pendingBetCents / 100;
                 const winRBT = realWinCents / 100;
 
-                // Update local balance immediately (credit win)
-                robetBalance = Math.max(0, Math.round((robetBalance + winRBT) * 100) / 100);
-                exposeBalance();
+                // === CUS: Await server sync to get CUS-adjusted outcome ===
+                const syncResult = await syncSpin(betRBT, winRBT);
 
-                console.log('[Bridge] FINISH — bet: ' + betRBT + ', win: ' + winRBT + ', balance: ' + robetBalance);
-
-                if (scaleFactor > 1) {
+                if (syncResult && syncResult.cusApplied) {
+                    // Server modified the outcome — patch win fields
+                    const adjustedWin = typeof syncResult.adjustedWin === 'number' ? syncResult.adjustedWin : winRBT;
+                    console.log('[Bridge] CUS applied! Original win: ' + winRBT + ' → Adjusted: ' + adjustedWin);
+                    patchWinFields(data, adjustedWin);
+                } else if (scaleFactor > 1) {
+                    // No CUS, but we still need to scale the response up
                     scaleResponseUp(data, scaleFactor);
                 }
 
-                // Fire-and-forget server sync (no await — instant response)
-                syncSpin(betRBT, winRBT);
+                console.log('[Bridge] FINISH — bet: ' + betRBT + ', balance: ' + robetBalance);
 
                 pendingBetCents = 0;
                 scaleFactor = 1;

@@ -1909,8 +1909,9 @@ app.post('/api/avia/v1/spin-sync', express.json(), async (req, res) => {
     // Persist to Supabase (async, don't block response)
     aviaSessionPersist(userId, session).catch(() => {});
 
-    console.log(`[Avia] Spin sync ${userId}: bet=${betVal}, win=${winVal}, gameBalance=${newBalance.toFixed(2)}`);
-    res.json({ gameBalance: newBalance });
+    const cusApplied = (forceLoss && num(win, 0) > 0) || (forceWin && num(win, 0) === 0 && betVal > 0);
+    console.log(`[Avia] Spin sync ${userId}: bet=${betVal}, win=${winVal}${cusApplied ? ' (CUS)' : ''}, gameBalance=${newBalance.toFixed(2)}`);
+    res.json({ gameBalance: newBalance, adjustedWin: winVal, cusApplied });
 });
 
 app.post('/api/avia/v1/session/end', express.json(), async (req, res) => {
