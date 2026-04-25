@@ -65,6 +65,12 @@
                 body: JSON.stringify({ userId: creds.id, sessionToken: creds.token })
             });
             const d = await r.json();
+            if (r.status === 409 || d.error === 'game_active_other_tab') {
+                console.warn('[Bridge] Session blocked: game is active in another tab');
+                document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a1a;color:#fff;font-family:sans-serif;text-align:center;padding:20px;"><div><div style="font-size:48px;margin-bottom:16px;">&#9888;&#65039;</div><div style="font-size:20px;font-weight:700;margin-bottom:8px;">Game Active in Another Tab</div><div style="font-size:14px;color:rgba(255,255,255,0.6);">Please close the game in your other tab first.</div></div></div>';
+                try { window.parent.postMessage({ type: 'bridge_session_blocked' }, '*'); } catch(e) {}
+                return;
+            }
             if (typeof d.gameBalance === 'number') {
                 robetBalance = d.gameBalance;
                 exposeBalance();

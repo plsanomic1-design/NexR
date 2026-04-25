@@ -1011,26 +1011,22 @@
     <div class="modal-backdrop" id="welcome-backdrop">
         <div class="modal-box" style="max-width:500px; padding:35px; position:relative;">
             <div style="display:flex; align-items:center; margin-bottom:20px;">
-                <span class="brand-mark" aria-hidden="true">
-                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
-                        <defs>
-                            <linearGradient id="brandGradWelcome" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
-                                <stop stop-color="#00e5b0"/>
-                                <stop offset="1" stop-color="#00a87e"/>
-                            </linearGradient>
-                            <filter id="rGlowWelcome">
-                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
-                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                            </filter>
-                        </defs>
-                        <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f2132"/>
-                        <rect x="2" y="2" width="36" height="36" rx="10" fill="none" stroke="rgba(0,200,150,0.35)" stroke-width="1.5"/>
-                        <g filter="url(#rGlowWelcome)">
-                            <path d="M12 10 L12 28 L15 28 L15 22 L18 22 L23 28 L27 28 L21.5 21 C25 20 26 16 26 13 C26 9.5 23 10 18 10 L12 10 Z M15 13 L18 13 C21 13 22 14 22 16 C22 18 21 19 18 19 L15 19 Z" fill="url(#brandGradWelcome)"/>
-                        </g>
+                <div class="logo-icon" style="width:40px;height:40px;">
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <text
+                            x="18" y="18"
+                            font-family="Georgia, serif"
+                            font-size="28"
+                            font-weight="700"
+                            text-anchor="middle"
+                            dominant-baseline="central"
+                            fill="none"
+                            stroke="#1D9E75"
+                            stroke-width="1.4"
+                        >R</text>
                     </svg>
-                </span>
-                <span style="font-size:18px; font-weight:800; margin-left:10px;">Nex<span style="color:var(--accent);">R$</span></span>
+                </div>
+                <div style="font-size:18px; font-weight:800; margin-left:10px; color:#ffffff; font-family:'DM Sans',sans-serif;">Ro <span style="color:#1D9E75;">Bet</span></div>
             </div>
             <h2 style="font-size:22px; font-weight:700; margin-bottom:10px;">Welcome</h2>
             <p style="color:var(--text-secondary); font-size:14px; margin-bottom:6px; line-height:1.6;">Welcome to RoBet - play games, manage balances, and connect your Roblox account.</p>

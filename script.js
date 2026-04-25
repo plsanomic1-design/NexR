@@ -25,6 +25,60 @@ document.addEventListener('DOMContentLoaded', () => {
     if(![...views].some(v => v.id === 'view-' + defaultView)) defaultView = 'home';
     switchView(defaultView);
 
+    // === MULTI-TAB GUARD (BroadcastChannel) ===
+    let _otherTabHasGame = false;
+    const _tabChannel = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('robet_game_state') : null;
+    if (_tabChannel) {
+        _tabChannel.onmessage = (e) => {
+            if (!e.data || typeof e.data !== 'object') return;
+            if (e.data.type === 'game_started') {
+                _otherTabHasGame = true;
+            } else if (e.data.type === 'game_ended') {
+                _otherTabHasGame = false;
+            } else if (e.data.type === 'game_ping') {
+                // Another tab is asking if a game is running here
+                if (window._aviaInPlay || window._bjInPlay) {
+                    _tabChannel.postMessage({ type: 'game_started' });
+                }
+            }
+        };
+        // On load, ask other tabs if they have a game open
+        _tabChannel.postMessage({ type: 'game_ping' });
+    }
+    function _broadcastGameStarted() {
+        if (_tabChannel) _tabChannel.postMessage({ type: 'game_started' });
+    }
+    function _broadcastGameEnded() {
+        if (_tabChannel) _tabChannel.postMessage({ type: 'game_ended' });
+        _otherTabHasGame = false;
+    }
+    function showGameBlockedToast() {
+        // Show a temporary toast notification
+        let toast = document.getElementById('game-blocked-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'game-blocked-toast';
+            Object.assign(toast.style, {
+                position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+                background: 'linear-gradient(135deg, #ff4444, #cc0000)', color: '#fff',
+                padding: '14px 28px', borderRadius: '12px', zIndex: '999999',
+                fontFamily: 'var(--font-main), sans-serif', fontSize: '14px', fontWeight: '600',
+                boxShadow: '0 4px 20px rgba(255,0,0,0.3)', opacity: '0',
+                transition: 'opacity 0.3s ease, transform 0.3s ease',
+                pointerEvents: 'none', textAlign: 'center', maxWidth: '90vw'
+            });
+            document.body.appendChild(toast);
+        }
+        toast.textContent = '\u26A0\uFE0F This game is already open in another tab. Please close it there first.';
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+        clearTimeout(toast._hideTimer);
+        toast._hideTimer = setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(-50%) translateY(-10px)';
+        }, 4000);
+    }
+
     // === AVIA LOADING MODAL ===
     const _aviaModal = document.createElement('div');
     _aviaModal.id = 'avia-sync-modal';
@@ -62,6 +116,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Prevent double-click
         if (window._aviaInPlay) return;
 
+        // Multi-tab guard: block if another tab has a game open
+        if (_otherTabHasGame) {
+            showGameBlockedToast();
+            return;
+        }
+
         const game = SLOT_GAMES[gameKey];
         if (!game) { console.error('[Slots] Unknown game key:', gameKey); return; }
 
@@ -77,8 +137,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // Start session and load iframe
         window._aviaInPlay = true;
         window._aviaGameBalance = null;
-        if (iframe) iframe.src = game.url;
-        // Show "(in play)" in sidebar
+        if (iframe) {
+            iframe.src = game.url;
+            // Listen for rejection from bridge.js inside the iframe
+            window.addEventListener('message', function _bridgeMsg(e) {
+                if (e.data && e.data.type === 'bridge_session_blocked') {
+                    window.removeEventListener('message', _bridgeMsg);
+                    showGameBlockedToast();
+                    // Revert: close the game container, show lobby
+                    window._aviaInPlay = false;
+                    if (iframe) iframe.src = 'about:blank';
+                    window._aviaGameBalance = null;
+                    _activeSlotKey = null;
+                    if (lobby) lobby.style.display = 'block';
+                    if (gameCont) gameCont.style.display = 'none';
+                    if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+                }
+            });
+        }
+        _broadcastGameStarted();
         if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
     };
 
@@ -131,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (iframe) iframe.src = 'about:blank';
             window._aviaGameBalance = null;
             _activeSlotKey = null;
+            _broadcastGameEnded();
             hideAviaModal();
         }
 
@@ -248,6 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             window._aviaGameBalance = null;
             _activeSlotKey = null;
+            _broadcastGameEnded();
             hideAviaModal();
         }
 
@@ -291,10 +370,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // Called when user navigates to the blackjack view
     window._startBjGame = function() {
         if (window._bjInPlay) return;
+        // Multi-tab guard
+        if (_otherTabHasGame) {
+            showGameBlockedToast();
+            return;
+        }
         window._bjInPlay = true;
         window._aviaGameBalance = null;
         const iframe = document.getElementById('bj-iframe');
-        if (iframe) iframe.src = '/proxy/blackjack';
+        if (iframe) {
+            iframe.src = '/proxy/blackjack';
+            // Listen for rejection from bridge.js inside the iframe
+            window.addEventListener('message', function _bridgeBjMsg(e) {
+                if (e.data && e.data.type === 'bridge_session_blocked') {
+                    window.removeEventListener('message', _bridgeBjMsg);
+                    showGameBlockedToast();
+                    window._bjInPlay = false;
+                    if (iframe) iframe.src = 'about:blank';
+                    window._aviaGameBalance = null;
+                    if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
+                }
+            });
+        }
+        _broadcastGameStarted();
         if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
     };
 
@@ -340,6 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const iframe = document.getElementById('bj-iframe');
         if (iframe) iframe.src = 'about:blank';
         window._aviaGameBalance = null;
+        _broadcastGameEnded();
         hideAviaModal();
     };
 
@@ -5265,14 +5364,15 @@ if (socket) {
 
     socket.on('balance:remote_sync', ({ userId, balance, balanceZh, stats }) => {
         if (!robloxUserId || !accountsMatchServerLocal(userId, robloxUserId)) return;
-        // IGNORE remote_sync while playing Avia Masters — sidebar shows "(in play)"
-        if (window._aviaInPlay) return;
+        // Always store the authoritative balance so it's correct when the user returns from a game.
+        // Only skip the UI update while playing (sidebar shows "(in play)").
         if (typeof balance === 'number' && balance >= 0) _roBalance = balance;
         // legacy balanceZh socket sync removed
         if (stats && typeof stats === 'object') {
             userStats = { ...userStats, ...stats };
             refreshWithdrawCooldown();
         }
+        if (window._aviaInPlay || window._bjInPlay) return; // Don't update UI during game
         updateBalanceDisplay();
         updateProfViews();
         if (typeof saveToStorage === 'function') saveToStorage();

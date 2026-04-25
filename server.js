@@ -1746,6 +1746,19 @@ app.post('/api/avia/v1/init', express.json(), async (req, res) => {
  */
 const aviaSessions = {};
 
+/** Given a session token, return the socket ID that owns it. */
+function getSocketIdFromToken(token) {
+    if (!token) return null;
+    const tokenStr = String(token);
+    for (const [socketId, entry] of _sessionTokens.entries()) {
+        if (entry.token.length !== tokenStr.length) continue;
+        const a = Buffer.from(entry.token, 'utf8');
+        const b = Buffer.from(tokenStr, 'utf8');
+        if (a.length === b.length && crypto.timingSafeEqual(a, b)) return socketId;
+    }
+    return null;
+}
+
 /** Persist avia session to Supabase as a special transaction row so it survives restarts. */
 async function aviaSessionPersist(userId, sessionData) {
     if (!supabaseEnabled()) return;
@@ -1835,13 +1848,30 @@ app.post('/api/avia/v1/session/start', express.json(), async (req, res) => {
         return res.status(401).json({ error: 'Unauthorized. Please refresh the page.' });
     }
 
-    // Resume existing in-memory session
+    // Resolve which socket/tab is making this request (from their unique token)
+    const callerSocketId = getSocketIdFromToken(sessionToken);
+
+    // Block if session is active on a DIFFERENT socket/tab
     if (aviaSessions[userId] && aviaSessions[userId].active) {
+        if (aviaSessions[userId].ownerSocketId && callerSocketId && aviaSessions[userId].ownerSocketId !== callerSocketId) {
+            console.log(`[Avia] BLOCKED session/start for ${userId}: already active on socket ${aviaSessions[userId].ownerSocketId}, caller is ${callerSocketId}`);
+            return res.status(409).json({ error: 'game_active_other_tab' });
+        }
+        // Same tab resuming (e.g. iframe reload) — allow
         console.log(`[Avia] Resuming session for ${userId}, gameBalance: ${aviaSessions[userId].gameBalance}`);
         return res.json({ gameBalance: aviaSessions[userId].gameBalance });
     }
 
     await withUserLock(userId, async () => {
+        // Re-check inside lock in case another request snuck in
+        if (aviaSessions[userId] && aviaSessions[userId].active) {
+            if (aviaSessions[userId].ownerSocketId && callerSocketId && aviaSessions[userId].ownerSocketId !== callerSocketId) {
+                console.log(`[Avia] BLOCKED (inside lock) session/start for ${userId}`);
+                return res.status(409).json({ error: 'game_active_other_tab' });
+            }
+            return res.json({ gameBalance: aviaSessions[userId].gameBalance });
+        }
+
         const account = await loadAccountFromSupabase(userId);
         const currentBalance = account ? account.balance : 0;
 
@@ -1852,17 +1882,18 @@ app.post('/api/avia/v1/session/start', express.json(), async (req, res) => {
         // Deduct full balance
         await deductUserBet(userId, currentBalance);
 
-        // Store session in memory + Supabase
+        // Store session in memory + Supabase, tagged with the caller's socket
         const sessionData = {
             startBalance: currentBalance,
             gameBalance: currentBalance,
             active: true,
-            startedAt: Date.now()
+            startedAt: Date.now(),
+            ownerSocketId: callerSocketId
         };
         aviaSessions[userId] = sessionData;
         await aviaSessionPersist(userId, sessionData);
 
-        console.log(`[Avia] Session started for ${userId}, balance: ${currentBalance} → DB set to 0`);
+        console.log(`[Avia] Session started for ${userId}, balance: ${currentBalance} → DB set to 0 (socket: ${callerSocketId})`);
         res.json({ gameBalance: currentBalance });
     });
 });
@@ -1881,6 +1912,12 @@ app.post('/api/avia/v1/spin-sync', express.json(), async (req, res) => {
     const session = aviaSessions[userId];
     if (!session || !session.active) {
         return res.status(400).json({ error: 'No active session' });
+    }
+
+    // Only the session owner can spin
+    const callerSocketId = getSocketIdFromToken(sessionToken);
+    if (session.ownerSocketId && callerSocketId && session.ownerSocketId !== callerSocketId) {
+        return res.status(409).json({ error: 'not_session_owner' });
     }
 
     const betVal = num(bet, 0);
@@ -1920,11 +1957,23 @@ app.post('/api/avia/v1/session/end', express.json(), async (req, res) => {
         return res.status(401).json({ error: 'no userId' });
     }
 
+    // Identify which socket is calling
+    const callerSocketId = getSocketIdFromToken(sessionToken);
+
     await withUserLock(userId, async () => {
         const session = aviaSessions[userId];
         let finalBalance = 0;
 
         if (session && session.active) {
+            // Only the session owner can end the session
+            if (session.ownerSocketId && callerSocketId && session.ownerSocketId !== callerSocketId) {
+                // Non-owner: return current DB balance without ending the session
+                const account = await loadAccountFromSupabase(userId);
+                finalBalance = account ? account.balance : 0;
+                console.log(`[Avia] session/end REJECTED for ${userId}: caller ${callerSocketId} is not owner ${session.ownerSocketId}`);
+                return res.json({ balance: finalBalance });
+            }
+
             finalBalance = Math.max(0, Math.round(session.gameBalance * 100) / 100);
             session.active = false;
 
@@ -1955,6 +2004,13 @@ app.post('/api/avia/v1/session/save', express.json(), async (req, res) => {
     }
 
     if (aviaSessions[userId] && aviaSessions[userId].active && typeof gameBalance === 'number') {
+        // Only the session owner can save
+        const callerSocketId = sessionToken ? getSocketIdFromToken(sessionToken) : null;
+        if (aviaSessions[userId].ownerSocketId && callerSocketId && aviaSessions[userId].ownerSocketId !== callerSocketId) {
+            console.log(`[Avia] session/save REJECTED for ${userId}: not session owner`);
+            return res.json({ ok: false, error: 'not_session_owner' });
+        }
+
         aviaSessions[userId].gameBalance = Math.max(0, gameBalance);
         console.log(`[Avia] Session saved for ${userId}, gameBalance: ${gameBalance.toFixed(2)}`);
         // Persist to Supabase
@@ -3839,35 +3895,47 @@ const onlinePlayers = new Map();
 
 // =====================================================================
 // SECURITY: Session token map — binds HTTP API identity to an authenticated socket.
-// On player:identify, we generate a secure random token stored here keyed by `userId`.
-// HTTP endpoints (cases/battles) must include this token; we validate it before acting.
+// On player:identify, we generate a secure random token stored here keyed by `socketId`.
+// Supports MULTIPLE concurrent tokens per user (one per tab/socket) so that
+// opening incognito or a second tab doesn't invalidate the original tab's token.
+// HTTP endpoints must include this token; we validate it before acting.
 // =====================================================================
-const _sessionTokens = new Map(); // userId (string) → { token, socketId, createdAt }
+const _sessionTokens = new Map(); // socketId (string) → { userId, token, createdAt }
 
 function generateSessionToken(userId, socketId) {
     const token = crypto.randomBytes(32).toString('hex');
-    _sessionTokens.set(String(userId), { token, socketId, createdAt: Date.now() });
+    _sessionTokens.set(String(socketId), { userId: String(userId), token, createdAt: Date.now() });
     return token;
 }
 
 function validateSessionToken(userId, token) {
     if (!userId || !token) return false;
-    const entry = _sessionTokens.get(String(userId));
-    if (!entry) return false;
-    // Constant-time comparison to prevent timing attacks
-    const a = Buffer.from(entry.token, 'utf8');
-    const b = Buffer.from(String(token), 'utf8');
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
+    const uid = String(userId);
+    const tokenStr = String(token);
+    // Check ALL active tokens for this user (there may be multiple sockets/tabs)
+    for (const entry of _sessionTokens.values()) {
+        if (entry.userId !== uid) continue;
+        if (entry.token.length !== tokenStr.length) continue;
+        const a = Buffer.from(entry.token, 'utf8');
+        const b = Buffer.from(tokenStr, 'utf8');
+        if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
+    }
+    return false;
 }
 
-// SECURITY FIX: Expire session tokens after 24 hours and clean up every 30 minutes.
+// SECURITY FIX: Expire session tokens after 24 hours and clean up disconnected sockets every 30 minutes.
 const SESSION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 setInterval(() => {
     const now = Date.now();
-    for (const [uid, entry] of _sessionTokens) {
+    for (const [socketId, entry] of _sessionTokens) {
+        // Remove expired tokens
         if (now - entry.createdAt > SESSION_TOKEN_TTL_MS) {
-            _sessionTokens.delete(uid);
+            _sessionTokens.delete(socketId);
+            continue;
+        }
+        // Remove tokens for sockets that are no longer connected
+        if (!io.sockets.sockets.has(socketId)) {
+            _sessionTokens.delete(socketId);
         }
     }
 }, 30 * 60 * 1000).unref();
@@ -5221,7 +5289,30 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
+        // Auto-end any avia session owned by this socket so the user isn't locked out
+        const disconnectedUserId = socket.data.userId;
+        if (disconnectedUserId) {
+            const session = aviaSessions[disconnectedUserId];
+            if (session && session.active && session.ownerSocketId === socket.id) {
+                console.log(`[Avia] Socket ${socket.id} disconnected — auto-ending session for ${disconnectedUserId}`);
+                withUserLock(disconnectedUserId, async () => {
+                    // Re-check in case it was already ended between the check and acquiring the lock
+                    const s = aviaSessions[disconnectedUserId];
+                    if (!s || !s.active || s.ownerSocketId !== socket.id) return;
+                    const finalBalance = Math.max(0, Math.round(s.gameBalance * 100) / 100);
+                    s.active = false;
+                    if (finalBalance > 0) {
+                        await creditUserWin(disconnectedUserId, finalBalance);
+                    }
+                    console.log(`[Avia] Auto-ended session for ${disconnectedUserId}: credited ${finalBalance.toFixed(2)}`);
+                    delete aviaSessions[disconnectedUserId];
+                    await aviaSessionRemove(disconnectedUserId);
+                }).catch(e => console.error('[Avia] Auto-end error:', e && e.message));
+            }
+        }
+
         onlinePlayers.delete(socket.id);
+        _sessionTokens.delete(socket.id);
         io.emit('online:count', baseFakeCount + io.engine.clientsCount);
         console.log(`[Socket] Client disconnected: ${socket.id}`);
     });
